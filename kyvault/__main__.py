@@ -1,4 +1,4 @@
-"""python -m vault 入口。"""
+"""python -m kyvault 入口。"""
 
 from .cli import main
 

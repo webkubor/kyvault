@@ -307,7 +307,7 @@ def cmd_platform_detail(args: argparse.Namespace) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="keyring",
+        prog="kyvault",
         description="轻量级加密密钥管理 — AES-256-GCM，纯本地存储",
     )
     parser.add_argument("-V", "--version", action="version", version=f"keyring {__version__}")
@@ -477,6 +477,8 @@ def cmd_check(args: argparse.Namespace) -> None:
         print(result["message"])
         if result["models"]:
             print(f"  可用模型：{', '.join(result['models'])}")
+        if result.get("balance"):
+            print(f"  {result['balance']}")
         sys.exit(0 if result["valid"] else 1)
 
     # 否则从 keyring 中读取
@@ -489,6 +491,8 @@ def cmd_check(args: argparse.Namespace) -> None:
         print(result["message"])
         if result["models"]:
             print(f"  可用模型：{', '.join(result['models'])}")
+        if result.get("balance"):
+            print(f"  {result['balance']}")
         sys.exit(0 if result["valid"] else 1)
 
     print("错误：请提供 API Key 或 keyring 中的密钥名", file=sys.stderr)

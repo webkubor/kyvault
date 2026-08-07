@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from keyring.alias import (
+from kyvault.alias import (
     set_alias,
     get_alias,
     resolve_ref,

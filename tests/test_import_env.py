@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from keyring.import_env import (
+from kyvault.import_env import (
     _parse_env_file,
     _guess_platform,
     _guess_kind,

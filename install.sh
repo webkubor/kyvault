@@ -2,9 +2,9 @@
 set -e
 
 KEYRING_DIR="$HOME/.keyring"
-KEYRING_BIN="/usr/local/bin/keyring"
+KEYRING_BIN="/usr/local/bin/kyvault"
 
-echo "🔐 Keyring — 安装中..."
+echo "🔐 Keyring (kyvault) — 安装中..."
 
 # 检查 Python
 if ! command -v python3 &>/dev/null; then
@@ -29,22 +29,22 @@ if ! python3 -c "import cryptography" 2>/dev/null; then
     pip3 install cryptography
 fi
 
-# 安装 keyring 模块
-echo "📦 安装 keyring..."
+# 安装 kyvault 模块
+echo "📦 安装 kyvault..."
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-KEYRING_MODULE="$SCRIPT_DIR/keyring"
+KEYRING_MODULE="$SCRIPT_DIR/kyvault"
 
 if [ ! -d "$KEYRING_MODULE" ]; then
-    echo "❌ 找不到 keyring 模块：$KEYRING_MODULE"
+    echo "❌ 找不到 kyvault 模块：$KEYRING_MODULE"
     exit 1
 fi
 
-# 复制 keyring 模块到 ~/.keyring/module
+# 复制 kyvault 模块到 ~/.keyring/module
 mkdir -p "$KEYRING_DIR/module"
-rm -rf "$KEYRING_DIR/module/keyring"
+rm -rf "$KEYRING_DIR/module/kyvault"
 cp -r "$KEYRING_MODULE" "$KEYRING_DIR/module/"
 
-# 创建 keyring 命令
+# 创建 kyvault 命令（独立命名，避免和 PyPI 上的 keyring 库撞包名/撞命令）
 cat > "$KEYRING_BIN" << 'KEYRING_EOF'
 #!/usr/bin/env python3
 import sys
@@ -53,7 +53,7 @@ import os
 KEYRING_DIR = os.path.join(os.path.expanduser("~"), ".keyring", "module")
 sys.path.insert(0, KEYRING_DIR)
 
-from keyring.cli import main
+from kyvault.cli import main
 if __name__ == "__main__":
     main()
 KEYRING_EOF
@@ -64,10 +64,10 @@ echo ""
 echo "✅ 安装完成！"
 echo ""
 echo "开始使用："
-echo "  keyring wizard                    # 交互式向导（推荐）"
-echo "  keyring import --file .env        # 从 .env 导入"
-echo "  keyring set secret://... \"值\"     # 手动添加"
+echo "  kyvault wizard                    # 交互式向导（推荐）"
+echo "  kyvault import --file .env        # 从 .env 导入"
+echo "  kyvault set secret://... \"值\"     # 手动添加"
 echo ""
 echo "查询："
-echo "  keyring list                      # 列出所有密钥/密码"
-echo "  keyring platforms                 # 查看有哪些平台"
+echo "  kyvault list                      # 列出所有密钥/密码"
+echo "  kyvault platforms                 # 查看有哪些平台"

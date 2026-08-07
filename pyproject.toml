@@ -3,8 +3,8 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "keyring-cli"
-version = "1.1.0"
+name = "kyvault"
+version = "1.2.0"
 description = "轻量级加密密钥管理 — 支持多账户多密钥，AI 安全注入"
 readme = "README.md"
 license = {text = "MIT"}
@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
-keyring = "keyring.cli:main"
+kyvault = "kyvault.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["keyring*"]
+include = ["kyvault*"]

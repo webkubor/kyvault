@@ -1,6 +1,6 @@
 ---
-name: keyring
-version: 1.1.0
+name: kyvault
+version: 1.2.0
 description: "轻量级加密密钥管理 — 支持多账户多密钥，AI 安全注入。触发条件: 需要管理密钥、密码、API Token 时触发。触发词: 密钥、secret、token、API key、password、keyring。"
 license: MIT
 author: webkubor
@@ -21,7 +21,7 @@ metadata:
 
 | 别名 | 等价 | 用途 |
 |------|------|------|
-| `ky` | `keyring` | 主命令 |
+| `ky` | `kyvault` | 主命令 |
 | `kyp` | `keyring platform` | 列出平台 |
 | `kya` | `keyring account` | 账户管理 |
 | `kyk` | `keyring key` | 密钥管理 |
@@ -31,7 +31,7 @@ metadata:
 ## 安装
 
 ```bash
-pip install keyring-cli
+pip install kyvault
 kyi
 ```
 

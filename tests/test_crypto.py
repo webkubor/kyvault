@@ -2,7 +2,7 @@
 
 import os
 import pytest
-from keyring.crypto import derive_key, encrypt, decrypt
+from kyvault.crypto import derive_key, encrypt, decrypt
 
 
 class TestDeriveKey:

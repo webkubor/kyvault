@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/Version-1.1.0-blue.svg)](https://github.com/webkubor/keyring/releases)
+[![Version](https://img.shields.io/badge/Version-1.2.0-blue.svg)](https://github.com/webkubor/kyvault/releases)
 
 ---
 
@@ -16,7 +16,7 @@
 
 ```bash
 # 安装
-pip install keyring-cli
+pip install kyvault
 
 # 初始化
 kyi
@@ -31,7 +31,7 @@ kyk set github ghp_xxxxxxxxxxxx
 kyr --env GITHUB_TOKEN=ghp_xxxxxxxxxxxx -- git push
 ```
 
-**快捷别名：** `ky`=keyring `kyp`=platform `kya`=account `kyk`=key `kyi`=init `kyr`=run
+**快捷别名：** `ky`=kyvault `kyp`=platform `kya`=account `kyk`=key `kyi`=init `kyr`=run
 
 ---
 
@@ -54,7 +54,7 @@ AI: 好的，我看到你的 token 是 ghp_abc123...（已泄露）
 
 ```
 你: 帮我推代码到 GitHub  
-AI: keyring run --env GITHUB_TOKEN=github_token -- git push
+AI: kyvault run --env GITHUB_TOKEN=github_token -- git push
     （只看到别名，看不到明文）
 ```
 
@@ -192,25 +192,25 @@ ky import --file .env --prefix GITHUB_
 
 | 快捷 | 完整 | 用途 | 示例 |
 |------|------|------|------|
-| `kyi` | `keyring init` | 初始化 | `kyi` |
+| `kyi` | `kyvault init` | 初始化 | `kyi` |
 | **账户管理** | | | |
-| `kya set` | `keyring account set` | 存账户 | `kya set github user@gmail pass` |
-| `kya get` | `keyring account get` | 读密码 | `kya get github user@gmail` |
-| `kya list` | `keyring account list` | 列账户 | `kya list github` |
-| `kya delete` | `keyring account delete` | 删账户 | `kya delete github user@gmail` |
+| `kya set` | `kyvault account set` | 存账户 | `kya set github user@gmail pass` |
+| `kya get` | `kyvault account get` | 读密码 | `kya get github user@gmail` |
+| `kya list` | `kyvault account list` | 列账户 | `kya list github` |
+| `kya delete` | `kyvault account delete` | 删账户 | `kya delete github user@gmail` |
 | **密钥管理** | | | |
-| `kyk set` | `keyring key set` | 存密钥 | `kyk set github ghp_xxx value` |
-| `kyk get` | `keyring key get` | 读密钥 | `kyk get github ghp_xxx` |
-| `kyk list` | `keyring key list` | 列密钥 | `kyk list github` |
-| `kyk delete` | `keyring key delete` | 删密钥 | `kyk delete github ghp_xxx` |
+| `kyk set` | `kyvault key set` | 存密钥 | `kyk set github ghp_xxx value` |
+| `kyk get` | `kyvault key get` | 读密钥 | `kyk get github ghp_xxx` |
+| `kyk list` | `kyvault key list` | 列密钥 | `kyk list github` |
+| `kyk delete` | `kyvault key delete` | 删密钥 | `kyk delete github ghp_xxx` |
 | **平台查询** | | | |
-| `kyp` | `keyring platform` | 平台列表 | `kyp` |
-| `kyp <name>` | `keyring platform <name>` | 平台详情 | `kyp github` |
+| `kyp` | `kyvault platform` | 平台列表 | `kyp` |
+| `kyp <name>` | `kyvault platform <name>` | 平台详情 | `kyp github` |
 | **API 验证** | | | |
-| `ky check` | `keyring check` | 验证 key | `ky check openai --key sk-xxx` |
-| `ky providers` | `keyring providers` | 支持平台 | `ky providers` |
+| `ky check` | `kyvault check` | 验证 key | `ky check openai --key sk-xxx` |
+| `ky providers` | `kyvault providers` | 支持平台 | `ky providers` |
 | **AI 集成** | | | |
-| `kyr` | `keyring run` | 注入env | `kyr --env X=val -- cmd` |
+| `kyr` | `kyvault run` | 注入env | `kyr --env X=val -- cmd` |
 
 ---
 
@@ -266,7 +266,7 @@ ky import --file .env --prefix GITHUB_
 
 ```bash
 # 开发环境
-git clone https://github.com/webkubor/keyring.git
+git clone https://github.com/webkubor/kyvault.git
 cd keyring
 pip install -e .
 pip install pytest

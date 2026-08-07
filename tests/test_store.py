@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from keyring.store import (
+from kyvault.store import (
     parse_ref,
     _load_secrets,
     _save_secrets,

@@ -121,7 +121,7 @@ Keyring —— 本地加密密钥管理工具。
 ## 快速上手
 
 ```bash
-pip install keyring-cli
+pip install kyvault
 keyring init
 keyring set secret://github/my-pat "ghp_xxx"
 keyring alias set github_token secret://github/my-pat
