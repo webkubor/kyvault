@@ -35,6 +35,7 @@ from .alias import (
 )
 from .wizard import wizard
 from .import_env import import_env_file
+from .update_check import check_for_update
 
 
 def cmd_get(args: argparse.Namespace) -> None:
@@ -310,7 +311,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="kyvault",
         description="轻量级加密密钥管理 — AES-256-GCM，纯本地存储",
     )
-    parser.add_argument("-V", "--version", action="version", version=f"keyring {__version__}")
+    parser.add_argument("-V", "--version", action="version", version=f"kyvault {__version__}")
     sub = parser.add_subparsers(dest="command", help="子命令")
 
     # ── 账户子命令 ──
@@ -513,6 +514,7 @@ def cmd_providers(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+    check_for_update(__version__)
     if not args.command:
         parser.print_help()
         sys.exit(1)
