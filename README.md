@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/Version-1.2.1-blue.svg)](https://github.com/webkubor/kyvault/releases)
+[![Version](https://img.shields.io/badge/Version-1.2.2-blue.svg)](https://github.com/webkubor/kyvault/releases)
 
 ---
 
