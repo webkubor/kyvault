@@ -1,5 +1,6 @@
 """store 模块单元测试。"""
 
+import base64
 import json
 import os
 import tempfile
@@ -36,8 +37,10 @@ class TestParseRef:
 
 class TestSecretsStore:
     @pytest.fixture
-    def tmp_store(self, tmp_path):
+    def tmp_store(self, tmp_path, monkeypatch):
         secrets_file = tmp_path / "secrets.json"
+        test_key = base64.b64encode(os.urandom(32)).decode("ascii")
+        monkeypatch.setenv("KEYRING_MASTER_KEY", test_key)
         with patch("kyvault.store.SECRETS_FILE", secrets_file):
             yield secrets_file
 
