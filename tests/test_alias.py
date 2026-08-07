@@ -17,7 +17,7 @@ class TestAlias:
     @pytest.fixture
     def tmp_aliases(self, tmp_path):
         aliases_file = tmp_path / "aliases.json"
-        with patch("keyring.alias.ALIASES_FILE", aliases_file):
+        with patch("kyvault.alias.ALIASES_FILE", aliases_file):
             yield aliases_file
 
     def test_set_and_get(self, tmp_aliases):

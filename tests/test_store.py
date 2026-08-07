@@ -38,7 +38,7 @@ class TestSecretsStore:
     @pytest.fixture
     def tmp_store(self, tmp_path):
         secrets_file = tmp_path / "secrets.json"
-        with patch("keyring.store.SECRETS_FILE", secrets_file):
+        with patch("kyvault.store.SECRETS_FILE", secrets_file):
             yield secrets_file
 
     def test_set_and_get(self, tmp_store):

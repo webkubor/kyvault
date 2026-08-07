@@ -1,5 +1,3 @@
-![logo](https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/keyring/cs-token4ai-1784193570620950000.png)
-
 ![banner](https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/keyring-banner/cs-token4ai-1784197546810397000.png)
 
 # 🔐 Keyring — AI 时代密钥管理
@@ -8,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/Version-1.2.0-blue.svg)](https://github.com/webkubor/kyvault/releases)
+[![Version](https://img.shields.io/badge/Version-1.2.1-blue.svg)](https://github.com/webkubor/kyvault/releases)
 
 ---
 
@@ -267,7 +265,7 @@ ky import --file .env --prefix GITHUB_
 ```bash
 # 开发环境
 git clone https://github.com/webkubor/kyvault.git
-cd keyring
+cd kyvault
 pip install -e .
 pip install pytest
 pytest
