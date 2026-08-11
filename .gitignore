@@ -9,3 +9,5 @@ build/
 .agents/
 .cursorrules
 .copilotinstructions
+.clauderules
+
