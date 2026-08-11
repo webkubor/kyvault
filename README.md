@@ -1,75 +1,62 @@
-![banner](https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/keyring-banner/cs-token4ai-1784197546810397000.png)
+<p align="center">
+  <img src="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/keyring-banner/cs-token4ai-1784197546810397000.png" alt="Kyvault Banner" width="100%">
+</p>
 
-# 🔐 Kyvault — AI 时代密钥管理
+<h1 align="center">🔐 Kyvault</h1>
 
-> **你存一次，AI 永远看不到明文。**
+<p align="center">
+  <strong>AI 时代开发者密钥与资产台账管理器 — 你存一次，AI 永远看不到明文。</strong>
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/Version-1.3.0-blue.svg)](https://github.com/webkubor/kyvault/releases)
+<p align="center">
+  <a href="https://github.com/webkubor/kyvault/releases"><img src="https://img.shields.io/github/v/release/webkubor/kyvault?style=for-the-badge&color=coral" alt="Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/webkubor/kyvault?style=for-the-badge&color=gold" alt="License"></a>
+  <a href="https://pypi.org/project/kyvault/"><img src="https://img.shields.io/pypi/v/kyvault?style=for-the-badge&color=orange" alt="PyPI"></a>
+  <a href="https://pypi.org/project/kyvault/"><img src="https://img.shields.io/pypi/dm/kyvault?style=for-the-badge&color=orange" alt="PyPI Downloads"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge" alt="Python"></a>
+  <a href="https://github.com/astral-sh/uv"><img src="https://img.shields.io/badge/Built%20with-uv-000000?style=for-the-badge" alt="uv"></a>
+  <a href="https://github.com/psf/black"><img src="https://img.shields.io/badge/code%20style-black-000000?style=for-the-badge" alt="Black"></a>
+</p>
+
+---
+
+## 🎯 为什么需要 Kyvault？ (核心对比)
+
+| 功能 | Kyvault | .env | 1Password | Vault |
+|------|---------|------|-----------|-------|
+| **AI 安全 (别名注入)** | **✅ 绝对安全** | ❌ 泄漏明文 | ✅ 安全但慢 | ✅ 复杂难用 |
+| **时效覆写 (自动防腐)** | **✅ 失效必改** | ❌ 无校验 | ❌ 手动更新 | ❌ 手动更新 |
+| **多平台 CLI 智能连接** | **✅ 一键连接** | ❌ 不支持 | ❌ 不支持 | ❌ 不支持 |
+| **纯本地存储 (零网络)** | **✅ 极速响应** | ✅ 本地 | ❌ 依赖云端 | ❌ 依赖云端 |
+| **多账户多密钥** | **✅ 支持** | ❌ 不支持 | ✅ 支持 | ✅ 支持 |
+| **API Key 验证 (含余额)**| **✅ 自动验证** | ❌ 不支持 | ❌ 不支持 | ❌ 不支持 |
+| **轻量依赖** | **✅ 极简** | ✅ 极简 | ❌ 庞大 | ❌ 庞大 |
+
+---
+
+## 🔥 一屏特性亮点
+
+* 🔒 **AI 安全别名注入 (AI-Safe)**: AI 只能看到无害别名（如 `github_token`），运行时单向注入，彻底防止密钥在 AI 聊天日志或训练数据中泄露。
+* 🤖 **多平台 CLI 智能对接 (AI Connect)**: 一键 `kyconnect`，自动将规则和技能注入 `Gemini/agy/Claude/Codex/Hermes/OpenCode` 规则库。
+* 🖥️ **开发者加密台账中心 (Developer Ledger)**: 加密管理服务器账号密码、云服务租金、CLI 客户端多 Profile 凭证令牌，支持 URI 寻址。
+* 🛡️ **失效密钥覆写防腐 (Overwrite Policy)**: 拦截 API 401 报错，刚性规定 Agent 必须立刻覆写（Overwrite）修改失效 Key，杜绝保守残留。
 
 ---
 
 ## ⚡ 30 秒上手
 
 ```bash
-# 安装
-pip install kyvault
+# 安装并初始化
+pip install kyvault && kyi
 
-# 初始化
-kyi
-
-# 连接 AI 智能体（自动在当前项目工程注入 rules/skills/cursorrules 规则包）
+# 一键连接本地所有 AI 智能体 (Claude/Codex/Hermes/OpenCode/Cursor)
 kyconnect
 
-# 存账户密码
-kya set github user@gmail.com mypassword
-
-# 存平台密钥
-kyk set github ghp_xxxxxxxxxxxx
-
-# AI 用
-kyr --env GITHUB_TOKEN=ghp_xxxxxxxxxxxx -- git push
+# AI 零明文注入运行
+kyr --env GITHUB_TOKEN=secret://github/personal-pat -- git push
 ```
 
 **快捷别名：** `ky`=kyvault `kyp`=platform `kya`=account `kyk`=key `kyi`=init `kyr`=run `kyconnect`=kyvault connect
-
----
-
-## 🎯 为什么需要 Kyvault？
-
-| 方案 | AI 能读明文？ | 安全性 |
-|------|--------------|--------|
-| `.env` 文件 | ✅ 能 | ❌ 危险 |
-| 环境变量 | ✅ 能 | ⚠️ 有风险 |
-| **Kyvault** | **❌ 不能** | **✅ 安全** |
-
-### 痛点
-
-```
-你: 帮我推代码到 GitHub
-AI: 好的，我看到你的 token 是 ghp_abc123...（已泄露）
-```
-
-### 解决
-
-```
-你: 帮我推代码到 GitHub  
-AI: kyvault run --env GITHUB_TOKEN=github_token -- git push
-    （只看到别名，看不到明文）
-```
-
-### 🏆 核心对比
-
-| 功能 | Kyvault | .env | 1Password | Vault |
-|------|---------|------|-----------|-------|
-| AI 安全 | ✅ | ❌ | ✅ | ✅ |
-| 本地存储 | ✅ | ✅ | ❌ | ❌ |
-| 多账户多密钥 | ✅ | ❌ | ✅ | ✅ |
-| API Key 验证 | ✅ | ❌ | ❌ | ❌ |
-| 轻量依赖 | ✅ | ✅ | ❌ | ❌ |
-| 免费开源 | ✅ | ✅ | ❌ | ⚠️ |
-| 命令行 | ✅ | ✅ | ⚠️ | ⚠️ |
 
 ---
 
