@@ -205,3 +205,5 @@ def connect_agents() -> None:
                 print(f"i {filename} 规则已存在，跳过追加")
 
     print("\n✅ AI 编码助手多平台 CLI 兼容连接成功！")
+    print("\n🌟 感谢使用 Kyvault！如果您觉得它好用，请为我们的项目点个 Star 支持一下吧！")
+    print("👉 GitHub 仓库：https://github.com/webkubor/kyvault 🌟")

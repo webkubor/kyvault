@@ -321,11 +321,22 @@ pip install pytest
 pytest
 ```
 
----
-
 ## 📄 许可证
 
-[MIT License](LICENSE)
+本项目基于 MIT 许可证开源，详情见 [LICENSE](LICENSE)。
+
+## ❓ FAQ & 常见问题
+
+#### Q: 本地只有 Node 环境，需要安装 Python 吗？
+**A: 是的，需要。**  
+Kyvault 底层利用了 Python 生态极度成熟的 `cryptography` 密码学库进行高强度本地加密（AES-256-GCM）。如果本地仅有 Node.js 运行环境，您需要先安装 Python 3.10+ 环境（例如 macOS 用户可直接运行 `brew install python` ），然后再执行 `pip install kyvault` 即可无缝使用。
+
+---
+
+## 🌟 觉得好用？支持一下！
+
+如果您喜欢 Kyvault，请为本项目在 GitHub 上点个 **Star ⭐️**！您的每一个 Star 都是我们持续优化的最大动力！  
+👉 **[GitHub 仓库链接](https://github.com/webkubor/kyvault)**
 
 ---
 
