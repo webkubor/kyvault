@@ -27,6 +27,10 @@ def _save_secrets(data: dict) -> None:
     SECRETS_DIR.mkdir(parents=True, exist_ok=True)
     with open(SECRETS_FILE, "w") as f:
         json.dump(data, f, indent=2)
+    try:
+        SECRETS_FILE.chmod(0o600)
+    except OSError:
+        pass
 
 
 def get_master_key() -> str:

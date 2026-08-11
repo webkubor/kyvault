@@ -44,6 +44,8 @@ from .alias import (
 from .wizard import wizard
 from .import_env import import_env_file
 from .update_check import check_for_update
+from .doctor import run_doctor
+from .updater import run_update
 
 
 def cmd_get(args: argparse.Namespace) -> None:
@@ -446,6 +448,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_import.add_argument("--no-alias", action="store_true", help="不自动创建别名")
     p_import.set_defaults(func=cmd_import)
 
+    # doctor
+    p_doctor = sub.add_parser("doctor", help="运行工具自检与健康检查")
+    p_doctor.set_defaults(func=cmd_doctor)
+
+    # update
+    p_update = sub.add_parser("update", help="在线检查新版本并升级工具")
+    p_update.set_defaults(func=cmd_update)
+
     return parser
 
 
@@ -682,3 +692,14 @@ def cmd_cli(args: argparse.Namespace) -> None:
             print("错误：delete 需要 cli_name 和 profile", file=sys.stderr)
             sys.exit(1)
         cmd_delete_cli(args)
+
+
+def cmd_doctor(args: argparse.Namespace) -> None:
+    """运行自检。"""
+    run_doctor()
+
+
+def cmd_update(args: argparse.Namespace) -> None:
+    """在线更新工具。"""
+    run_update()
+

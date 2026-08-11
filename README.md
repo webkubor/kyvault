@@ -269,6 +269,9 @@ kyvault get secret://cli/studio-cli/test-user   # 输出: jwt_token_test
 | - | `kyvault cli get` | 读 CLI Token | `kyvault cli get tool prof` |
 | - | `kyvault cli list` | 列 CLI Token | `kyvault cli list` |
 | - | `kyvault cli delete`| 删 CLI Token | `kyvault cli delete tool prof` |
+| **自检与更新** | | | |
+| - | `kyvault doctor` | 工具自检修复 | `kyvault doctor` |
+| - | `kyvault update` | 在线升级工具 | `kyvault update` |
 
 ---
 

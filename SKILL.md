@@ -28,6 +28,8 @@ metadata:
 | `kyi` | `kyvault init` | 初始化 |
 | `kyr` | `kyvault run` | 注入 env |
 | `kyconnect` | `kyvault connect` | AI 一键连接 |
+| - | `kyvault doctor` | 工具自检修复 |
+| - | `kyvault update` | 在线升级工具 |
 
 ## 安装与对接
 
