@@ -1,12 +1,12 @@
 ![banner](https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/keyring-banner/cs-token4ai-1784197546810397000.png)
 
-# 🔐 Keyring — AI 时代密钥管理
+# 🔐 Kyvault — AI 时代密钥管理
 
 > **你存一次，AI 永远看不到明文。**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/Version-1.2.2-blue.svg)](https://github.com/webkubor/kyvault/releases)
+[![Version](https://img.shields.io/badge/Version-1.3.0-blue.svg)](https://github.com/webkubor/kyvault/releases)
 
 ---
 
@@ -19,6 +19,9 @@ pip install kyvault
 # 初始化
 kyi
 
+# 连接 AI 智能体（自动在当前项目工程注入 rules/skills/cursorrules 规则包）
+kyconnect
+
 # 存账户密码
 kya set github user@gmail.com mypassword
 
@@ -29,17 +32,17 @@ kyk set github ghp_xxxxxxxxxxxx
 kyr --env GITHUB_TOKEN=ghp_xxxxxxxxxxxx -- git push
 ```
 
-**快捷别名：** `ky`=kyvault `kyp`=platform `kya`=account `kyk`=key `kyi`=init `kyr`=run
+**快捷别名：** `ky`=kyvault `kyp`=platform `kya`=account `kyk`=key `kyi`=init `kyr`=run `kyconnect`=kyvault connect
 
 ---
 
-## 🎯 为什么需要 Keyring？
+## 🎯 为什么需要 Kyvault？
 
 | 方案 | AI 能读明文？ | 安全性 |
 |------|--------------|--------|
 | `.env` 文件 | ✅ 能 | ❌ 危险 |
 | 环境变量 | ✅ 能 | ⚠️ 有风险 |
-| **Keyring** | **❌ 不能** | **✅ 安全** |
+| **Kyvault** | **❌ 不能** | **✅ 安全** |
 
 ### 痛点
 
@@ -56,17 +59,27 @@ AI: kyvault run --env GITHUB_TOKEN=github_token -- git push
     （只看到别名，看不到明文）
 ```
 
----
-
 ## 🔥 核心亮点
 
-| 特性 | 说明 |
-|------|------|
-| 🔒 **AI 安全** | 别名注入，明文不暴露 |
-| ⚡ **极速** | 纯本地，毫秒级响应 |
-| 🎯 **多账户多密钥** | 每个平台支持多个账户和多个密钥 |
-| 📦 **轻量依赖** | 仅需 `cryptography>=41.0` |
-| 🔄 **兼容** | 支持 .env 导入 |
+### 🔒 1. AI 编码原生安全 (AI-Safe Alias Injection)
+* **痛点**：传统的 `.env` 文件或内存环境变量会被 Cursor、Claude Code、GitHub Copilot 等 AI 助手读取其上下文，导致密钥直接暴露在 AI 提供商的聊天日志或训练数据中。
+* **解法**：`kyvault` 采用**别名映射注入机制**。AI 在代码和提示词中只能看到无害的“别名”（如 `github_token`），而在运行时（Runtime）通过 `kyvault run` 动态且单向地将明文注入子进程。AI 永远接触不到明文，从源头上杜绝了数据泄露。
+
+### 🤖 2. 智能连接，AI 零配置感知 (Zero-Config AI Connect)
+* **一键连接**：内置 `kyvault connect` 命令，能自动发现并注入当前机器的全局 Gemini/Claude 规则与当前项目的 `.agents/` 技能文件。
+* **IDE 无感对接**：自动识别项目目录并追加安全别名规则到 `.cursorrules` 与 `.copilotinstructions`。AI 智能体在理解您的项目时会“自动学会”使用 `cs secrets`，实现零人工介入的主动安全运维。
+
+### 🖥️ 3. 加密资产台账中心 (Developer Ledger & CLI Multi-Tokens)
+* **服务器台账**：将服务器 IP、root 登录密码、云服务商及月度租用成本以第一公民的数据结构集中加密记录，统一支持 `secret://server/<host>/[ip|root-password]` 的 URI 寻址解密。
+* **CLI 多账户管理**：支持针对同一个 CLI 工具（如 `studio-cli`、`git`）管理多套 Profile（如主账户、测试账户、部署账户）的 Token，多账户环境一键读取，杜绝身份混淆。
+
+### 🔑 4. 纯本地军事级加密 (Local Military-Grade Encryption)
+* **高强度加密**：采用业界公认安全的 **AES-256-GCM**（认证加密），所有数据在写入磁盘前均完成高强度加密。
+* **零网络依赖**：100% 纯本地运行，不发起任何外网连接，绝无任何 SaaS 云端数据泄漏或被拖库的潜在风险。密钥完全掌握在您自己手中。
+
+### 🔄 5. 极简无缝迁移 (.env Migration)
+* **无感导入**：支持一键导入项目已有的 `.env` 配置文件，并自动匹配最适合 AI 使用的变量别名。
+* **支持 Dry-Run**：在实际导入前提供安全预览机制，清晰掌握数据结构变化。
 
 ---
 
@@ -152,6 +165,42 @@ ky import --file .env
 ky import --file .env --prefix GITHUB_
 ```
 
+### 🤖 AI 智能体一键连接 (AI Connect)
+
+通过全局和项目本地的智能规则，使您本地的 AI 编码助手（如 Cursor、VSCode Copilot、Claude Code 等）能够立即读懂密钥库及别名别称，彻底避免明文泄漏：
+```bash
+# 一键自动对接全局 Gemini 规则和当前项目下的 .agents/、.cursorrules 和 .copilotinstructions
+kyvault connect
+```
+
+### 🖥️ 服务器密码与租金台账 (Server Ledger)
+
+以第一公民命令格式加密存储您的所有服务器台账，支持以 `secret://` 的形式让 AI 直接寻址解密：
+```bash
+# 1. 保存服务器（必填：主机名、IP、root密码；可选：月租成本、云服务商）
+kyvault server set my-host 120.46.12.3 rootpwd123 --cost "99元/月" --provider "腾讯云"
+
+# 2. 查询全部台账信息
+kyvault server get my-host
+
+# 3. 指定读取单个加密字段（支持 secret:// URI 路由兼容，完美服务 AI）
+kyvault server get my-host --field ip            # 输出: 120.46.12.3
+kyvault get secret://server/my-host/root-password # 输出: rootpwd123
+```
+
+### 🔌 CLI 客户端多 Token 维护 (CLI Multi-Tokens)
+
+用于多账户、多环境切换的 CLI 统一 Token 凭证维护：
+```bash
+# 1. 为指定 CLI 的不同账户存储 Token
+kyvault cli set studio-cli webkubor jwt_token_main
+kyvault cli set studio-cli test-user jwt_token_test
+
+# 2. 查询指定 Profile 的加密令牌
+kyvault cli get studio-cli webkubor             # 输出: jwt_token_main
+kyvault get secret://cli/studio-cli/test-user   # 输出: jwt_token_test
+```
+
 ---
 
 ## 📁 安全架构
@@ -209,6 +258,16 @@ ky import --file .env --prefix GITHUB_
 | `ky providers` | `kyvault providers` | 支持平台 | `ky providers` |
 | **AI 集成** | | | |
 | `kyr` | `kyvault run` | 注入env | `kyr --env X=val -- cmd` |
+| `kyconnect` | `kyvault connect` | AI 智能对接 | `kyconnect` |
+| **加密资产台账** | | | |
+| - | `kyvault server set` | 存服务器 | `kyvault server set host 1.1.1.1 pw` |
+| - | `kyvault server get` | 读服务器 | `kyvault server get host` |
+| - | `kyvault server list` | 列服务器 | `kyvault server list` |
+| - | `kyvault server delete`| 删服务器 | `kyvault server delete host` |
+| - | `kyvault cli set` | 存 CLI Token | `kyvault cli set tool prof token` |
+| - | `kyvault cli get` | 读 CLI Token | `kyvault cli get tool prof` |
+| - | `kyvault cli list` | 列 CLI Token | `kyvault cli list` |
+| - | `kyvault cli delete`| 删 CLI Token | `kyvault cli delete tool prof` |
 
 ---
 
@@ -246,7 +305,7 @@ ky import --file .env --prefix GITHUB_
 
 ## 🏆 对比
 
-| 功能 | Keyring | .env | 1Password | Vault |
+| 功能 | Kyvault | .env | 1Password | Vault |
 |------|---------|------|-----------|-------|
 | AI 安全 | ✅ | ❌ | ✅ | ✅ |
 | 本地存储 | ✅ | ✅ | ❌ | ❌ |

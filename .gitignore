@@ -6,3 +6,6 @@ __pycache__/
 .DS_Store
 dist/
 build/
+.agents/
+.cursorrules
+.copilotinstructions

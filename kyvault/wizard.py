@@ -23,7 +23,7 @@ def _confirm(prompt: str) -> bool:
 
 def wizard() -> None:
     """交互式设置向导。"""
-    print("🔐 Keyring — 设置向导")
+    print("🔐 Kyvault — 设置向导")
     print("=" * 40)
     print()
 
@@ -77,12 +77,12 @@ def wizard() -> None:
         print(f"✅ 已添加 {len(secrets_added)} 个密钥")
         print()
         print("使用方式：")
-        print("  keyring list          # 查看所有密钥")
-        print("  keyring get 别名      # 读取密钥")
-        print("  keyring run --env X=别名 -- cmd  # AI 用")
+        print("  kyvault list          # 查看所有密钥")
+        print("  kyvault get 别名      # 读取密钥")
+        print("  kyvault run --env X=别名 -- cmd  # AI 用")
     else:
         print("未添加任何密钥。")
-        print("稍后可以用 keyring set secret://... 添加")
+        print("稍后可以用 kyvault set secret://... 添加")
 
     print()
-    print("更多命令：keyring --help")
+    print("更多命令：kyvault --help")

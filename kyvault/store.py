@@ -181,21 +181,155 @@ def list_platform_detail(platform: str) -> Optional[dict]:
     }
 
 
+# ── 服务器台账与 CLI 多 Profile 选项支持 ──────────────────
+
+def set_server(hostname: str, ip: str, root_password: str, cost: str = "", provider: str = "") -> None:
+    """加密并保存服务器台账。"""
+    master_key = get_master_key()
+    data = {
+        "ip": encrypt(ip, master_key),
+        "root-password": encrypt(root_password, master_key)
+    }
+    if cost:
+        data["cost"] = encrypt(cost, master_key)
+    if provider:
+        data["provider"] = encrypt(provider, master_key)
+        
+    secrets = _load_secrets()
+    if "_servers" not in secrets:
+        secrets["_servers"] = {}
+    secrets["_servers"][hostname] = data
+    _save_secrets(secrets)
+
+
+def get_server(hostname: str, field: Optional[str] = None) -> Optional[dict | str]:
+    """读取并解密服务器台账。"""
+    secrets = _load_secrets()
+    if "_servers" not in secrets or hostname not in secrets["_servers"]:
+        return None
+    
+    master_key = get_master_key()
+    encrypted_data = secrets["_servers"][hostname]
+    
+    if field:
+        ciphertext = encrypted_data.get(field)
+        if ciphertext is None:
+            return None
+        return decrypt(ciphertext, master_key)
+        
+    # 解密所有字段并返回 dict
+    result = {}
+    for k, val in encrypted_data.items():
+        result[k] = decrypt(val, master_key)
+    return result
+
+
+def list_servers() -> list[str]:
+    """列出所有服务器主机名。"""
+    secrets = _load_secrets()
+    if "_servers" not in secrets:
+        return []
+    return list(secrets["_servers"].keys())
+
+
+def delete_server(hostname: str) -> bool:
+    """删除服务器台账。"""
+    secrets = _load_secrets()
+    if "_servers" not in secrets or hostname not in secrets["_servers"]:
+        return False
+    del secrets["_servers"][hostname]
+    _save_secrets(secrets)
+    return True
+
+
+def set_cli_token(cli_name: str, profile: str, token: str) -> None:
+    """加密并保存 CLI 多 Profile Token。"""
+    ciphertext = encrypt(token, get_master_key())
+    secrets = _load_secrets()
+    if "_clis" not in secrets:
+        secrets["_clis"] = {}
+    if cli_name not in secrets["_clis"]:
+        secrets["_clis"][cli_name] = {}
+    secrets["_clis"][cli_name][profile] = ciphertext
+    _save_secrets(secrets)
+
+
+def get_cli_token(cli_name: str, profile: str) -> Optional[str]:
+    """读取并解密 CLI Token。"""
+    secrets = _load_secrets()
+    if "_clis" not in secrets or cli_name not in secrets["_clis"]:
+        return None
+    ciphertext = secrets["_clis"][cli_name].get(profile)
+    if ciphertext is None:
+        return None
+    return decrypt(ciphertext, get_master_key())
+
+
+def list_clis(cli_name: Optional[str] = None) -> list[str] | dict[str, list[str]]:
+    """列出所有 CLI 或指定 CLI 下的 Profile 列表。"""
+    secrets = _load_secrets()
+    if "_clis" not in secrets:
+        return [] if cli_name else {}
+    
+    if cli_name:
+        if cli_name not in secrets["_clis"]:
+            return []
+        return list(secrets["_clis"][cli_name].keys())
+        
+    result = {}
+    for name, profiles in secrets["_clis"].items():
+        result[name] = list(profiles.keys())
+    return result
+
+
+def delete_cli_token(cli_name: str, profile: str) -> bool:
+    """删除 CLI Token。"""
+    secrets = _load_secrets()
+    if "_clis" not in secrets or cli_name not in secrets["_clis"]:
+        return False
+    profiles = secrets["_clis"][cli_name]
+    if profile in profiles:
+        del profiles[profile]
+        if not profiles:
+            del secrets["_clis"][cli_name]
+        _save_secrets(secrets)
+        return True
+    return False
+
+
 # ── 旧接口兼容（alias / import 用） ──────────────────────
 
 def get_secret(ref: str) -> Optional[str]:
     """读取并解密本地密钥（兼容旧 secret:// 格式）。"""
     platform, name = parse_ref(ref)
+    
+    # 支持 server 与 cli 命名空间通过 secret:// 寻址
+    if platform == "server":
+        parts = name.split("/", 1)
+        if len(parts) == 2:
+            return get_server(parts[0], parts[1])
+        elif len(parts) == 1:
+            data = get_server(parts[0])
+            import json
+            return json.dumps(data) if data else None
+            
+    if platform == "cli":
+        parts = name.split("/", 1)
+        if len(parts) == 2:
+            return get_cli_token(parts[0], parts[1])
+
     secrets = _load_secrets()
 
     # 新格式：platform/name 在 keys 或 accounts 中
     if platform in secrets:
-        plaintext = secrets[platform].get("keys", {}).get(name)
-        if plaintext:
-            return decrypt(plaintext, get_master_key())
-        plaintext = secrets[platform].get("accounts", {}).get(name)
-        if plaintext:
-            return decrypt(plaintext, get_master_key())
+        # 排除系统保留前缀
+        if not platform.startswith("_"):
+            plaintext = secrets[platform].get("keys", {}).get(name)
+            if plaintext:
+                return decrypt(plaintext, get_master_key())
+            plaintext = secrets[platform].get("accounts", {}).get(name)
+            if plaintext:
+                return decrypt(plaintext, get_master_key())
 
     # 旧格式兼容：platform/name 作为扁平 key
     key = f"{platform}/{name}"
@@ -208,12 +342,34 @@ def get_secret(ref: str) -> Optional[str]:
 def set_secret(ref: str, value: str, kind: str = "API Key", account: str = "") -> None:
     """加密并保存密钥（兼容旧 secret:// 格式，存入 keys）。"""
     platform, name = parse_ref(ref)
+    if platform == "server":
+        parts = name.split("/", 1)
+        if len(parts) == 2:
+            # 默认写入 ip 或 root-password，其余为可选项
+            ip = value if parts[1] == "ip" else ""
+            pw = value if parts[1] == "root-password" else ""
+            set_server(parts[0], ip, pw)
+            return
+    if platform == "cli":
+        parts = name.split("/", 1)
+        if len(parts) == 2:
+            set_cli_token(parts[0], parts[1], value)
+            return
+            
     set_key(platform, name, value)
 
 
 def delete_secret(ref: str) -> bool:
     """删除密钥（兼容旧格式）。"""
     platform, name = parse_ref(ref)
+    if platform == "server":
+        parts = name.split("/", 1)
+        return delete_server(parts[0])
+    if platform == "cli":
+        parts = name.split("/", 1)
+        if len(parts) == 2:
+            return delete_cli_token(parts[0], parts[1])
+
     if delete_key(platform, name):
         return True
     # 旧格式兼容
@@ -230,12 +386,27 @@ def list_secrets() -> list[dict]:
     """列出所有密钥元信息（兼容旧接口）。"""
     secrets = _load_secrets()
     result = []
+    
+    # 注入服务器和 CLI 字段
+    if "_servers" in secrets:
+        for hostname, fields in secrets["_servers"].items():
+            for field in fields.keys():
+                result.append({"platform": "server", "name": f"{hostname}/{field}", "kind": "Server Field", "account": ""})
+                
+    if "_clis" in secrets:
+        for cli_name, profiles in secrets["_clis"].items():
+            for profile in profiles.keys():
+                result.append({"platform": "cli", "name": f"{cli_name}/{profile}", "kind": "CLI Token", "account": profile})
+
     for platform, data in secrets.items():
+        if platform.startswith("_"):
+            continue
         # 新格式
-        for name in data.get("keys", {}).keys():
-            result.append({"platform": platform, "name": name, "kind": "Key", "account": ""})
-        for username in data.get("accounts", {}).keys():
-            result.append({"platform": platform, "name": username, "kind": "Account", "account": username})
+        if isinstance(data, dict) and ("keys" in data or "accounts" in data):
+            for name in data.get("keys", {}).keys():
+                result.append({"platform": platform, "name": name, "kind": "Key", "account": ""})
+            for username in data.get("accounts", {}).keys():
+                result.append({"platform": platform, "name": username, "kind": "Account", "account": username})
         # 旧格式兼容
         for flat_key, val in data.items() if isinstance(data, dict) and "accounts" not in data else []:
             if isinstance(val, dict) and "ciphertext" in val:
@@ -248,14 +419,24 @@ def list_platforms() -> dict[str, list[dict]]:
     """按平台分组列出密钥（兼容旧接口）。"""
     secrets = _load_secrets()
     platforms = {}
+    
+    # 注入系统内部虚平台以实现对齐显示
+    if "_servers" in secrets:
+        platforms["server"] = [{"name": f"{h}/{f}", "kind": "Server Field", "account": ""} for h, fields in secrets["_servers"].items() for f in fields.keys()]
+    if "_clis" in secrets:
+        platforms["cli"] = [{"name": f"{c}/{p}", "kind": "CLI Token", "account": p} for c, profiles in secrets["_clis"].items() for p in profiles.keys()]
+
     for platform, data in secrets.items():
+        if platform.startswith("_"):
+            continue
         if platform not in platforms:
             platforms[platform] = []
         # 新格式
-        for name in data.get("keys", {}).keys():
-            platforms[platform].append({"name": name, "kind": "Key", "account": ""})
-        for username in data.get("accounts", {}).keys():
-            platforms[platform].append({"name": username, "kind": "Account", "account": username})
+        if isinstance(data, dict) and ("keys" in data or "accounts" in data):
+            for name in data.get("keys", {}).keys():
+                platforms[platform].append({"name": name, "kind": "Key", "account": ""})
+            for username in data.get("accounts", {}).keys():
+                platforms[platform].append({"name": username, "kind": "Account", "account": username})
         # 旧格式兼容
         for flat_key, val in data.items() if isinstance(data, dict) and "accounts" not in data else []:
             if isinstance(val, dict) and "ciphertext" in val:

@@ -24,6 +24,14 @@ from .store import (
     delete_key,
     list_all_platforms,
     list_platform_detail,
+    set_server,
+    get_server,
+    list_servers,
+    delete_server,
+    set_cli_token,
+    get_cli_token,
+    list_clis,
+    delete_cli_token,
 )
 from .validator import validate_key, list_providers, get_provider
 from .alias import (
@@ -170,9 +178,9 @@ def cmd_init(args: argparse.Namespace) -> None:
     init_master_key()
     print(f"✓ Master key 已生成：~/.keyring/master.key")
     print(f"\n开始使用：")
-    print(f"  keyring wizard              # 交互式向导")
-    print(f"  keyring import --file .env  # 从 .env 导入")
-    print(f"  keyring set secret://...    # 手动添加")
+    print(f"  kyvault wizard              # 交互式向导")
+    print(f"  kyvault import --file .env  # 从 .env 导入")
+    print(f"  kyvault set secret://...    # 手动添加")
 
 
 def cmd_wizard(args: argparse.Namespace) -> None:
@@ -338,7 +346,7 @@ def build_parser() -> argparse.ArgumentParser:
     # ── API Key 验证 ──
     p_check = sub.add_parser("check", help="验证 API Key 是否有效")
     p_check.add_argument("provider", help="平台名称（如 openai、deepseek、zhipu）")
-    p_check.add_argument("key_name", nargs="?", help="keyring 中的密钥名（可选）")
+    p_check.add_argument("key_name", nargs="?", help="kyvault 中的密钥名（可选）")
     p_check.add_argument("--key", dest="api_key", help="直接提供 API Key（可选）")
     p_check.set_defaults(func=cmd_check)
 
@@ -402,6 +410,29 @@ def build_parser() -> argparse.ArgumentParser:
     # init
     p_init = sub.add_parser("init", help="初始化 master key")
     p_init.set_defaults(func=cmd_init)
+
+    # connect
+    p_connect = sub.add_parser("connect", help="连接本地 AI 编码助手并写入规则/技能包")
+    p_connect.set_defaults(func=cmd_connect)
+
+    # server
+    p_server = sub.add_parser("server", help="管理服务器资产与密码台账")
+    p_server.add_argument("action", choices=["set", "get", "list", "delete"], help="操作")
+    p_server.add_argument("hostname", nargs="?", help="服务器主机名（如 my-web-server）")
+    p_server.add_argument("ip", nargs="?", help="服务器公网 IP（set 时必填）")
+    p_server.add_argument("root_password", nargs="?", help="服务器 root 密码（set 时必填）")
+    p_server.add_argument("--cost", help="月度租用成本（可选）")
+    p_server.add_argument("--provider", help="云服务商（可选）")
+    p_server.add_argument("--field", help="get 时指定读取的特定字段（可选）")
+    p_server.set_defaults(func=cmd_server)
+
+    # cli
+    p_cli = sub.add_parser("cli", help="管理 CLI 多 Profile Token 凭证")
+    p_cli.add_argument("action", choices=["set", "get", "list", "delete"], help="操作")
+    p_cli.add_argument("cli_name", nargs="?", help="CLI 名称（如 studio-cli）")
+    p_cli.add_argument("profile", nargs="?", help="Profile 账号别名（如 webkubor）")
+    p_cli.add_argument("token", nargs="?", help="登录凭证 Token（set 时必填）")
+    p_cli.set_defaults(func=cmd_cli)
 
     # wizard
     p_wizard = sub.add_parser("wizard", help="交互式设置向导")
@@ -482,7 +513,7 @@ def cmd_check(args: argparse.Namespace) -> None:
             print(f"  {result['balance']}")
         sys.exit(0 if result["valid"] else 1)
 
-    # 否则从 keyring 中读取
+    # 否则从 kyvault 中读取
     if args.key_name:
         value = get_key(args.provider, args.key_name)
         if value is None:
@@ -496,7 +527,7 @@ def cmd_check(args: argparse.Namespace) -> None:
             print(f"  {result['balance']}")
         sys.exit(0 if result["valid"] else 1)
 
-    print("错误：请提供 API Key 或 keyring 中的密钥名", file=sys.stderr)
+    print("错误：请提供 API Key 或 kyvault 中的密钥名", file=sys.stderr)
     sys.exit(1)
 
 
@@ -519,3 +550,135 @@ def main() -> None:
         parser.print_help()
         sys.exit(1)
     args.func(args)
+
+
+# ── 新增加密台账与连接路由实现 ────────────────────────────
+
+def cmd_connect(args: argparse.Namespace) -> None:
+    """连接本地 AI 编码助手。"""
+    from .connect import connect_agents
+    connect_agents()
+
+
+def cmd_set_server(args: argparse.Namespace) -> None:
+    """保存服务器台账。"""
+    set_server(args.hostname, args.ip, args.root_password, args.cost or "", args.provider or "")
+    print(f"✓ 服务器 {args.hostname} 台账已保存")
+
+
+def cmd_get_server(args: argparse.Namespace) -> None:
+    """读取服务器台账。"""
+    data = get_server(args.hostname, args.field)
+    if data is None:
+        print(f"未找到：{args.hostname}", file=sys.stderr)
+        sys.exit(1)
+    if isinstance(data, dict):
+        for k, v in data.items():
+            print(f"  {k}: {v}")
+    else:
+        print(data, end="")
+
+
+def cmd_list_servers(args: argparse.Namespace) -> None:
+    """列出所有服务器。"""
+    servers = list_servers()
+    if not servers:
+        print("没有记录任何服务器")
+        return
+    print("已记录的服务器主机名：")
+    for hostname in servers:
+        print(f"  {hostname}")
+
+
+def cmd_delete_server(args: argparse.Namespace) -> None:
+    """删除服务器台账。"""
+    if delete_server(args.hostname):
+        print(f"✓ 服务器 {args.hostname} 台账已删除")
+    else:
+        print(f"未找到：{args.hostname}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_server(args: argparse.Namespace) -> None:
+    """路由服务器子命令。"""
+    if args.action == "set":
+        if not args.hostname or not args.ip or not args.root_password:
+            print("错误：set 需要 hostname、ip 和 root_password", file=sys.stderr)
+            sys.exit(1)
+        cmd_set_server(args)
+    elif args.action == "get":
+        if not args.hostname:
+            print("错误：get 需要 hostname", file=sys.stderr)
+            sys.exit(1)
+        cmd_get_server(args)
+    elif args.action == "list":
+        cmd_list_servers(args)
+    elif args.action == "delete":
+        if not args.hostname:
+            print("错误：delete 需要 hostname", file=sys.stderr)
+            sys.exit(1)
+        cmd_delete_server(args)
+
+
+def cmd_set_cli(args: argparse.Namespace) -> None:
+    """保存 CLI Profile Token。"""
+    set_cli_token(args.cli_name, args.profile, args.token)
+    print(f"✓ CLI {args.cli_name} 的 Profile {args.profile} Token 已保存")
+
+
+def cmd_get_cli(args: argparse.Namespace) -> None:
+    """读取 CLI Profile Token。"""
+    token = get_cli_token(args.cli_name, args.profile)
+    if token is None:
+        print(f"未找到：{args.profile}@{args.cli_name}", file=sys.stderr)
+        sys.exit(1)
+    print(token, end="")
+
+
+def cmd_list_clis(args: argparse.Namespace) -> None:
+    """列出 CLI。"""
+    clis = list_clis(args.cli_name)
+    if not clis:
+        if args.cli_name:
+            print(f"CLI {args.cli_name} 下没有配置 Profile")
+        else:
+            print("没有记录任何 CLI Token")
+        return
+    if isinstance(clis, list):
+        print(f"  {args.cli_name} Profiles:")
+        for profile in clis:
+            print(f"    {profile}")
+    else:
+        print("已记录的 CLI 与 Profiles：")
+        for cli_name, profiles in clis.items():
+            print(f"  {cli_name} -> {', '.join(profiles)}")
+
+
+def cmd_delete_cli(args: argparse.Namespace) -> None:
+    """删除 CLI Token。"""
+    if delete_cli_token(args.cli_name, args.profile):
+        print(f"✓ CLI {args.cli_name} 的 Profile {args.profile} Token 已删除")
+    else:
+        print(f"未找到：{args.profile}@{args.cli_name}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_cli(args: argparse.Namespace) -> None:
+    """路由 CLI 子命令。"""
+    if args.action == "set":
+        if not args.cli_name or not args.profile or not args.token:
+            print("错误：set 需要 cli_name、profile 和 token", file=sys.stderr)
+            sys.exit(1)
+        cmd_set_cli(args)
+    elif args.action == "get":
+        if not args.cli_name or not args.profile:
+            print("错误：get 需要 cli_name 和 profile", file=sys.stderr)
+            sys.exit(1)
+        cmd_get_cli(args)
+    elif args.action == "list":
+        cmd_list_clis(args)
+    elif args.action == "delete":
+        if not args.cli_name or not args.profile:
+            print("错误：delete 需要 cli_name 和 profile", file=sys.stderr)
+            sys.exit(1)
+        cmd_delete_cli(args)
