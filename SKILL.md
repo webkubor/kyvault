@@ -1,19 +1,19 @@
 ---
 name: kyvault
-version: 1.2.2
-description: "轻量级加密密钥管理 — 支持多账户多密钥，AI 安全注入。触发条件: 需要管理密钥、密码、API Token 时触发。触发词: 密钥、secret、token、API key、password、keyring。"
+version: 1.3.0
+description: "轻量级加密密钥管理 — 支持多账户多密钥，AI 安全注入。触发条件: 需要管理密钥、密码、API Token、服务器台账或 CLI 令牌时触发。触发词: 密钥、secret、token、API key、password、kyvault、server ledger、cli token。"
 license: MIT
 author: webkubor
 category: security
 platforms: [linux, macos]
 metadata:
   openclaw:
-    tags: [security, secrets, passwords, encryption, keyring]
+    tags: [security, secrets, passwords, encryption, kyvault]
     requires:
       python: [>=3.10, cryptography>=41.0]
 ---
 
-# Keyring
+# Kyvault
 
 本地加密密钥库 — 人存一次，AI 用别名注入，永远看不到明文。
 
@@ -22,17 +22,19 @@ metadata:
 | 别名 | 等价 | 用途 |
 |------|------|------|
 | `ky` | `kyvault` | 主命令 |
-| `kyp` | `keyring platform` | 列出平台 |
-| `kya` | `keyring account` | 账户管理 |
-| `kyk` | `keyring key` | 密钥管理 |
-| `kyi` | `keyring init` | 初始化 |
-| `kyr` | `keyring run` | 注入 env |
+| `kyp` | `kyvault platform` | 列出平台 |
+| `kya` | `kyvault account` | 账户管理 |
+| `kyk` | `kyvault key` | 密钥管理 |
+| `kyi` | `kyvault init` | 初始化 |
+| `kyr` | `kyvault run` | 注入 env |
+| `kyconnect` | `kyvault connect` | AI 一键连接 |
 
-## 安装
+## 安装与对接
 
 ```bash
 pip install kyvault
 kyi
+kyconnect
 ```
 
 ## 账户管理
@@ -115,6 +117,32 @@ ky import --file .env
 ky import --file .env --prefix GITHUB_
 ```
 
+## 🖥️ 服务器密码与租金台账 (Server Ledger)
+
+```bash
+# 保存服务器
+kyvault server set my-host 120.46.12.3 rootpwd123 --cost "99元/月" --provider "腾讯云"
+
+# 查询全部台账信息
+kyvault server get my-host
+
+# 指定读取单个加密字段
+kyvault server get my-host --field ip
+kyvault get secret://server/my-host/root-password
+```
+
+## 🔌 CLI 客户端多 Token 维护 (CLI Multi-Tokens)
+
+```bash
+# 为指定 CLI 的不同账户存储 Token
+kyvault cli set studio-cli webkubor jwt_token_main
+kyvault cli set studio-cli test-user jwt_token_test
+
+# 查询指定 Profile 的加密令牌
+kyvault cli get studio-cli webkubor
+kyvault get secret://cli/studio-cli/test-user
+```
+
 ## 存储结构
 
 ```
@@ -134,6 +162,19 @@ ky import --file .env --prefix GITHUB_
       "ghp_xxx": "encrypted_key",
       "ghp_yyy": "encrypted_key"
     }
+  },
+  "_servers": {
+    "my-host": {
+      "ip": "encrypted_ip",
+      "root-password": "encrypted_password",
+      "cost": "encrypted_cost",
+      "provider": "encrypted_provider"
+    }
+  },
+  "_clis": {
+    "studio-cli": {
+      "webkubor": "encrypted_token"
+    }
   }
 }
 ```
@@ -146,7 +187,7 @@ ky check openai --key sk-xxx
 ky check deepseek --key sk-xxx
 ky check zhipu --key xxx
 
-# 从 keyring 中读取并验证
+# 从 kyvault 中读取并验证
 kyk set openai sk-xxx mykey
 ky check openai mykey
 
@@ -170,6 +211,7 @@ ky providers
 | 字节豆包 | 🫘 | `ky check doubao`（含余额） |
 | Groq | ⚡ | `ky check groq` |
 | OpenRouter | 🔀 | `ky check openrouter` |
+| SiliconFlow | 🧊 | `ky check siliconflow` |
 | GitHub | 🐙 | `ky check github` |
 
 ## 双模式设计
