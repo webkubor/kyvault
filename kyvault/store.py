@@ -7,10 +7,20 @@ from pathlib import Path
 from typing import Optional
 
 from .crypto import encrypt, decrypt
+from . import d1_backend
 
 SECRETS_DIR = Path.home() / ".keyring"
 SECRETS_FILE = SECRETS_DIR / "secrets.json"
 MASTER_KEY_FILE = SECRETS_DIR / "master.key"
+
+
+def _using_d1() -> bool:
+    """KYVAULT_BACKEND=d1 时，get/set/delete/list 走 Cloudflare D1（跟 CortexOS
+    `cs kyvault` 共用同一张表），否则维持默认的本地文件行为。只影响
+    get_secret/set_secret/delete_secret/list_secrets/list_platforms 这 5 个通过
+    secret://platform/name 寻址的入口——account/key/server/cli 这些更细粒度的命名
+    空间目前仍只有本地文件实现。"""
+    return os.environ.get("KYVAULT_BACKEND", "file").strip().lower() == "d1"
 
 
 def _load_secrets() -> dict:
@@ -304,9 +314,12 @@ def delete_cli_token(cli_name: str, profile: str) -> bool:
 # ── 旧接口兼容（alias / import 用） ──────────────────────
 
 def get_secret(ref: str) -> Optional[str]:
-    """读取并解密本地密钥（兼容旧 secret:// 格式）。"""
+    """读取并解密密钥（兼容旧 secret:// 格式）。KYVAULT_BACKEND=d1 时走 Cloudflare D1。"""
+    if _using_d1():
+        return d1_backend.get_secret(ref)
+
     platform, name = parse_ref(ref)
-    
+
     # 支持 server 与 cli 命名空间通过 secret:// 寻址
     if platform == "server":
         parts = name.split("/", 1)
@@ -344,7 +357,11 @@ def get_secret(ref: str) -> Optional[str]:
 
 
 def set_secret(ref: str, value: str, kind: str = "API Key", account: str = "") -> None:
-    """加密并保存密钥（兼容旧 secret:// 格式，存入 keys）。"""
+    """加密并保存密钥（兼容旧 secret:// 格式，存入 keys）。KYVAULT_BACKEND=d1 时走 Cloudflare D1。"""
+    if _using_d1():
+        d1_backend.set_secret(ref, value, kind=kind, account=account)
+        return
+
     platform, name = parse_ref(ref)
     if platform == "server":
         parts = name.split("/", 1)
@@ -364,7 +381,10 @@ def set_secret(ref: str, value: str, kind: str = "API Key", account: str = "") -
 
 
 def delete_secret(ref: str) -> bool:
-    """删除密钥（兼容旧格式）。"""
+    """删除密钥（兼容旧格式）。KYVAULT_BACKEND=d1 时走 Cloudflare D1。"""
+    if _using_d1():
+        return d1_backend.delete_secret(ref)
+
     platform, name = parse_ref(ref)
     if platform == "server":
         parts = name.split("/", 1)
@@ -387,7 +407,10 @@ def delete_secret(ref: str) -> bool:
 
 
 def list_secrets() -> list[dict]:
-    """列出所有密钥元信息（兼容旧接口）。"""
+    """列出所有密钥元信息（兼容旧接口）。KYVAULT_BACKEND=d1 时走 Cloudflare D1。"""
+    if _using_d1():
+        return d1_backend.list_secrets()
+
     secrets = _load_secrets()
     result = []
     
@@ -420,7 +443,10 @@ def list_secrets() -> list[dict]:
 
 
 def list_platforms() -> dict[str, list[dict]]:
-    """按平台分组列出密钥（兼容旧接口）。"""
+    """按平台分组列出密钥（兼容旧接口）。KYVAULT_BACKEND=d1 时走 Cloudflare D1。"""
+    if _using_d1():
+        return d1_backend.list_platforms()
+
     secrets = _load_secrets()
     platforms = {}
     

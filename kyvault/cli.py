@@ -1,6 +1,7 @@
 """vault CLI — 命令行入口，纯本地，零网络依赖。"""
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -63,18 +64,22 @@ def cmd_get(args: argparse.Namespace) -> None:
 
 
 def cmd_list(args: argparse.Namespace) -> None:
-    """列出密钥，支持按平台过滤。"""
+    """列出密钥，支持按平台过滤；--json 输出结构化数据供程序解析（如 CortexOS `cs kyvault`）。"""
     secrets = list_secrets()
+
+    if args.platform:
+        secrets = [s for s in secrets if s["platform"] == args.platform]
+
+    if getattr(args, "json", False):
+        print(json.dumps(secrets, ensure_ascii=False))
+        return
+
     if not secrets:
         print("（空）")
         return
-
-    # 按平台过滤
-    if args.platform:
-        secrets = [s for s in secrets if s["platform"] == args.platform]
-        if not secrets:
-            print(f"平台 {args.platform} 下没有密钥")
-            return
+    if args.platform and not secrets:
+        print(f"平台 {args.platform} 下没有密钥")
+        return
 
     for s in secrets:
         account = f" ({s['account']})" if s.get("account") else ""
@@ -95,9 +100,11 @@ def cmd_platforms(args: argparse.Namespace) -> None:
 
 
 def cmd_set(args: argparse.Namespace) -> None:
-    """写入/更新密钥。"""
+    """写入/更新密钥。value 传 "-" 时从 stdin 读取，避免明文出现在进程参数列表
+    （`ps`/`ps aux` 能看到 argv，看不到 stdin），供其他程序调用本 CLI 时使用。"""
     try:
-        set_secret(args.ref, args.value, kind=args.kind, account=args.account)
+        value = sys.stdin.readline().rstrip("\n") if args.value == "-" else args.value
+        set_secret(args.ref, value, kind=args.kind, account=args.account)
         platform, name = parse_ref(args.ref)
         print(f"✓ secret://{platform}/{name} 已保存")
     except ValueError as e:
@@ -365,6 +372,7 @@ def build_parser() -> argparse.ArgumentParser:
     # list
     p_list = sub.add_parser("list", help="列出密钥（支持按平台过滤）")
     p_list.add_argument("--platform", "-p", help="只显示指定平台的密钥")
+    p_list.add_argument("--json", action="store_true", help="输出 JSON（供程序解析）")
     p_list.set_defaults(func=cmd_list)
 
     # platforms
@@ -374,7 +382,7 @@ def build_parser() -> argparse.ArgumentParser:
     # set
     p_set = sub.add_parser("set", help="写入/更新密钥")
     p_set.add_argument("ref", help="secret://platform/name")
-    p_set.add_argument("value", help="密钥值")
+    p_set.add_argument("value", help="密钥值；传 - 表示从 stdin 读取（避免出现在进程参数里）")
     p_set.add_argument("--kind", default="API Key", help="密钥类型")
     p_set.add_argument("--account", default="", help="关联账号")
     p_set.set_defaults(func=cmd_set)
