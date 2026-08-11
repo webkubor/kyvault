@@ -213,6 +213,7 @@ ky providers
 | OpenRouter | 🔀 | `ky check openrouter` |
 | SiliconFlow | 🧊 | `ky check siliconflow` |
 | GitHub | 🐙 | `ky check github` |
+| Cloudflare | 🧡 | `ky check cloudflare` |
 
 ## 双模式设计
 

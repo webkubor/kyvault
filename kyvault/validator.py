@@ -159,6 +159,14 @@ PROVIDERS = {
         "env_key": "GITHUB_TOKEN",
         "logo": "🐙",
     },
+    "cloudflare": {
+        "name": "Cloudflare",
+        "url": "https://api.cloudflare.com/client/v4/user/tokens/verify",
+        "header": "Authorization",
+        "prefix": "Bearer ",
+        "env_key": "CLOUDFLARE_API_TOKEN",
+        "logo": "🧡",
+    },
 }
 
 

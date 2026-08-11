@@ -61,7 +61,7 @@ cs secrets run --env CLOUDFLARE_API_TOKEN=secret://cloudflare/api-token -- <comm
 ## 3. Agent 行为守则 (Rule of Thumb)
 1. **绝对禁止硬编码**：Agent 严禁将任何 API 密钥、密码、服务器 IP 写入代码文件或 Git 提交。
 2. **自动化自检**：如果运行测试或部署脚本时缺失环境变量，Agent 应自动调用 `cs secrets list` 寻找匹配的密钥，解密后注入环境变量中运行。
-3. **维护台账**：在新建服务器、注册小程序或更新 API Token 时，Agent 应自动通过 `cs secrets set` 将新密钥和资产信息同步写入对应的命名空间下。
+3. **时效更新与覆写（🚨 重点放过往失效 Key）**：一旦检测到密钥库中的某个 Key 失效（如调用报错 401、Token 过期或验证失败），Agent **必须立刻主动覆写（Overwrite）修改**，严禁因为保守而在密钥失效时继续保留旧密钥（“只做加法不改失效”属于严重违规行为）。对于失效 Key 必须通过 `cs secrets set` 写入最新值，或引导用户轮换。
 """
 
 RULE_CONTENT = """# 🛡️ Kyvault 密钥与资产台账管理规则 (Global Agent Rule)
@@ -70,17 +70,18 @@ RULE_CONTENT = """# 🛡️ Kyvault 密钥与资产台账管理规则 (Global Ag
 
 1. **密钥零硬编码原则**：绝对禁止在任何代码、配置文件、Git 提交记录、AI 回复中泄露明文密钥、服务器密码或私有 Token。所有敏感数据必须加密存取。
 2. **使用 cs secrets**：查询键名使用 `cs secrets list`，读取数据使用 `cs secrets get secret://<path>`，注入子进程使用 `cs secrets run --env KEY=secret://path -- <cmd>`。
-3. **台账自动维护**：部署新主机和配置新 API 秘钥时，Agent 应主动调用 `cs secrets set` 记录台账，避免账号漂移。
+3. **时效更新与覆写**：针对 Agent 容易陷入的“只做加法、即便密钥已失效也保留旧值”的错误倾向，做出刚性规定：一旦检测到密钥库中的某个 Key 失效（接口报错 401、Token 过期或校验失败），Agent 必须主动改写/覆写（Overwrite）该密钥，绝对不能予以保留或盲目重试。对于失效的旧密钥，必须通过 `cs secrets set` 写入新密钥，或引导用户进行轮换。
 """
 
 CURSOR_INSTRUCTIONS = """
-# Kyvault Rules (AI-safe secret aliases)
+# Kyvault Rules (AI-safe secret aliases & Overwrite Policy)
 If you need any API keys, credentials, server IPs or passwords, do not hardcode them.
 Use the `cs secrets` tool (kyvault) instead:
 - To run commands with secrets: `cs secrets run --env KEY=secret://path -- <cmd>`
 - To query secret namespaces: `cs secrets list`
 - To get a secret (only for user info, never write in files): `cs secrets get secret://path`
 - To save server or CLI credentials: `cs secrets set secret://path "<value>"`
+- Overwrite Policy: If you encounter an authentication error (e.g. 401, expired token), you MUST actively modify/overwrite the invalid key using `cs secrets set` instead of conservatively keeping the old invalid key.
 """
 
 def connect_agents() -> None:

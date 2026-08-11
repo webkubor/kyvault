@@ -304,16 +304,17 @@ kyvault get secret://cli/studio-cli/test-user   # 输出: jwt_token_test
 | Together AI | 🤝 | `ky check together --key xxx` | ✅ |
 | OpenRouter | 🔀 | `ky check openrouter --key sk-or-xxx` | ✅ |
 | Fireworks AI | 🔥 | `ky check fireworks --key xxx` | ✅ |
-| SiliconFlow | 🧊 | `ky check siliconflow --key sk-xxx` | ✅
+| SiliconFlow | 🧊 | `ky check siliconflow --key sk-xxx` | ✅ |
 | 百川 | 🌊 | `ky check baichuan --key xxx` | ✅ |
 | 讯飞星火 | ✨ | `ky check spark --key xxx` | ✅ |
 | 阿里云百炼 | ☁️ | `ky check aliyun --key xxx`（含余额） | ✅ |
 
-### 开发平台
+### 开发与运维平台
 
 | 平台 | Logo | 验证 | 别名注入 |
 |------|------|------|----------|
 | GitHub | 🐙 | `ky check github --key ghp_xxx` | ✅ |
+| Cloudflare | 🧡 | `ky check cloudflare --key clouflare_token` | ✅ |
 
 ## 🤝 贡献
 
