@@ -301,7 +301,9 @@ kyvault get secret://cli/studio-cli/test-user   # 输出: jwt_token_test
 | 平台 | Logo | 验证 | 别名注入 |
 |------|------|------|----------|
 | GitHub | 🐙 | `ky check github --key ghp_xxx` | ✅ |
-| Cloudflare | 🧡 | `ky check cloudflare --key clouflare_token` | ✅ |
+| Cloudflare | 🧡 | `ky check cloudflare --key cloudflare_token` | ✅ |
+| GitLab | 🦊 | `ky check gitlab --key glpat-xxx` | ✅ |
+| Feishu | 🐦 | `ky check feishu --key tenant_access_token` | ✅ |
 
 ## 🤝 贡献
 

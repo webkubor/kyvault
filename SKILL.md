@@ -214,6 +214,8 @@ ky providers
 | SiliconFlow | 🧊 | `ky check siliconflow` |
 | GitHub | 🐙 | `ky check github` |
 | Cloudflare | 🧡 | `ky check cloudflare` |
+| GitLab | 🦊 | `ky check gitlab` |
+| Feishu | 🐦 | `ky check feishu` |
 
 ## 双模式设计
 

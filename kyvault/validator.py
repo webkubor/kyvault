@@ -167,6 +167,22 @@ PROVIDERS = {
         "env_key": "CLOUDFLARE_API_TOKEN",
         "logo": "🧡",
     },
+    "gitlab": {
+        "name": "GitLab",
+        "url": "https://gitlab.com/api/v4/user",
+        "header": "PRIVATE-TOKEN",
+        "prefix": "",
+        "env_key": "GITLAB_TOKEN",
+        "logo": "🦊",
+    },
+    "feishu": {
+        "name": "Feishu",
+        "url": "https://open.feishu.cn/open-apis/bot/v3/info",
+        "header": "Authorization",
+        "prefix": "Bearer ",
+        "env_key": "FEISHU_TOKEN",
+        "logo": "🐦",
+    },
 }
 
 
@@ -264,6 +280,16 @@ def validate_key(provider_name: str, api_key: str) -> dict:
 
         with urllib.request.urlopen(req, timeout=10) as resp:
             result = json.loads(resp.read().decode("utf-8"))
+
+            # Feishu 特殊处理：Feishu API 即使 Token 失效也会返回 HTTP 200，需要检查 json body 的 code
+            if provider_name == "feishu" and result.get("code") != 0:
+                return {
+                    "valid": False,
+                    "message": f"🐦 Feishu 验证失败：{result.get('msg', 'Token 无效或已过期')}",
+                    "provider": provider_name,
+                    "models": [],
+                    "balance": None,
+                }
 
             # 提取模型列表
             models = []
