@@ -380,6 +380,21 @@ def set_secret(ref: str, value: str, kind: str = "API Key", account: str = "") -
     set_key(platform, name, value)
 
 
+def annotate_secret(ref: str, account: str | None = None, kind: str | None = None) -> bool:
+    """只改元信息（备注/类型），不碰密文。**仅 D1 后端支持。**
+
+    本地 JSON 后端不支持不是偷懒：它的 keys 结构里只存 {name: 加密值}，压根没有
+    account/kind 这两列（见 set_key），没有地方可写。假装支持、静默不生效，比明确报错糟得多——
+    调用方会以为备注改好了。
+    """
+    if _using_d1():
+        return d1_backend.annotate_secret(ref, account=account, kind=kind)
+    raise ValueError(
+        "annotate 仅 D1 后端可用：本地 JSON 后端不存 account/kind 元信息（结构里没有这两列）。"
+        "设 KYVAULT_BACKEND=d1 后重试。"
+    )
+
+
 def delete_secret(ref: str) -> bool:
     """删除密钥（兼容旧格式）。KYVAULT_BACKEND=d1 时走 Cloudflare D1。"""
     if _using_d1():

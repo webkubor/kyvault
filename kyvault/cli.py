@@ -33,6 +33,7 @@ from .store import (
     get_cli_token,
     list_clis,
     delete_cli_token,
+    annotate_secret,
 )
 from .validator import validate_key, list_providers, get_provider
 from .alias import (
@@ -107,6 +108,19 @@ def cmd_set(args: argparse.Namespace) -> None:
         set_secret(args.ref, value, kind=args.kind, account=args.account)
         platform, name = parse_ref(args.ref)
         print(f"✓ secret://{platform}/{name} 已保存")
+    except ValueError as e:
+        print(f"错误：{e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_annotate(args: argparse.Namespace) -> None:
+    """只改备注/类型，不需要提供密钥明文。"""
+    try:
+        if annotate_secret(args.ref, account=args.account, kind=args.kind):
+            print(f"✓ {args.ref} 元信息已更新（密文未改动）")
+        else:
+            print(f"未找到：{args.ref}", file=sys.stderr)
+            sys.exit(1)
     except ValueError as e:
         print(f"错误：{e}", file=sys.stderr)
         sys.exit(1)
@@ -386,6 +400,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_set.add_argument("--kind", default="API Key", help="密钥类型")
     p_set.add_argument("--account", default="", help="关联账号")
     p_set.set_defaults(func=cmd_set)
+
+    # annotate —— 只改元信息，不用交出明文
+    p_ann = sub.add_parser("annotate", help="只改备注/类型，不需要提供密钥明文")
+    p_ann.add_argument("ref", help="secret://platform/name")
+    p_ann.add_argument("--account", default=None, help="新的关联账号/备注")
+    p_ann.add_argument("--kind", default=None, help="新的密钥类型")
+    p_ann.set_defaults(func=cmd_annotate)
 
     # delete
     p_del = sub.add_parser("delete", help="删除密钥")

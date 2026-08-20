@@ -168,6 +168,38 @@ def set_secret(ref: str, value: str, kind: str = "API Key", account: str = "") -
     )
 
 
+def annotate_secret(ref: str, account: str | None = None, kind: str | None = None) -> bool:
+    """只改元信息（备注 account / 类型 kind），**不碰密文**。
+
+    为什么单开一个函数而不复用 set_secret：set_secret 是全量 upsert，改一句备注要求调用方
+    先把密钥明文找出来重新交一遍。那既让明文多走一趟（每一趟都是一次泄漏机会），
+    又在「手上没有明文」时根本做不到——而备注恰恰是最常需要订正的字段：
+    2026-08-20 一条 volcengine key 的备注写成了「小楠主模型 glm-5.2」，实际它是图片逆向
+    上游用的，看备注的人会以为动它会影响小楠，不敢清理。这种订正不该要求交出密钥。
+
+    只 UPDATE 传了的列，ciphertext/nonce/sha256/last4/length 一概不动。
+    返回 False 表示该 ref 不存在（不静默当成功，否则打错一个字就以为改好了）。
+    """
+    if not ref.startswith("secret://"):
+        raise ValueError(f"格式错误，应为 secret://platform/name: {ref}")
+    if account is None and kind is None:
+        raise ValueError("至少要给 --account 或 --kind 之一，否则这次调用什么都不会改")
+    if not _rows(_query("SELECT id FROM secret_vault WHERE id = ?1 LIMIT 1", [ref])):
+        return False
+    sets, params = [], []
+    if account is not None:
+        sets.append(f"account=?{len(params) + 1}")
+        params.append(account)
+    if kind is not None:
+        sets.append(f"kind=?{len(params) + 1}")
+        params.append(kind)
+    sets.append(f"updated_at=?{len(params) + 1}")
+    params.append(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+    params.append(ref)
+    _query(f"UPDATE secret_vault SET {', '.join(sets)} WHERE id = ?{len(params)}", params)
+    return True
+
+
 def delete_secret(ref: str) -> bool:
     existing = _query("SELECT id FROM secret_vault WHERE id = ?1 LIMIT 1", [ref])
     if not _rows(existing):
