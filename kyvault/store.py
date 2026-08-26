@@ -3,6 +3,7 @@
 import base64
 import json
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +13,38 @@ from . import d1_backend
 SECRETS_DIR = Path.home() / ".keyring"
 SECRETS_FILE = SECRETS_DIR / "secrets.json"
 MASTER_KEY_FILE = SECRETS_DIR / "master.key"
+
+# 常见密钥前缀。name 字段不加密（list 会原样打印），把密钥本身填成 name
+# 等于加密存了一份、明文又漏一份 —— 加密就白做了。
+_KEY_PREFIXES = (
+    "sk-", "sk_", "pk_", "rk_",          # OpenAI / Stripe 等
+    "ghp_", "gho_", "ghu_", "ghs_",      # GitHub
+    "glpat-", "gldt-",                   # GitLab
+    "xoxb-", "xoxp-", "xapp-",           # Slack
+    "AKIA", "ASIA",                      # AWS
+    "AIza",                              # Google
+    "hf_", "r8_", "gsk_",                # HuggingFace / Replicate / Groq
+)
+
+
+def looks_like_secret(name: str) -> bool:
+    """判断 name 是否像密钥本身而非别名。
+
+    两种判据：
+    1. 命中已知服务商的密钥前缀（sk- / ghp_ / AKIA …）；
+    2. 够长（>=32）且只含 base64/hex 字符，同时不含 key/token/secret 这类
+       人写别名时惯用的词 —— 纯随机串没有可读语义，人不会这么起名。
+    """
+    n = (name or "").strip()
+    if not n:
+        return False
+    if any(n.startswith(p) for p in _KEY_PREFIXES):
+        return True
+    if len(n) >= 32 and re.fullmatch(r"[A-Za-z0-9+/=_-]+", n):
+        # 别名里通常带这些词（如 deepseek-api-key、gh-pat-main），随机密钥不会
+        if not re.search(r"(key|token|secret|pat|api|cred|auth)", n, re.I):
+            return True
+    return False
 
 
 def _using_d1() -> bool:

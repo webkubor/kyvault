@@ -9,6 +9,7 @@ import sys
 from . import __version__
 from .store import (
     init_master_key,
+    looks_like_secret,
     get_secret,
     set_secret,
     delete_secret,
@@ -104,9 +105,20 @@ def cmd_set(args: argparse.Namespace) -> None:
     """写入/更新密钥。value 传 "-" 时从 stdin 读取，避免明文出现在进程参数列表
     （`ps`/`ps aux` 能看到 argv，看不到 stdin），供其他程序调用本 CLI 时使用。"""
     try:
+        platform, name = parse_ref(args.ref)
+        # name 不加密，list 会原样打印。把密钥本身填成 name 等于加密存一份、
+        # 明文再漏一份，加密就白做了 —— 默认拦住，除非显式 --force。
+        if looks_like_secret(name) and not getattr(args, "force", False):
+            print(
+                f"✗ 拒绝保存：ref 里的 name「{name[:12]}…」看起来是密钥本身，不是别名。\n"
+                f"  name 字段不加密，kyvault list 会把它原样打印出来。\n"
+                f"  改成可读别名，例如： secret://{platform}/api-key、secret://{platform}/main-pat\n"
+                f"  确认无误要强行保存： 加 --force",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         value = sys.stdin.readline().rstrip("\n") if args.value == "-" else args.value
         set_secret(args.ref, value, kind=args.kind, account=args.account)
-        platform, name = parse_ref(args.ref)
         print(f"✓ secret://{platform}/{name} 已保存")
     except ValueError as e:
         print(f"错误：{e}", file=sys.stderr)
@@ -399,6 +411,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_set.add_argument("value", help="密钥值；传 - 表示从 stdin 读取（避免出现在进程参数里）")
     p_set.add_argument("--kind", default="API Key", help="密钥类型")
     p_set.add_argument("--account", default="", help="关联账号")
+    p_set.add_argument("--force", action="store_true",
+                       help="name 看起来像密钥本身时仍强行保存（默认拒绝）")
     p_set.set_defaults(func=cmd_set)
 
     # annotate —— 只改元信息，不用交出明文
