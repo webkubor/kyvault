@@ -78,6 +78,21 @@ kyr --env GITHUB_TOKEN=secret://github/personal-pat -- git push
 * **高强度加密**：采用业界公认安全的 **AES-256-GCM**（认证加密），所有数据在写入磁盘前均完成高强度加密。
 * **零网络依赖**：100% 纯本地运行，不发起任何外网连接，绝无任何 SaaS 云端数据泄漏或被拖库的潜在风险。密钥完全掌握在您自己手中。
 
+> **⚠️ name 是别名，不要填密钥本身。**
+> `secret://<platform>/<name>` 里的 `name` **不加密** —— 它是寻址用的，`list` 会原样打印。
+> 把密钥填进 name 等于「加密存了一份、明文又漏一份」，加密就白做了。
+>
+> ```bash
+> ✅ kyvault set secret://deepseek/api-key -        # 可读别名
+> ✅ kyvault set secret://github/main-pat -         # 多账号用 pat-work / pat-personal
+> ❌ kyvault set secret://deepseek/sk-9dcea1111... - # 密钥当 name
+> ```
+>
+> v1.4 起 `set` 会自动拦下疑似密钥的 name（认已知前缀 `sk-`/`ghp_`/`glpat-`/`AKIA`/
+> `AIza` 等，以及长随机串），确有需要可加 `--force`。历史数据里已存在的这类条目，
+> `list` 会打码显示并提示 —— 建议 `delete` 后用别名重存，且**到对应平台吊销重签**
+> （name 曾被打印过就该视为已泄露）。
+
 ### 🔄 5. 极简无缝迁移 (.env Migration)
 * **无感导入**：支持一键导入项目已有的 `.env` 配置文件，并自动匹配最适合 AI 使用的变量别名。
 * **支持 Dry-Run**：在实际导入前提供安全预览机制，清晰掌握数据结构变化。

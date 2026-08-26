@@ -83,9 +83,26 @@ def cmd_list(args: argparse.Namespace) -> None:
         print(f"平台 {args.platform} 下没有密钥")
         return
 
+    # 历史数据里可能存在把密钥本身当 name 的条目（新版 set 已拦，旧数据还在）。
+    # 人读输出对这类 name 打码，避免终端截图/录屏/共享时把明文带出去。
+    # --json 分支不打码 —— 那是给程序用的，cs kyvault 需要完整 ref 才能寻址。
+    masked = 0
     for s in secrets:
         account = f" ({s['account']})" if s.get("account") else ""
-        print(f"  secret://{s['platform']}/{s['name']}{account}  [{s.get('kind', '?')}]")
+        name = s["name"]
+        if looks_like_secret(name):
+            masked += 1
+            name = f"{name[:7]}…{name[-4:]}" if len(name) > 16 else f"{name[:4]}…"
+            name += "  ⚠️ name 疑似密钥明文"
+        print(f"  secret://{s['platform']}/{name}{account}  [{s.get('kind', '?')}]")
+
+    if masked:
+        print(
+            f"\n⚠️  {masked} 条的 name 疑似密钥本身（已打码显示）。name 字段不加密，"
+            f"建议用 delete + set 换成可读别名；\n"
+            f"   若这些密钥曾被打印过，请到对应平台吊销重签。完整 ref 用 --json 查看。",
+            file=sys.stderr,
+        )
 
 
 def cmd_platforms(args: argparse.Namespace) -> None:
