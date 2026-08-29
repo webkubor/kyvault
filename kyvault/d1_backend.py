@@ -16,6 +16,9 @@ import base64
 import hashlib
 import json
 import os
+import shutil
+import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -53,11 +56,8 @@ def _config() -> tuple[str, str, str]:
     return account_id, database_id, token
 
 
-def _query(sql: str, params: Optional[list] = None) -> dict:
-    """POST 到 Cloudflare D1 HTTP API，跟 Go 端 D1Client.Query 完全同一份契约。"""
-    account_id, database_id, token = _config()
-    url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/d1/database/{database_id}/query"
-    payload = json.dumps({"sql": sql, "params": params or []}).encode("utf-8")
+def _post_urllib(url: str, token: str, payload: bytes) -> dict:
+    """标准路径：走 urllib。HTTP 错误也要读 body —— D1 把错误详情放在响应体里。"""
     req = urllib.request.Request(
         url,
         data=payload,
@@ -69,11 +69,66 @@ def _query(sql: str, params: Optional[list] = None) -> dict:
     )
     try:
         with urllib.request.urlopen(req, timeout=D1_QUERY_TIMEOUT) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        body = json.loads(e.read().decode("utf-8"))
-    except urllib.error.URLError as e:
-        raise D1QueryError(f"D1 请求失败（网络层）：{e}") from e
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:  # 注意：HTTPError 是 URLError 的子类，必须先捕获
+        return json.loads(e.read().decode("utf-8"))
+
+
+def _post_curl(url: str, token: str, payload: bytes) -> dict:
+    """兜底路径：走 curl。
+
+    存在的理由是一类真实故障：某些机器上 Python 的 TLS 验证整体失效（证书链、CA
+    bundle、系统时间全都正常，同一条链用 `openssl verify` 判 OK、curl 也连得通，
+    唯独 Python 报 CERTIFICATE_VERIFY_FAILED），且跨解释器复现 —— homebrew 的
+    python 3.10/3.13/3.14 与 uv 的独立构建 3.11/3.12 全中，只有系统自带 python
+    （链 LibreSSL）幸免。换版本、重装 openssl、换 CA bundle 都救不回来，而密钥写入
+    是刚需，不能因为解释器的 TLS 坏了就整个不可用。
+
+    安全约束（比可用性更重要，别为了省事破坏它）：
+    - token 走 --config 临时文件（0600），**不进 argv**，否则 ps 一跑就明文泄露
+    - payload 走 stdin，不落盘（里面有密文，虽已加密但没必要留痕）
+    - 绝不加 -k/--insecure：TLS 验证必须照做，这里换的是 HTTP 客户端，不是安全模型
+    """
+    curl = shutil.which("curl")
+    if not curl:
+        raise D1QueryError("Python TLS 验证失败，且本机没有 curl 可兜底")
+    # curl config 是带引号的文本格式，token 里出现引号/换行会把它撑破
+    if any(c in token for c in '"\n\r\\'):
+        raise D1QueryError("Cloudflare API Token 含特殊字符，无法走 curl 兜底")
+
+    fd, conf = tempfile.mkstemp(prefix="kyvault-curl-", suffix=".conf")  # mkstemp 默认 0600
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(f'header = "Authorization: Bearer {token}"\n')
+            f.write('header = "Content-Type: application/json"\n')
+        proc = subprocess.run(
+            [curl, "-sS", "-X", "POST", "--config", conf, "--data-binary", "@-",
+             "--max-time", str(D1_QUERY_TIMEOUT), url],
+            input=payload, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+    finally:
+        os.unlink(conf)
+
+    if proc.returncode != 0:
+        detail = proc.stderr.decode("utf-8", "replace").strip() or f"curl 退出码 {proc.returncode}"
+        raise D1QueryError(f"D1 请求失败（curl 兜底）：{detail}")
+    try:
+        return json.loads(proc.stdout.decode("utf-8"))
+    except json.JSONDecodeError as e:
+        raise D1QueryError(f"D1 返回的不是合法 JSON（curl 兜底）：{proc.stdout[:200]!r}") from e
+
+
+def _query(sql: str, params: Optional[list] = None) -> dict:
+    """POST 到 Cloudflare D1 HTTP API，跟 Go 端 D1Client.Query 完全同一份契约。"""
+    account_id, database_id, token = _config()
+    url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/d1/database/{database_id}/query"
+    payload = json.dumps({"sql": sql, "params": params or []}).encode("utf-8")
+    try:
+        body = _post_urllib(url, token, payload)
+    except urllib.error.URLError:
+        # 传输层失败（TLS 验证挂掉是最常见的一种）才兜底；HTTP 4xx/5xx 不会走到这里，
+        # 那类错误由下面的 success 判断统一报，免得把业务错误伪装成网络问题。
+        body = _post_curl(url, token, payload)
 
     if not body.get("success"):
         errors = body.get("errors") or [{"message": "未知错误", "code": 0}]
