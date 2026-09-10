@@ -7,4 +7,5 @@ pub mod alias;
 pub mod crypto;
 pub mod d1;
 pub mod model;
+pub mod providers;
 pub mod store;

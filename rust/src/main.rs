@@ -87,6 +87,18 @@ enum Cmd {
         #[command(subcommand)]
         action: AliasCmd,
     },
+    /// 验证 API Key 是否还有效（顺带查余额）—— 对应密钥红线「失效就覆写」
+    Check {
+        /// 平台名（kyvault providers 看清单）
+        provider: String,
+        /// 库里的密钥名；不给就必须传 --key
+        key_name: Option<String>,
+        /// 直接给明文 key（不落库、只验一次）
+        #[arg(long = "key")]
+        api_key: Option<String>,
+    },
+    /// 列出 check 支持的平台
+    Providers,
     /// 把密钥注入子进程环境变量后执行命令（不打印明文）
     Run {
         /// NAME=secret://platform/name，可重复
@@ -444,6 +456,48 @@ fn run() -> Result<()> {
                         return Err(anyhow!("未找到别名：{name}"));
                     }
                 }
+            }
+        }
+        Cmd::Providers => {
+            println!("check 支持的平台（{} 个）：\n", kyvault::providers::PROVIDERS.len());
+            for p in kyvault::providers::PROVIDERS {
+                println!("  {} {:<14} {:<28} {}", p.logo, p.id, p.name, p.env_key);
+            }
+            println!("\n用法：kyvault check <平台> <密钥名>   或   kyvault check <平台> --key <明文>");
+        }
+        Cmd::Check {
+            provider,
+            key_name,
+            api_key,
+        } => {
+            // 三种来源，优先级同 Python 版：--key > 库里的 key_name > 报错
+            // 不做「按平台猜唯一一把 key」那种便利：猜错了会去验错的 key，
+            // 然后把一把好 key 判成失效 —— 这类便利的代价比省下的一次输入大得多。
+            let key = match (api_key, key_name) {
+                (Some(k), _) => k,
+                (None, Some(name)) => {
+                    let r#ref = format!("secret://{provider}/{name}");
+                    let b = Backend::select()?;
+                    b.get(&r#ref)?
+                        .ok_or_else(|| anyhow!("找不到 {}（后端 {}）", r#ref, b.name()))?
+                }
+                (None, None) => {
+                    return Err(anyhow!(
+                        "要么给库里的密钥名，要么用 --key 传明文：kyvault check {provider} <密钥名>"
+                    ))
+                }
+            };
+            let r = kyvault::providers::validate_key(&provider, &key);
+            println!("{}", r.message);
+            if !r.models.is_empty() {
+                println!("  可用模型：{}", r.models.join(", "));
+            }
+            if let Some(b) = r.balance {
+                println!("  {b}");
+            }
+            // 退出码要能被脚本用：无效返回 1，这样 `kyvault check x y || 轮换` 成立
+            if !r.valid {
+                std::process::exit(1);
             }
         }
         Cmd::Run { envs, command } => {
