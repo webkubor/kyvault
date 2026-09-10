@@ -16,7 +16,20 @@ permissions:
   contents: write
 
 jobs:
+  # upload-rust-binary-action 只负责「上传 asset」，Release 本身得先存在 ——
+  # 第一版漏了这个 job，四个 target 全都编译打包成功、然后卡在 release not found
+  # 重试 11 次后失败。
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/create-gh-release-action@v1
+        with:
+          changelog: CHANGELOG.md
+          token: ${{ secrets.GITHUB_TOKEN }}
+
   upload-assets:
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
