@@ -29,8 +29,17 @@ jobs:
         working-directory: rust
         run: cargo test --all-features
 
-  # Python 版仍在维护期（Rust 版补齐 import/check/connect 之前不下线），
-  # 所以这条继续跑。等 Python 实现移除时连这个 job 一起删。
+  # Python 版仍在维护期，所以这条继续跑；Python 实现移除时连这个 job 一起删。
+  #
+  # 下线前提 = Rust 侧补齐这 9 个子命令（2026-09-10 实测差集，约 700 行实现）：
+  #   check（validator.py 341 行）· import（import_env.py 151 行）
+  #   doctor（doctor.py 111 行）· wizard（88 行）· update（updater.py 74 行）
+  #   providers · connect · server · cli
+  # Rust 现有：init get set annotate delete list platforms account key platform alias run
+  #
+  # 注意 interop.rs 不在此列 —— 它的 Python 脚本是内联的、只依赖 cryptography 标准库，
+  # 不 import 本仓的 Python 包（实测把 kyvault/ 改名后 5 个测试照样全过）。
+  # 所以「Python 实现」和「interop 用的 python3」是两回事，删前者不影响后者。
   python:
     runs-on: ubuntu-latest
     strategy:

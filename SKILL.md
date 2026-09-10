@@ -34,10 +34,13 @@ metadata:
 ## 安装与对接
 
 ```bash
-pip install kyvault
-kyi
-kyconnect
+curl -fsSL https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh | bash
+kyvault init          # 生成 master key（已存在则原样返回，绝不覆盖）
 ```
+
+`install.sh` 装的是 Rust 静态二进制到 `~/.local/bin`，并顺手清掉旧的 Python 版
+（pipx 包 / `/usr/local/bin` 里的 python shim / 数据目录下的模块副本）。
+**不要用 `pip install kyvault`** —— PyPI 从来没有成功发布过，那条指引一直是错的。
 
 ## 账户管理
 

@@ -121,11 +121,11 @@ Keyring —— 本地加密密钥管理工具。
 ## 快速上手
 
 ```bash
-pip install kyvault
-keyring init
-keyring set secret://github/my-pat "ghp_xxx"
-keyring alias set github_token secret://github/my-pat
-keyring run --env GITHUB_TOKEN=github_token -- git push
+curl -fsSL https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh | bash
+kyvault init
+kyvault set --platform github --name my-pat --value -   # 明文走 stdin，不进 argv
+kyvault alias set github_token secret://github/my-pat
+kyvault run --env GITHUB_TOKEN=github_token -- git push
 ```
 
 AI 只看到 `github_token`，看不到 `ghp_xxx`。
