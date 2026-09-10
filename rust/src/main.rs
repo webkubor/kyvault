@@ -553,7 +553,9 @@ fn run() -> Result<()> {
                 "list" => {
                     let v = st.list_servers();
                     if v.is_empty() {
-                        println!("（没有服务器台账 —— kyvault server set <主机名> <IP> <root密码>）");
+                        println!(
+                            "（没有服务器台账 —— kyvault server set <主机名> <IP> <root密码>）"
+                        );
                     } else {
                         println!("服务器台账（{} 台）：", v.len());
                         for h in v {
@@ -657,7 +659,10 @@ fn run() -> Result<()> {
             let text = ie::read_file(&file)?;
             let planned = ie::plan(&text, &prefix);
             if planned.is_empty() {
-                println!("没有可导入的变量（{file}，前缀 {:?}）—— 空值会被跳过", prefix);
+                println!(
+                    "没有可导入的变量（{file}，前缀 {:?}）—— 空值会被跳过",
+                    prefix
+                );
                 return Ok(());
             }
             if dry_run {
@@ -680,11 +685,16 @@ fn run() -> Result<()> {
             println!("\n共导入 {} 条（后端 {}）", planned.len(), b.name());
         }
         Cmd::Providers => {
-            println!("check 支持的平台（{} 个）：\n", kyvault::providers::PROVIDERS.len());
+            println!(
+                "check 支持的平台（{} 个）：\n",
+                kyvault::providers::PROVIDERS.len()
+            );
             for p in kyvault::providers::PROVIDERS {
                 println!("  {} {:<14} {:<28} {}", p.logo, p.id, p.name, p.env_key);
             }
-            println!("\n用法：kyvault check <平台> <密钥名>   或   kyvault check <平台> --key <明文>");
+            println!(
+                "\n用法：kyvault check <平台> <密钥名>   或   kyvault check <平台> --key <明文>"
+            );
         }
         Cmd::Check {
             provider,

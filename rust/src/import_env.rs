@@ -18,11 +18,16 @@ pub fn parse_env(text: &str) -> Vec<(String, String)> {
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        let Some((k, v)) = line.split_once('=') else { continue };
+        let Some((k, v)) = line.split_once('=') else {
+            continue;
+        };
         let k = k.trim();
         // 变量名必须是 [A-Za-z_][A-Za-z0-9_]* —— 否则那行不是环境变量赋值
         let mut cs = k.chars();
-        let head_ok = cs.next().map(|c| c.is_ascii_alphabetic() || c == '_').unwrap_or(false);
+        let head_ok = cs
+            .next()
+            .map(|c| c.is_ascii_alphabetic() || c == '_')
+            .unwrap_or(false);
         if !head_ok || !cs.all(|c| c.is_ascii_alphanumeric() || c == '_') {
             continue;
         }
@@ -43,29 +48,63 @@ pub fn parse_env(text: &str) -> Vec<(String, String)> {
 pub fn guess_platform(env_key: &str) -> &'static str {
     let k = env_key.to_lowercase();
     let has = |s: &str| k.contains(s);
-    if has("github") { return "github"; }
-    if has("gitlab") { return "gitlab"; }
-    if has("cloudflare") || has("cf_") { return "cloudflare"; }
-    if has("deepseek") { return "deepseek"; }
-    if has("zhipu") || has("chatglm") { return "zhipu"; }
-    if has("volcengine") || has("ark") { return "volcengine"; }
-    if has("feishu") || has("lark") { return "feishu"; }
-    if has("jenkins") { return "jenkins"; }
-    if has("aws") { return "aws"; }
-    if has("gcp") || has("google") { return "gcp"; }
-    if has("azure") { return "azure"; }
-    if has("openai") { return "openai"; }
-    if has("anthropic") || has("claude") { return "anthropic"; }
+    if has("github") {
+        return "github";
+    }
+    if has("gitlab") {
+        return "gitlab";
+    }
+    if has("cloudflare") || has("cf_") {
+        return "cloudflare";
+    }
+    if has("deepseek") {
+        return "deepseek";
+    }
+    if has("zhipu") || has("chatglm") {
+        return "zhipu";
+    }
+    if has("volcengine") || has("ark") {
+        return "volcengine";
+    }
+    if has("feishu") || has("lark") {
+        return "feishu";
+    }
+    if has("jenkins") {
+        return "jenkins";
+    }
+    if has("aws") {
+        return "aws";
+    }
+    if has("gcp") || has("google") {
+        return "gcp";
+    }
+    if has("azure") {
+        return "azure";
+    }
+    if has("openai") {
+        return "openai";
+    }
+    if has("anthropic") || has("claude") {
+        return "anthropic";
+    }
     "custom"
 }
 
 /// 从变量名猜类型。token/pat → Token，key → API Key，secret → Secret，password → Password。
 pub fn guess_kind(env_key: &str) -> &'static str {
     let k = env_key.to_lowercase();
-    if k.contains("token") || k.contains("pat") { return "Token"; }
-    if k.contains("key") { return "API Key"; }
-    if k.contains("secret") { return "Secret"; }
-    if k.contains("password") || k.contains("passwd") { return "Password"; }
+    if k.contains("token") || k.contains("pat") {
+        return "Token";
+    }
+    if k.contains("key") {
+        return "API Key";
+    }
+    if k.contains("secret") {
+        return "Secret";
+    }
+    if k.contains("password") || k.contains("passwd") {
+        return "Password";
+    }
     "API Key"
 }
 
@@ -88,7 +127,11 @@ pub fn make_name(env_key: &str, platform: &str) -> String {
         }
     }
     let out = out.trim_matches('-').to_string();
-    if out.is_empty() { "default".into() } else { out }
+    if out.is_empty() {
+        "default".into()
+    } else {
+        out
+    }
 }
 
 pub struct Planned {
@@ -118,8 +161,7 @@ pub fn plan(text: &str, prefix: &str) -> Vec<Planned> {
 }
 
 pub fn read_file(path: &str) -> Result<String> {
-    Ok(std::fs::read_to_string(path)
-        .map_err(|e| anyhow::anyhow!("读不到 {path}：{e}"))?)
+    std::fs::read_to_string(path).map_err(|e| anyhow::anyhow!("读不到 {path}：{e}"))
 }
 
 #[cfg(test)]

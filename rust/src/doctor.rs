@@ -25,7 +25,10 @@ fn perm_desc(path: &Path) -> String {
                 if mode == 0o600 {
                     format!("权限 {mode:o} (OK)")
                 } else {
-                    format!("权限 {mode:o} (FAIL, 应为 600 —— chmod 600 {})", path.display())
+                    format!(
+                        "权限 {mode:o} (FAIL, 应为 600 —— chmod 600 {})",
+                        path.display()
+                    )
                 }
             }
             Err(e) => format!("读不到权限：{e}"),
@@ -38,7 +41,7 @@ fn perm_desc(path: &Path) -> String {
     }
 }
 
-fn exists_mark(p: &PathBuf) -> &'static str {
+fn exists_mark(p: &Path) -> &'static str {
     if p.exists() {
         "已连接 (OK)"
     } else {
@@ -52,15 +55,33 @@ pub fn run() -> Result<()> {
 
     // ① 运行环境
     println!("\n⚙️  1. 运行环境：");
-    println!("  - kyvault 版本：{} (Rust 静态二进制)", env!("CARGO_PKG_VERSION"));
-    println!("  - 平台：{}/{}", std::env::consts::OS, std::env::consts::ARCH);
+    println!(
+        "  - kyvault 版本：{} (Rust 静态二进制)",
+        env!("CARGO_PKG_VERSION")
+    );
+    println!(
+        "  - 平台：{}/{}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    );
     let backend = std::env::var("KYVAULT_BACKEND").unwrap_or_else(|_| "file".into());
     println!("  - 当前后端：{backend}（KYVAULT_BACKEND，缺省 file）");
     if backend == "d1" {
         // D1 三件套缺任何一个都会在下一次读写时才炸，这里提前点出来
-        for v in ["KYVAULT_D1_ACCOUNT_ID", "KYVAULT_D1_DATABASE_ID", "CF_API_TOKEN"] {
+        for v in [
+            "KYVAULT_D1_ACCOUNT_ID",
+            "KYVAULT_D1_DATABASE_ID",
+            "CF_API_TOKEN",
+        ] {
             let ok = std::env::var(v).map(|s| !s.is_empty()).unwrap_or(false);
-            println!("  - {v}：{}", if ok { "已注入 (OK)" } else { "缺失 (FAIL)" });
+            println!(
+                "  - {v}：{}",
+                if ok {
+                    "已注入 (OK)"
+                } else {
+                    "缺失 (FAIL)"
+                }
+            );
         }
     } else {
         println!("  - 提示：cs kyvault 会自动注入 d1 三件套；裸跑走 file，两套数据不通");
@@ -72,7 +93,11 @@ pub fn run() -> Result<()> {
     println!(
         "  - 数据目录：{} ({})",
         store.root().display(),
-        if store.root().exists() { "存在" } else { "未初始化" }
+        if store.root().exists() {
+            "存在"
+        } else {
+            "未初始化"
+        }
     );
     let mk = store.master_key_path();
     if mk.exists() {
@@ -106,11 +131,20 @@ pub fn run() -> Result<()> {
     println!("\n🤖  4. AI 编码助手对接：");
     let home = dirs::home_dir().unwrap_or_default();
     let items: [(&str, PathBuf); 5] = [
-        ("Gemini/agy 规则", home.join(".gemini/config/rules/kyvault.md")),
-        ("Gemini/agy 技能", home.join(".gemini/config/skills/kyvault-ops/SKILL.md")),
+        (
+            "Gemini/agy 规则",
+            home.join(".gemini/config/rules/kyvault.md"),
+        ),
+        (
+            "Gemini/agy 技能",
+            home.join(".gemini/config/skills/kyvault-ops/SKILL.md"),
+        ),
         ("Claude Code 规则", home.join(".clauderules")),
         ("Codex 规则 (AGENTS.md)", home.join(".codex/AGENTS.md")),
-        ("Hermes 技能包", home.join(".hermes/profiles/free/skills/kyvault-ops/SKILL.md")),
+        (
+            "Hermes 技能包",
+            home.join(".hermes/profiles/free/skills/kyvault-ops/SKILL.md"),
+        ),
     ];
     for (label, p) in &items {
         println!("  - {label}：{}", exists_mark(p));

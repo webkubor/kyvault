@@ -42,7 +42,11 @@ fn write_whole(path: &Path, content: &str) -> Result<Action> {
     }
     let existed = path.exists();
     fs::write(path, content)?;
-    Ok(if existed { Action::Updated } else { Action::Created })
+    Ok(if existed {
+        Action::Updated
+    } else {
+        Action::Created
+    })
 }
 
 /// 往共享文件里插一块（.clauderules / AGENTS.md 这种还有别人内容的）。
@@ -87,7 +91,11 @@ fn upsert_block(path: &Path, content: &str) -> Result<Action> {
     }
     text.push_str(&block);
     fs::write(path, text)?;
-    Ok(if removed > 0 { Action::Deduped(removed) } else { Action::Updated })
+    Ok(if removed > 0 {
+        Action::Deduped(removed)
+    } else {
+        Action::Updated
+    })
 }
 
 fn report(label: &str, path: &Path, a: Action) {
@@ -170,7 +178,11 @@ pub fn run() -> Result<()> {
         println!("\n检测到项目工作区 {}，注入局部规则：", cwd.display());
         let agents = cwd.join(".agents");
         let items: [(&str, PathBuf, &str); 3] = [
-            ("局部技能包", agents.join("skills/kyvault-ops/SKILL.md"), SKILL_MD),
+            (
+                "局部技能包",
+                agents.join("skills/kyvault-ops/SKILL.md"),
+                SKILL_MD,
+            ),
             ("局部规则", agents.join("rules/kyvault.md"), RULE_MD),
             ("局部 AGENTS.md", agents.join("AGENTS.md"), RULE_MD),
         ];
@@ -205,7 +217,10 @@ mod tests {
         upsert_block(&p, "规则正文").unwrap();
         let thrice = fs::read_to_string(&p).unwrap();
 
-        assert_eq!(once, thrice, "跑三次必须和跑一次一样 —— 这正是 Python 版的 bug");
+        assert_eq!(
+            once, thrice,
+            "跑三次必须和跑一次一样 —— 这正是 Python 版的 bug"
+        );
         assert!(thrice.contains("用户自己的内容"), "不能动用户原有内容");
         assert_eq!(thrice.matches(BEGIN).count(), 1, "只能有一个标记块");
     }
@@ -218,7 +233,10 @@ mod tests {
         upsert_block(&p, "新规则").unwrap();
         let t = fs::read_to_string(&p).unwrap();
         assert!(t.contains("新规则"));
-        assert!(!t.contains("旧规则"), "升级规则时旧内容要被替换掉，不是并存");
+        assert!(
+            !t.contains("旧规则"),
+            "升级规则时旧内容要被替换掉，不是并存"
+        );
     }
 
     #[test]

@@ -78,7 +78,7 @@ fn ask_secret(prompt: &str) -> Result<String> {
         if n == 0 {
             return Err(anyhow!("stdin 已结束：wizard 需要交互终端"));
         }
-        return Ok(s.trim().to_string());
+        Ok(s.trim().to_string())
     }
 
     #[cfg(not(unix))]
@@ -149,7 +149,10 @@ pub fn run(backend_name: &str) -> Result<Vec<Entry>> {
         } else {
             format!("{platform}_{name}")
         };
-        let alias = ask(&format!("别名（回车用 {default_alias}，输 n 跳过）"), &default_alias)?;
+        let alias = ask(
+            &format!("别名（回车用 {default_alias}，输 n 跳过）"),
+            &default_alias,
+        )?;
         let alias = if alias.eq_ignore_ascii_case("n") || alias.is_empty() {
             None
         } else {

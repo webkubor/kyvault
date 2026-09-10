@@ -2,6 +2,40 @@
 
 所有对 `kyvault` 项目的重大变更都将记录在本文档中。
 
+## [2.1.0] - 2026-09-10
+
+### ✨ 新增
+- Rust 侧补齐最后 9 个只有 Python 版才有的子命令，两侧命令面完全对齐：
+  `check`（21 个平台的 key 有效性验证，顺带查余额）· `providers` · `doctor` ·
+  `import`（.env 批量导入）· `server` / `cli`（资产与多 Profile 台账）·
+  `update` · `connect` · `wizard`
+
+### 🗑 移除
+- **删掉 Python 实现**（`kyvault/`、`tests/`、`pyproject.toml`、`uv.lock`）以及
+  CI 里的 python job。命令面已被 Rust 全覆盖，留着只是两份要同步维护的东西。
+  `install.sh` 的 `cleanup_python_version()` 保留 —— 老用户升级仍要靠它清掉
+  pipx 包 / `/usr/local/bin` 的 python shim / 数据目录下的模块副本。
+
+### 🐛 修复
+- `connect` 每跑一次就往 `.clauderules` / Codex `AGENTS.md` 重复追加一份规则：
+  幂等判据查的字符串（`Multi-Account`）根本不在被追加的内容里，判据永远不成立。
+  改成标记块 `<!-- kyvault:begin/end -->`，有块整块替换、没块追加，并清掉精确
+  一致的无标记旧副本（实测某台机上已堆了 4 份）。
+- `update` 原本跑 `pip install --upgrade kyvault`，而 PyPI 从未成功发布过，
+  那条升级路径一直是死的。改为查 GitHub Release + 交给 `install.sh`。
+- `wizard` 录密钥时明文会回显在终端里。改为不回显（关不掉时明确提示）。
+  另外它原先写死 file 后端 —— 在注入了 `KYVAULT_BACKEND=d1` 的环境里跑会把密钥
+  存到本地而不是真源，人却以为存进去了；现在按当前后端落库并打出后端名。
+- README 的 FAQ「需要安装 Python 吗」答案写着「是的，需要」，而紧接的正文说
+  「不需要 Python」—— 重写时改了一半。
+
+### 🔒 测试
+- 老库兼容改成固定测试向量：`rust/tests/fixtures/` 存一份 Python 1.x 真实写出的
+  `master.key` + `secrets.json`，Rust 对着它解。此前那条测试靠现场 import Python
+  实现做对照，既把「删 Python」永久卡住，又会在没装 `cryptography` 的 CI 里静默
+  跳过（看着是绿的，其实没跑）。那把 fixture master.key 只能解开同目录那份库、
+  明文都写在断言里，公开零损失。
+
 ## [2.0.0] - 2026-09-10
 
 ### 💥 破坏性变更 (Breaking)

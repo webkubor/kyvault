@@ -430,7 +430,9 @@ impl Store {
         let Some(entry) = data.get("_servers").and_then(|v| v.get(hostname)) else {
             return Ok(None);
         };
-        let Some(obj) = entry.as_object() else { return Ok(None) };
+        let Some(obj) = entry.as_object() else {
+            return Ok(None);
+        };
         let mut out = Vec::new();
         for (k, v) in obj {
             if let Some(f) = field {

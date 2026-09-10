@@ -162,93 +162,102 @@ fn formats_are_not_interchangeable() {
     );
 }
 
-// ── _servers / _clis 两个桶的结构兼容 ───────────────────────────────────────
+// ── 老库兼容：对着固定测试向量解（不依赖 Python 实现）─────────────────────
 //
-// 上面几条只覆盖 crypto 层（一段明文加密解密能不能对上）。但 server / cli 台账
-// 存的是**嵌套结构**：_servers[host] = {ip, root-password, cost?, provider?}、
-// _clis[cli][profile] = 密文。结构错一层，crypto 全对也读不出来 —— 2026-09-10
-// 补 Rust 版这两个命令时，`root-password` 这个带连字符的字段名就是照抄 Python
-// 才对上的，写成 root_password 就会静默读不到。
+// 上面几条只覆盖 crypto 层（一段明文加解密能不能对上）。但 server / cli 台账存的是
+// **嵌套结构**：_servers[host] = {ip, root-password, cost?, provider?}、
+// _clis[cli][profile] = 密文。结构错一层，crypto 全对也读不出来 —— `root-password`
+// 这个带连字符的字段名就是照抄 Python 才对上的，写成下划线会静默读不到（不报错，
+// 就是查无此项）。
 //
-// 用临时 HOME 跑 Python（它的路径写死在 Path.home()），Rust 侧用 Store::new
-// 指向同一个 .keyring 目录 —— 不动进程的全局 HOME，避免和其他测试抢。
+// 这条测试原先靠现场 `import kyvault.store` 拿 Python 实现当对照，于是同时依赖
+// ①本仓还留着 Python 实现 ②本机装了 cryptography。第一条把「删掉已被 Rust 全覆盖
+// 的 Python 实现」永久卡住；第二条让它在 CI 里静默跳过 —— 看着是绿的，其实没跑。
+//
+// 改成读 tests/fixtures 下那份**由 Python 1.x 真实写出来的**密钥库。契约不变
+// （Rust 必须能打开老库），但不再需要 Python 在场，CI 里必然真跑。
+// fixture 里那把 master.key 只能解开同目录的 secrets.json，明文就写在下面的断言里
+// —— 公开它零损失，详见 fixtures/README.md。
 
-fn py_in_home(home: &std::path::Path, script: &str) -> std::process::Output {
-    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .to_path_buf();
-    let mut cmd = Command::new("python3");
-    cmd.arg("-c").arg(script).env("HOME", home);
-    // 让 python 既能 import 本仓的 kyvault 包，也能找到用户级装的 cryptography
-    let mut paths = vec![repo.to_string_lossy().to_string()];
-    if let Ok(out) = Command::new("python3")
-        .args(["-c", "import cryptography,os;print(os.path.dirname(os.path.dirname(cryptography.__file__)))"])
-        .output()
-    {
-        let p = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if !p.is_empty() {
-            paths.push(p);
-        }
+fn fixture_store() -> (tempfile::TempDir, kyvault::store::Store) {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join(".keyring");
+    std::fs::create_dir_all(&dir).unwrap();
+    // 拷到临时目录再用：测试不该往仓库里的 fixture 写东西
+    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    for f in ["master.key", "secrets.json"] {
+        std::fs::copy(base.join(f), dir.join(f)).unwrap();
     }
-    cmd.env("PYTHONPATH", paths.join(":"));
-    cmd.output().expect("python3 跑不起来")
+    let store = kyvault::store::Store::new(dir);
+    (tmp, store)
 }
 
 #[test]
-fn server_and_cli_buckets_survive_both_directions() {
-    if !python_ready() {
-        eprintln!("跳过：没有 python3 + cryptography");
-        return;
-    }
-    let tmp = tempfile::tempdir().unwrap();
-    let home = tmp.path();
-    let store = kyvault::store::Store::new(home.join(".keyring"));
-    store.init_master_key().unwrap();
+fn rust_opens_python_written_library() {
+    let (_tmp, store) = fixture_store();
 
-    // ① Python 写 → Rust 读（老库能不能打开）
-    let out = py_in_home(
-        home,
-        "from kyvault.store import set_server, set_cli_token\n\
-         set_server('py-host','9.9.9.9','pypass','66','aliyun')\n\
-         set_cli_token('py-cli','main','py_token_999')\n",
+    // 普通密钥
+    assert_eq!(
+        store.get_secret("secret://github/pat").unwrap().as_deref(),
+        Some("ghp_fixture_value_001"),
+        "Rust 解不开 Python 写的普通密钥 —— 现有 ~/.keyring 会打不开"
     );
-    assert!(
-        out.status.success(),
-        "python 写入失败：{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    let fields = store.get_server("py-host", None).unwrap().expect("Rust 读不到 Python 写的服务器");
+
+    // _servers 桶：四个字段逐个核
+    let fields = store
+        .get_server("fx-host", None)
+        .unwrap()
+        .expect("Rust 读不到 Python 写的服务器台账");
     let map: std::collections::HashMap<_, _> = fields.into_iter().collect();
-    assert_eq!(map.get("ip").map(String::as_str), Some("9.9.9.9"));
+    assert_eq!(map.get("ip").map(String::as_str), Some("10.0.0.1"));
     assert_eq!(
         map.get("root-password").map(String::as_str),
-        Some("pypass"),
-        "root-password 这个字段名带连字符，写成下划线就会静默读不到"
+        Some("fxpass"),
+        "root-password 带连字符，写成下划线就会静默读不到"
     );
-    assert_eq!(map.get("cost").map(String::as_str), Some("66"));
-    assert_eq!(map.get("provider").map(String::as_str), Some("aliyun"));
-    assert_eq!(
-        store.get_cli_token("py-cli", "main").unwrap().as_deref(),
-        Some("py_token_999")
-    );
+    assert_eq!(map.get("cost").map(String::as_str), Some("42"));
+    assert_eq!(map.get("provider").map(String::as_str), Some("tencent"));
 
-    // ② Rust 写 → Python 读（新写的东西 Python/Go 端还认不认）
-    store.set_server("rs-host", "8.8.8.8", "rspass", "", "").unwrap();
-    store.set_cli_token("rs-cli", "prof", "rs_tok_777").unwrap();
-    let out = py_in_home(
-        home,
-        "from kyvault.store import get_server, get_cli_token\n\
-         s = get_server('rs-host')\n\
-         assert s['ip']=='8.8.8.8', s\n\
-         assert s['root-password']=='rspass', s\n\
-         assert 'cost' not in s, '空字段不该落库：'+str(s)\n\
-         assert get_cli_token('rs-cli','prof')=='rs_tok_777'\n\
-         print('ok')\n",
+    // _clis 桶
+    assert_eq!(
+        store.get_cli_token("fx-cli", "main").unwrap().as_deref(),
+        Some("fx_token_777"),
+        "Rust 读不到 Python 写的 CLI 凭证"
+    );
+}
+
+/// 反向：Rust 写进这份老库，结构必须还是老结构（这样 Go 端与任何旧读者仍认得）。
+/// 没有 Python 也能验 —— 直接看落盘 JSON 的形状。
+#[test]
+fn rust_writes_keep_legacy_shape() {
+    let (_tmp, store) = fixture_store();
+    store
+        .set_server("rs-host", "8.8.8.8", "rspass", "", "")
+        .unwrap();
+    store.set_cli_token("rs-cli", "prof", "rs_tok").unwrap();
+
+    let raw = std::fs::read_to_string(store.secrets_path()).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&raw).unwrap();
+
+    let srv = &v["_servers"]["rs-host"];
+    assert!(
+        srv["ip"].is_string(),
+        "_servers 下每个字段必须是单独加密的字符串"
     );
     assert!(
-        out.status.success(),
-        "Python 读不回 Rust 写的桶：{}",
-        String::from_utf8_lossy(&out.stderr)
+        srv["root-password"].is_string(),
+        "字段名必须是 root-password"
+    );
+    assert!(
+        srv.get("cost").is_none(),
+        "空字段不该落库 —— 写空密文会解出空串，看着像存过但丢了"
+    );
+    assert!(v["_clis"]["rs-cli"]["prof"].is_string(), "_clis 是两层嵌套");
+
+    // 老条目不能被写操作破坏
+    assert_eq!(
+        store.get_cli_token("fx-cli", "main").unwrap().as_deref(),
+        Some("fx_token_777"),
+        "写新条目把老条目弄坏了"
     );
 }
