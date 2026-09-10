@@ -74,7 +74,10 @@ pub fn decrypt_joined(ciphertext_b64: &str, key: &[u8; 32]) -> Result<String> {
         .decode(ciphertext_b64.trim())
         .context("密文不是合法 base64")?;
     if data.len() <= NONCE_LEN {
-        return Err(anyhow!("密文过短：{} 字节，至少要有 12 字节 nonce", data.len()));
+        return Err(anyhow!(
+            "密文过短：{} 字节，至少要有 12 字节 nonce",
+            data.len()
+        ));
     }
     let (nonce, ct) = data.split_at(NONCE_LEN);
     let pt = cipher(key)
@@ -93,8 +96,12 @@ pub fn encrypt_split(plaintext: &str, key: &[u8; 32]) -> Result<(String, String)
 }
 
 pub fn decrypt_split(ciphertext_b64: &str, nonce_b64: &str, key: &[u8; 32]) -> Result<String> {
-    let ct = B64.decode(ciphertext_b64.trim()).context("ciphertext 不是合法 base64")?;
-    let nonce = B64.decode(nonce_b64.trim()).context("nonce 不是合法 base64")?;
+    let ct = B64
+        .decode(ciphertext_b64.trim())
+        .context("ciphertext 不是合法 base64")?;
+    let nonce = B64
+        .decode(nonce_b64.trim())
+        .context("nonce 不是合法 base64")?;
     if nonce.len() != NONCE_LEN {
         return Err(anyhow!("nonce 长度是 {} 字节，应为 12", nonce.len()));
     }
@@ -142,7 +149,10 @@ mod tests {
         let key = derive_file_key(&new_master_key_b64()).unwrap();
         let a = encrypt_joined("x", &key).unwrap();
         let b = encrypt_joined("x", &key).unwrap();
-        assert_ne!(a, b, "同一明文两次加密不该得到相同密文（nonce 复用会毁掉 GCM）");
+        assert_ne!(
+            a, b,
+            "同一明文两次加密不该得到相同密文（nonce 复用会毁掉 GCM）"
+        );
     }
 
     #[test]
@@ -155,7 +165,10 @@ mod tests {
 
     #[test]
     fn d1_key_rejects_wrong_length() {
-        assert!(d1_key(&B64.encode([0u8; 16])).is_err(), "16 字节的 key 应被拒绝");
+        assert!(
+            d1_key(&B64.encode([0u8; 16])).is_err(),
+            "16 字节的 key 应被拒绝"
+        );
     }
 
     #[test]

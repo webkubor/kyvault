@@ -60,7 +60,13 @@ mod tests {
 
     #[test]
     fn parse_ref_rejects_bad() {
-        for bad in ["github/token", "secret://github", "secret://", "secret:///x", "secret://x/"] {
+        for bad in [
+            "github/token",
+            "secret://github",
+            "secret://",
+            "secret:///x",
+            "secret://x/",
+        ] {
             assert!(parse_ref(bad).is_err(), "{bad} 应该被拒");
         }
     }

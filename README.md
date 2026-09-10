@@ -11,9 +11,9 @@
 <p align="center">
   <a href="https://github.com/webkubor/kyvault/releases"><img src="https://img.shields.io/github/v/release/webkubor/kyvault?style=for-the-badge&color=coral" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/webkubor/kyvault?style=for-the-badge&color=gold" alt="License"></a>
-  <a href="https://pypi.org/project/kyvault/"><img src="https://img.shields.io/pypi/v/kyvault?style=for-the-badge&color=orange" alt="PyPI"></a>
-  <a href="https://pypi.org/project/kyvault/"><img src="https://img.shields.io/pypi/dm/kyvault?style=for-the-badge&color=orange" alt="PyPI Downloads"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge" alt="Python"></a>
+  <a href="https://github.com/webkubor/kyvault/releases/latest"><img src="https://img.shields.io/github/downloads/webkubor/kyvault/total?style=for-the-badge&color=orange" alt="Downloads"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-静态二进制-orange?style=for-the-badge" alt="Rust"></a>
+  <a href="#-安装"><img src="https://img.shields.io/badge/依赖-零运行时-4c9a6b?style=for-the-badge" alt="零运行时依赖"></a>
   <a href="https://github.com/astral-sh/uv"><img src="https://img.shields.io/badge/Built%20with-uv-000000?style=for-the-badge" alt="uv"></a>
   <a href="https://github.com/psf/black"><img src="https://img.shields.io/badge/code%20style-black-000000?style=for-the-badge" alt="Black"></a>
 </p>
@@ -47,7 +47,7 @@
 
 ```bash
 # 安装并初始化
-pip install kyvault && kyi
+curl -fsSL https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh | bash
 
 # 一键连接本地所有 AI 智能体 (Claude/Codex/Hermes/OpenCode/Cursor)
 kyconnect
@@ -331,8 +331,7 @@ kyvault get secret://cli/studio-cli/test-user   # 输出: jwt_token_test
 # 开发环境
 git clone https://github.com/webkubor/kyvault.git
 cd kyvault
-pip install -e .
-pip install pytest
+cd rust && cargo test        # 含跨语言互操作测试（验证解得开存量密钥）
 pytest
 ```
 
@@ -344,7 +343,9 @@ pytest
 
 #### Q: 本地只有 Node 环境，需要安装 Python 吗？
 **A: 是的，需要。**  
-Kyvault 底层利用了 Python 生态极度成熟的 `cryptography` 密码学库进行高强度本地加密（AES-256-GCM）。如果本地仅有 Node.js 运行环境，您需要先安装 Python 3.10+ 环境（例如 macOS 用户可直接运行 `brew install python` ），然后再执行 `pip install kyvault` 即可无缝使用。
+Kyvault 是一个 Rust 静态二进制，加密走 `aes-gcm`（AES-256-GCM）、TLS 走 `rustls`。**不需要 Python、不需要 Node、不需要 Rust 工具链**，下载即用。
+
+这一点是刻意的：密钥库是所有需要凭据的工作的底座，它不该依赖任何一个可能坏掉的运行时。此前的 Python 版就吃过这个亏——某些机器上解释器的 TLS 验证会整体失效（同一条证书链 `openssl verify` 判 OK、`curl` 连得通，唯独 Python 报 `CERTIFICATE_VERIFY_FAILED`），密钥写入通道当场只读。
 
 ---
 

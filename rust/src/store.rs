@@ -118,12 +118,18 @@ impl Store {
                 Some(field) => self.decrypt_at(&data, &["_servers", host, field], &key),
                 None => {
                     // 不带字段时返回整台机器的 json，与 Python 版一致
-                    let Some(fields) = data.pointer(&format!("/_servers/{host}")).and_then(|v| v.as_object()) else {
+                    let Some(fields) = data
+                        .pointer(&format!("/_servers/{host}"))
+                        .and_then(|v| v.as_object())
+                    else {
                         return Ok(None);
                     };
                     let mut out = Map::new();
                     for (k, v) in fields {
-                        out.insert(k.clone(), Value::String(decrypt_joined(v.as_str().unwrap_or_default(), &key)?));
+                        out.insert(
+                            k.clone(),
+                            Value::String(decrypt_joined(v.as_str().unwrap_or_default(), &key)?),
+                        );
                     }
                     Ok(Some(serde_json::to_string(&out)?))
                 }
@@ -213,7 +219,11 @@ impl Store {
             let mut hit = false;
             if platform == "cli" {
                 if let Some((cli, profile)) = name.split_once('/') {
-                    if let Some(m) = root.get_mut("_clis").and_then(|v| v.get_mut(cli)).and_then(|v| v.as_object_mut()) {
+                    if let Some(m) = root
+                        .get_mut("_clis")
+                        .and_then(|v| v.get_mut(cli))
+                        .and_then(|v| v.as_object_mut())
+                    {
                         hit = m.remove(profile).is_some();
                     }
                 }
@@ -223,7 +233,11 @@ impl Store {
                     hit = m.remove(host).is_some();
                 }
             } else {
-                if let Some(m) = root.get_mut(&platform).and_then(|v| v.get_mut("keys")).and_then(|v| v.as_object_mut()) {
+                if let Some(m) = root
+                    .get_mut(&platform)
+                    .and_then(|v| v.get_mut("keys"))
+                    .and_then(|v| v.as_object_mut())
+                {
                     hit = m.remove(&name).is_some();
                 }
                 if !hit {
@@ -241,11 +255,17 @@ impl Store {
     pub fn list_secrets(&self) -> Vec<SecretMeta> {
         let data = self.load();
         let mut out = Vec::new();
-        let Some(root) = data.as_object() else { return out };
+        let Some(root) = data.as_object() else {
+            return out;
+        };
 
         if let Some(servers) = root.get("_servers").and_then(|v| v.as_object()) {
             for (host, fields) in servers {
-                for field in fields.as_object().map(|m| m.keys().collect::<Vec<_>>()).unwrap_or_default() {
+                for field in fields
+                    .as_object()
+                    .map(|m| m.keys().collect::<Vec<_>>())
+                    .unwrap_or_default()
+                {
                     out.push(SecretMeta {
                         platform: "server".into(),
                         name: format!("{host}/{field}"),
@@ -257,7 +277,11 @@ impl Store {
         }
         if let Some(clis) = root.get("_clis").and_then(|v| v.as_object()) {
             for (cli, profiles) in clis {
-                for profile in profiles.as_object().map(|m| m.keys().collect::<Vec<_>>()).unwrap_or_default() {
+                for profile in profiles
+                    .as_object()
+                    .map(|m| m.keys().collect::<Vec<_>>())
+                    .unwrap_or_default()
+                {
                     out.push(SecretMeta {
                         platform: "cli".into(),
                         name: format!("{cli}/{profile}"),
@@ -302,7 +326,11 @@ impl Store {
                                 platform: p.into(),
                                 name: n.into(),
                                 kind: ct.get("kind").and_then(|k| k.as_str()).unwrap_or("").into(),
-                                account: ct.get("account").and_then(|k| k.as_str()).unwrap_or("").into(),
+                                account: ct
+                                    .get("account")
+                                    .and_then(|k| k.as_str())
+                                    .unwrap_or("")
+                                    .into(),
                                 ..Default::default()
                             });
                         }
@@ -421,10 +449,16 @@ mod tests {
     fn secret_roundtrip_and_delete() {
         let (_d, s) = store();
         s.set_secret("secret://github/token", "ghp_x").unwrap();
-        assert_eq!(s.get_secret("secret://github/token").unwrap().unwrap(), "ghp_x");
+        assert_eq!(
+            s.get_secret("secret://github/token").unwrap().unwrap(),
+            "ghp_x"
+        );
         assert!(s.delete_secret("secret://github/token").unwrap());
         assert!(s.get_secret("secret://github/token").unwrap().is_none());
-        assert!(!s.delete_secret("secret://github/token").unwrap(), "删不存在的要返回 false");
+        assert!(
+            !s.delete_secret("secret://github/token").unwrap(),
+            "删不存在的要返回 false"
+        );
     }
 
     /// cli/server 走各自的命名空间，别落进普通平台的 keys 里 ——
@@ -433,10 +467,16 @@ mod tests {
     fn cli_and_server_namespaces() {
         let (_d, s) = store();
         s.set_secret("secret://cli/gh/main", "gho_1").unwrap();
-        s.set_secret("secret://server/vex/root-password", "pw").unwrap();
-        assert_eq!(s.get_secret("secret://cli/gh/main").unwrap().unwrap(), "gho_1");
+        s.set_secret("secret://server/vex/root-password", "pw")
+            .unwrap();
         assert_eq!(
-            s.get_secret("secret://server/vex/root-password").unwrap().unwrap(),
+            s.get_secret("secret://cli/gh/main").unwrap().unwrap(),
+            "gho_1"
+        );
+        assert_eq!(
+            s.get_secret("secret://server/vex/root-password")
+                .unwrap()
+                .unwrap(),
             "pw"
         );
         // 不带字段时返回整台机器的 json
@@ -470,7 +510,10 @@ mod tests {
             serde_json::to_string(&json!({ "legacy/thing": { "ciphertext": ct } })).unwrap(),
         )
         .unwrap();
-        assert_eq!(s.get_secret("secret://legacy/thing").unwrap().unwrap(), "old-value");
+        assert_eq!(
+            s.get_secret("secret://legacy/thing").unwrap().unwrap(),
+            "old-value"
+        );
     }
 
     #[test]
@@ -493,7 +536,10 @@ mod tests {
         let (_d, s) = store();
         let first = s.master_key().unwrap();
         let again = s.init_master_key().unwrap();
-        assert_eq!(first, again, "init 第二次绝不能换 key —— 换了存量密文全部解不开");
+        assert_eq!(
+            first, again,
+            "init 第二次绝不能换 key —— 换了存量密文全部解不开"
+        );
     }
 
     #[test]

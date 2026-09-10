@@ -170,7 +170,9 @@ fn read_value(v: &str) -> Result<String> {
     }
     // 从 stdin 读：密钥不进 argv，ps 看不到
     let mut buf = String::new();
-    std::io::stdin().read_to_string(&mut buf).context("从 stdin 读密钥失败")?;
+    std::io::stdin()
+        .read_to_string(&mut buf)
+        .context("从 stdin 读密钥失败")?;
     let v = buf.trim_end_matches(['\n', '\r']).to_string();
     if v.is_empty() {
         return Err(anyhow!("stdin 没读到内容"));
@@ -181,7 +183,7 @@ fn read_value(v: &str) -> Result<String> {
 fn print_list(items: &[SecretMeta], platform: Option<&str>, as_json: bool) -> Result<()> {
     let filtered: Vec<&SecretMeta> = items
         .iter()
-        .filter(|m| platform.is_none_or(|p| m.platform == p))
+        .filter(|m| platform.map_or(true, |p| m.platform == p))
         .collect();
     if as_json {
         println!("{}", serde_json::to_string_pretty(&filtered)?);
@@ -191,7 +193,12 @@ fn print_list(items: &[SecretMeta], platform: Option<&str>, as_json: bool) -> Re
         println!("（没有密钥）");
         return Ok(());
     }
-    let w = filtered.iter().map(|m| m.r#ref().chars().count()).max().unwrap_or(20).min(60);
+    let w = filtered
+        .iter()
+        .map(|m| m.r#ref().chars().count())
+        .max()
+        .unwrap_or(20)
+        .min(60);
     for m in filtered {
         let mut line = format!("{:<w$}  {:<14}", m.r#ref(), m.kind, w = w);
         if !m.last4.is_empty() {
@@ -224,7 +231,11 @@ fn run() -> Result<()> {
             store.init_master_key()?;
             println!(
                 "master key 就绪（~/.keyring/master.key，0600）{}",
-                if existed { "；已有密钥库，未改动" } else { "" }
+                if existed {
+                    "；已有密钥库，未改动"
+                } else {
+                    ""
+                }
             );
         }
         Cmd::Get { r#ref } => {
@@ -236,14 +247,23 @@ fn run() -> Result<()> {
                 None => return Err(anyhow!("找不到 {ref}（后端 {}）", b.name(), r#ref = r#ref)),
             }
         }
-        Cmd::Set { r#ref, value, kind, account } => {
+        Cmd::Set {
+            r#ref,
+            value,
+            kind,
+            account,
+        } => {
             let v = read_value(&value)?;
             let b = Backend::select()?;
             b.set(&r#ref, &v, &kind, &account)?;
             // 不回显明文，只确认写成功和它有多长
             println!("已写入 {} （{} 字节，后端 {}）", r#ref, v.len(), b.name());
         }
-        Cmd::Annotate { r#ref, account, kind } => match Backend::select()? {
+        Cmd::Annotate {
+            r#ref,
+            account,
+            kind,
+        } => match Backend::select()? {
             Backend::D1(d) => {
                 if d.annotate(&r#ref, account.as_deref(), kind.as_deref())? {
                     println!("已更新备注：{ref}", r#ref = r#ref);
@@ -282,12 +302,20 @@ fn run() -> Result<()> {
         }
         // account / key / platform 只有本地 file 后端有（D1 那张表是扁平的
         // id→密文，没有 accounts 这个桶），所以这里直接用 Store，不走后端分发
-        Cmd::Account { action, platform, username, password } => {
+        Cmd::Account {
+            action,
+            platform,
+            username,
+            password,
+        } => {
             let s = Store::default_location()?;
             match action.as_str() {
                 "set" => {
                     let u = username.ok_or_else(|| anyhow!("set 需要 username"))?;
-                    let p = read_value(&password.ok_or_else(|| anyhow!("set 需要 password（传 - 从 stdin 读）"))?)?;
+                    let p = read_value(
+                        &password
+                            .ok_or_else(|| anyhow!("set 需要 password（传 - 从 stdin 读）"))?,
+                    )?;
                     s.set_account(&platform, &u, &p)?;
                     println!("已写入账户 {platform}/{u}（{} 字节）", p.len());
                 }
@@ -318,12 +346,19 @@ fn run() -> Result<()> {
                 other => return Err(anyhow!("未知操作 {other}，应为 set / get / list / delete")),
             }
         }
-        Cmd::Key { action, platform, key_name, value } => {
+        Cmd::Key {
+            action,
+            platform,
+            key_name,
+            value,
+        } => {
             let s = Store::default_location()?;
             match action.as_str() {
                 "set" => {
                     let n = key_name.ok_or_else(|| anyhow!("set 需要 key_name"))?;
-                    let v = read_value(&value.ok_or_else(|| anyhow!("set 需要 value（传 - 从 stdin 读）"))?)?;
+                    let v = read_value(
+                        &value.ok_or_else(|| anyhow!("set 需要 value（传 - 从 stdin 读）"))?,
+                    )?;
                     s.set_key(&platform, &n, &v)?;
                     println!("已写入 {platform}/{n}（{} 字节）", v.len());
                 }

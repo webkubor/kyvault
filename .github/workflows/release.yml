@@ -1,5 +1,12 @@
 name: Create Release
 
+# 打 v* tag 时交叉编译 Rust 二进制并附到 Release。
+#
+# 为什么改成二进制分发：Rust 版存在的意义就是「不依赖运行时」——
+# Python 版那条 pip install 链条上任何一环坏掉（尤其是解释器的 TLS 验证路径），
+# 密钥库就只读，而它是所有需要凭据的活的底座。发一个静态二进制，
+# 装它的人不需要有 Python、也不需要有 Rust 工具链。
+
 on:
   push:
     tags:
@@ -9,25 +16,35 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  upload-assets:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      # 上传前先跑一遍测试：发布是最后一道门，不依赖「之前某次 CI 应该跑过了」。
+      # 跨语言互操作测试在这里尤其要跑 —— 它守的是「解得开存量密钥」，
+      # 那条断了比任何功能缺失都严重。
+      - name: 测试
+        if: matrix.target == 'aarch64-apple-darwin' || matrix.target == 'x86_64-unknown-linux-gnu'
+        working-directory: rust
+        run: cargo test --all-features
 
-      - name: Build package
-        run: |
-          python -m pip install --upgrade pip build
-          python -m build
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - uses: taiki-e/upload-rust-binary-action@v1
         with:
-          generate_release_notes: true
-          files: dist/*
+          bin: kyvault
+          target: ${{ matrix.target }}
+          manifest-path: rust/Cargo.toml
+          archive: kyvault-$target
+          token: ${{ secrets.GITHUB_TOKEN }}

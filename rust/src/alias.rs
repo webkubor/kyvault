@@ -16,7 +16,9 @@ pub struct Aliases {
 
 impl Aliases {
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { path: root.into().join("aliases.json") }
+        Self {
+            path: root.into().join("aliases.json"),
+        }
     }
 
     pub fn default_location() -> Result<Self> {
@@ -67,7 +69,8 @@ impl Aliases {
         if ref_or_alias.starts_with("secret://") {
             return ref_or_alias.to_string();
         }
-        self.get(ref_or_alias).unwrap_or_else(|| ref_or_alias.to_string())
+        self.get(ref_or_alias)
+            .unwrap_or_else(|| ref_or_alias.to_string())
     }
 }
 
@@ -88,16 +91,27 @@ mod tests {
         a.set("gh", "secret://github/pat").unwrap();
         assert_eq!(a.get("gh").unwrap(), "secret://github/pat");
         assert!(a.delete("gh").unwrap());
-        assert!(!a.delete("gh").unwrap(), "删第二次应返回 false，不能静默当成功");
+        assert!(
+            !a.delete("gh").unwrap(),
+            "删第二次应返回 false，不能静默当成功"
+        );
     }
 
     #[test]
     fn resolve_passthrough_and_lookup() {
         let (_d, a) = tmp();
         a.set("gh", "secret://github/pat").unwrap();
-        assert_eq!(a.resolve("secret://x/y"), "secret://x/y", "完整 ref 原样返回");
+        assert_eq!(
+            a.resolve("secret://x/y"),
+            "secret://x/y",
+            "完整 ref 原样返回"
+        );
         assert_eq!(a.resolve("gh"), "secret://github/pat", "别名要被解析");
-        assert_eq!(a.resolve("unknown"), "unknown", "查不到原样返回，由后端报错");
+        assert_eq!(
+            a.resolve("unknown"),
+            "unknown",
+            "查不到原样返回，由后端报错"
+        );
     }
 
     #[test]

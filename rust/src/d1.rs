@@ -50,7 +50,12 @@ impl D1 {
                 missing.join(", ")
             ));
         }
-        Ok(Self { account_id, database_id, token, key: OnceCell::new() })
+        Ok(Self {
+            account_id,
+            database_id,
+            token,
+            key: OnceCell::new(),
+        })
     }
 
     fn url(&self) -> String {
@@ -141,9 +146,17 @@ impl D1 {
             vec![json!(r)],
         )?;
         let rows = Self::rows(&body);
-        let Some(row) = rows.first() else { return Ok(None) };
-        let ct = row.get("ciphertext").and_then(|v| v.as_str()).unwrap_or_default();
-        let nonce = row.get("nonce").and_then(|v| v.as_str()).unwrap_or_default();
+        let Some(row) = rows.first() else {
+            return Ok(None);
+        };
+        let ct = row
+            .get("ciphertext")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        let nonce = row
+            .get("nonce")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
         Ok(Some(decrypt_split(ct, nonce, self.master()?)?))
     }
 
@@ -174,9 +187,16 @@ impl D1 {
     /// （每交一趟都是一次泄漏机会，而且「手上没有明文」时根本做不到）。
     pub fn annotate(&self, r: &str, account: Option<&str>, kind: Option<&str>) -> Result<bool> {
         if account.is_none() && kind.is_none() {
-            return Err(anyhow!("至少要给 --account 或 --kind 之一，否则这次调用什么都不会改"));
+            return Err(anyhow!(
+                "至少要给 --account 或 --kind 之一，否则这次调用什么都不会改"
+            ));
         }
-        if Self::rows(&self.query("SELECT id FROM secret_vault WHERE id = ?1 LIMIT 1", vec![json!(r)])?).is_empty() {
+        if Self::rows(&self.query(
+            "SELECT id FROM secret_vault WHERE id = ?1 LIMIT 1",
+            vec![json!(r)],
+        )?)
+        .is_empty()
+        {
             return Ok(false); // 不静默当成功：打错一个字就以为改好了是最坏的结果
         }
         let mut sets = Vec::new();
@@ -192,13 +212,22 @@ impl D1 {
         params.push(json!(now_utc()));
         sets.push(format!("updated_at=?{}", params.len()));
         params.push(json!(r));
-        let sql = format!("UPDATE secret_vault SET {} WHERE id = ?{}", sets.join(", "), params.len());
+        let sql = format!(
+            "UPDATE secret_vault SET {} WHERE id = ?{}",
+            sets.join(", "),
+            params.len()
+        );
         self.query(&sql, params)?;
         Ok(true)
     }
 
     pub fn delete_secret(&self, r: &str) -> Result<bool> {
-        if Self::rows(&self.query("SELECT id FROM secret_vault WHERE id = ?1 LIMIT 1", vec![json!(r)])?).is_empty() {
+        if Self::rows(&self.query(
+            "SELECT id FROM secret_vault WHERE id = ?1 LIMIT 1",
+            vec![json!(r)],
+        )?)
+        .is_empty()
+        {
             return Ok(false);
         }
         self.query("DELETE FROM secret_vault WHERE id = ?1", vec![json!(r)])?;
@@ -227,7 +256,10 @@ impl D1 {
 }
 
 fn str_of(v: &Value, k: &str) -> String {
-    v.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_string()
+    v.get(k)
+        .and_then(|x| x.as_str())
+        .unwrap_or_default()
+        .to_string()
 }
 
 fn now_utc() -> String {
@@ -254,7 +286,14 @@ fn civil_from_unix(secs: i64) -> (i64, u32, u32, u32, u32, u32) {
     let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
     let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
     let y = if m <= 2 { y + 1 } else { y };
-    (y, m, d, (rem / 3600) as u32, ((rem % 3600) / 60) as u32, (rem % 60) as u32)
+    (
+        y,
+        m,
+        d,
+        (rem / 3600) as u32,
+        ((rem % 3600) / 60) as u32,
+        (rem % 60) as u32,
+    )
 }
 
 fn sha256_hex(v: &str) -> String {
