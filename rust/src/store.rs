@@ -42,6 +42,20 @@ impl Store {
         self.root.join("master.key")
     }
 
+    // 下面三个只读访问器给 doctor 用 —— 自检要报「文件在不在、权限对不对」，
+    // 就得知道路径。刻意只暴露读，不给外部改 root 的机会。
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub fn master_key_path(&self) -> PathBuf {
+        self.master_key_file()
+    }
+
+    pub fn secrets_path(&self) -> PathBuf {
+        self.secrets_file()
+    }
+
     /// master key：环境变量优先，其次本地文件。与 Python 版同序，
     /// 否则 CI/容器里注入的 key 会被本地文件悄悄盖掉。
     pub fn master_key(&self) -> Result<String> {

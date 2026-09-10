@@ -99,6 +99,22 @@ enum Cmd {
     },
     /// 列出 check 支持的平台
     Providers,
+    /// 自检：后端/环境变量/文件权限/解密/AI 助手对接
+    Doctor,
+    /// 从 .env 批量导入密钥
+    Import {
+        #[arg(long, short = 'f', default_value = ".env")]
+        file: String,
+        /// 只导入以此开头的变量，如 GITHUB_
+        #[arg(long, short = 'p', default_value = "")]
+        prefix: String,
+        /// 只打印会导入什么，不写库不建别名
+        #[arg(long = "dry-run", short = 'n')]
+        dry_run: bool,
+        /// 不自动建别名（默认建，别名 = 变量名小写）
+        #[arg(long = "no-alias")]
+        no_alias: bool,
+    },
     /// 把密钥注入子进程环境变量后执行命令（不打印明文）
     Run {
         /// NAME=secret://platform/name，可重复
@@ -457,6 +473,39 @@ fn run() -> Result<()> {
                     }
                 }
             }
+        }
+        Cmd::Doctor => kyvault::doctor::run()?,
+        Cmd::Import {
+            file,
+            prefix,
+            dry_run,
+            no_alias,
+        } => {
+            use kyvault::import_env as ie;
+            let text = ie::read_file(&file)?;
+            let planned = ie::plan(&text, &prefix);
+            if planned.is_empty() {
+                println!("没有可导入的变量（{file}，前缀 {:?}）—— 空值会被跳过", prefix);
+                return Ok(());
+            }
+            if dry_run {
+                println!("预览（不写库）：");
+                for p in &planned {
+                    println!("  {} → {} [{}]", p.env_key, p.r#ref, p.kind);
+                }
+                println!("\n共 {} 条。去掉 --dry-run 真导入。", planned.len());
+                return Ok(());
+            }
+            let b = Backend::select()?;
+            let aliases = Aliases::default_location()?;
+            for p in &planned {
+                b.set(&p.r#ref, &p.value, p.kind, "")?;
+                println!("✓ {} → {}", p.env_key, p.r#ref);
+                if !no_alias {
+                    aliases.set(&p.env_key.to_lowercase(), &p.r#ref)?;
+                }
+            }
+            println!("\n共导入 {} 条（后端 {}）", planned.len(), b.name());
         }
         Cmd::Providers => {
             println!("check 支持的平台（{} 个）：\n", kyvault::providers::PROVIDERS.len());
