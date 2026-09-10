@@ -124,6 +124,14 @@ enum Cmd {
         profile: Option<String>,
         token: Option<String>,
     },
+    /// 把密钥使用规则/技能包写进本地各家 AI 助手
+    Connect,
+    /// 检查并升级到最新版（走 GitHub Release + install.sh）
+    Update {
+        /// 不问直接升（脚本/CI 用）
+        #[arg(long = "yes", short = 'y')]
+        assume_yes: bool,
+    },
     /// 从 .env 批量导入密钥
     Import {
         #[arg(long, short = 'f', default_value = ".env")]
@@ -618,6 +626,8 @@ fn run() -> Result<()> {
                 a => return Err(anyhow!("未知操作 {a}（set / get / list / delete）")),
             }
         }
+        Cmd::Connect => kyvault::connect::run()?,
+        Cmd::Update { assume_yes } => kyvault::update::run(assume_yes)?,
         Cmd::Doctor => kyvault::doctor::run()?,
         Cmd::Import {
             file,

@@ -4,6 +4,7 @@
 //! 这次 Rust 重写唯一不能出错的地方就是「解得开 Python 版和 Go 端写的密钥」，
 //! 那个断言必须是自动化测试，不能靠手工比对一次就算完。
 pub mod alias;
+pub mod connect;
 pub mod crypto;
 pub mod d1;
 pub mod doctor;
@@ -11,3 +12,4 @@ pub mod import_env;
 pub mod model;
 pub mod providers;
 pub mod store;
+pub mod update;
