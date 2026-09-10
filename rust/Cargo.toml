@@ -1,0 +1,36 @@
+[package]
+name = "kyvault"
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.80"
+description = "本地加密密钥管理 CLI — AES-256-GCM 纯本地存储，AI 只拿别名"
+license = "MIT"
+
+[lib]
+name = "kyvault"
+path = "src/lib.rs"
+
+[[bin]]
+name = "kyvault"
+path = "src/main.rs"
+
+[dependencies]
+aes-gcm = "0.10"
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.8"
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+# rustls：不碰系统 OpenSSL —— 重写的主要动因就是 Python 那条 TLS 验证路径会整体失效
+ureq = { version = "2.10", default-features = false, features = ["tls", "json"] }
+dirs = "5"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true
