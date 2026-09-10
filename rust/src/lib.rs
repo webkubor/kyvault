@@ -13,3 +13,4 @@ pub mod model;
 pub mod providers;
 pub mod store;
 pub mod update;
+pub mod wizard;

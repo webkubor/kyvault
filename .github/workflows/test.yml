@@ -29,17 +29,21 @@ jobs:
         working-directory: rust
         run: cargo test --all-features
 
-  # Python 版仍在维护期，所以这条继续跑；Python 实现移除时连这个 job 一起删。
+  # Python 版**命令面已被 Rust 全覆盖**（2026-09-10 补齐 check/providers/doctor/
+  # import/server/cli/update/connect/wizard 九个，两侧 `add_parser` 与 clap 子命令
+  # 逐条对齐）。这个 job 仍留着，因为还有一件事卡着删除：
   #
-  # 下线前提 = Rust 侧补齐这 9 个子命令（2026-09-10 实测差集，约 700 行实现）：
-  #   check（validator.py 341 行）· import（import_env.py 151 行）
-  #   doctor（doctor.py 111 行）· wizard（88 行）· update（updater.py 74 行）
-  #   providers · connect · server · cli
-  # Rust 现有：init get set annotate delete list platforms account key platform alias run
+  #   tests/interop.rs 的 server_and_cli_buckets_survive_both_directions 会
+  #   `from kyvault.store import set_server`，靠 Python 实现做对照来验证
+  #   _servers/_clis 嵌套结构的双向兼容。删掉 Python 这条测试就没了对照。
   #
-  # 注意 interop.rs 不在此列 —— 它的 Python 脚本是内联的、只依赖 cryptography 标准库，
-  # 不 import 本仓的 Python 包（实测把 kyvault/ 改名后 5 个测试照样全过）。
-  # 所以「Python 实现」和「interop 用的 python3」是两回事，删前者不影响后者。
+  # 删除前该做的是把它改成固定测试向量（KAT）：用 Python 生成一份
+  # master.key + secrets.json 存成测试资源，让 Rust 对着固定密文解。那样既不依赖
+  # Python，也不依赖本机装没装 cryptography，CI 里能真跑而不是静默跳过。
+  # 做完这一步，本 job 连同 kyvault/ tests/ pyproject.toml uv.lock 一起删。
+  #
+  # 注意上面那个 python3 + cryptography 步骤要留 —— interop.rs 的其余 5 条用的是
+  # 内联脚本 + cryptography 标准库，与本仓 Python 包无关。
   python:
     runs-on: ubuntu-latest
     strategy:

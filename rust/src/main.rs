@@ -124,6 +124,8 @@ enum Cmd {
         profile: Option<String>,
         token: Option<String>,
     },
+    /// 交互式首次设置（逐条录密钥 + 建别名）
+    Wizard,
     /// 把密钥使用规则/技能包写进本地各家 AI 助手
     Connect,
     /// 检查并升级到最新版（走 GitHub Release + install.sh）
@@ -624,6 +626,22 @@ fn run() -> Result<()> {
                     }
                 }
                 a => return Err(anyhow!("未知操作 {a}（set / get / list / delete）")),
+            }
+        }
+        Cmd::Wizard => {
+            let b = Backend::select()?;
+            let entries = kyvault::wizard::run(b.name())?;
+            let aliases = Aliases::default_location()?;
+            for e in &entries {
+                b.set(&e.r#ref, &e.value, &e.kind, &e.account)?;
+                println!("✓ 已保存 {}", e.r#ref);
+                if let Some(a) = &e.alias {
+                    aliases.set(a, &e.r#ref)?;
+                    println!("  别名 {a} → {}", e.r#ref);
+                }
+            }
+            if !entries.is_empty() {
+                println!("\n共 {} 条已落到后端 {}", entries.len(), b.name());
             }
         }
         Cmd::Connect => kyvault::connect::run()?,
