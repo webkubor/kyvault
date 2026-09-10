@@ -101,6 +101,29 @@ enum Cmd {
     Providers,
     /// 自检：后端/环境变量/文件权限/解密/AI 助手对接
     Doctor,
+    /// 服务器资产台账（IP / root 密码 / 成本 / 云商）—— 仅本地 file 后端
+    Server {
+        /// set / get / list / delete
+        action: String,
+        hostname: Option<String>,
+        ip: Option<String>,
+        root_password: Option<String>,
+        #[arg(long)]
+        cost: Option<String>,
+        #[arg(long)]
+        provider: Option<String>,
+        /// get 时只读某个字段（ip / root-password / cost / provider）
+        #[arg(long)]
+        field: Option<String>,
+    },
+    /// CLI 多 Profile 凭证 —— 仅本地 file 后端
+    Cli {
+        /// set / get / list / delete
+        action: String,
+        cli_name: Option<String>,
+        profile: Option<String>,
+        token: Option<String>,
+    },
     /// 从 .env 批量导入密钥
     Import {
         #[arg(long, short = 'f', default_value = ".env")]
@@ -472,6 +495,127 @@ fn run() -> Result<()> {
                         return Err(anyhow!("未找到别名：{name}"));
                     }
                 }
+            }
+        }
+        Cmd::Server {
+            action,
+            hostname,
+            ip,
+            root_password,
+            cost,
+            provider,
+            field,
+        } => {
+            let st = Store::default_location()?;
+            match action.as_str() {
+                "set" => {
+                    // 三个必填缺一个就拒 —— 半条台账比没有更坏：以后 get 出来
+                    // 少个 root 密码，人会以为密码丢了而不是没存过
+                    let (Some(h), Some(i), Some(pw)) = (hostname, ip, root_password) else {
+                        return Err(anyhow!("set 需要 hostname、ip、root_password 三个参数"));
+                    };
+                    st.set_server(
+                        &h,
+                        &i,
+                        &pw,
+                        cost.as_deref().unwrap_or(""),
+                        provider.as_deref().unwrap_or(""),
+                    )?;
+                    println!("✓ 服务器 {h} 已保存（本地 file 后端）");
+                }
+                "get" => {
+                    let h = hostname.ok_or_else(|| anyhow!("get 需要 hostname"))?;
+                    match st.get_server(&h, field.as_deref())? {
+                        Some(fields) => {
+                            // 单字段查询直接打值，方便 $(kyvault server get h --field ip)
+                            if field.is_some() && fields.len() == 1 {
+                                println!("{}", fields[0].1);
+                            } else {
+                                println!("🖥  {h}");
+                                for (k, v) in fields {
+                                    println!("  {k}: {v}");
+                                }
+                            }
+                        }
+                        None => return Err(anyhow!("未找到服务器 {h}（或该字段没存过）")),
+                    }
+                }
+                "list" => {
+                    let v = st.list_servers();
+                    if v.is_empty() {
+                        println!("（没有服务器台账 —— kyvault server set <主机名> <IP> <root密码>）");
+                    } else {
+                        println!("服务器台账（{} 台）：", v.len());
+                        for h in v {
+                            println!("  - {h}");
+                        }
+                    }
+                }
+                "delete" => {
+                    let h = hostname.ok_or_else(|| anyhow!("delete 需要 hostname"))?;
+                    if st.delete_server(&h)? {
+                        println!("✓ 已删除服务器 {h}");
+                    } else {
+                        return Err(anyhow!("未找到服务器 {h}"));
+                    }
+                }
+                a => return Err(anyhow!("未知操作 {a}（set / get / list / delete）")),
+            }
+        }
+        Cmd::Cli {
+            action,
+            cli_name,
+            profile,
+            token,
+        } => {
+            let st = Store::default_location()?;
+            match action.as_str() {
+                "set" => {
+                    let (Some(c), Some(pf), Some(t)) = (cli_name, profile, token) else {
+                        return Err(anyhow!("set 需要 cli_name、profile、token 三个参数"));
+                    };
+                    st.set_cli_token(&c, &pf, &t)?;
+                    println!("✓ {c} 的 profile {pf} 凭证已保存（本地 file 后端）");
+                }
+                "get" => {
+                    let (Some(c), Some(pf)) = (cli_name, profile) else {
+                        return Err(anyhow!("get 需要 cli_name 和 profile"));
+                    };
+                    match st.get_cli_token(&c, &pf)? {
+                        // 不加换行：这个值通常被 $(...) 直接吃掉
+                        Some(t) => print!("{t}"),
+                        None => return Err(anyhow!("未找到 {pf}@{c}")),
+                    }
+                }
+                "list" => {
+                    let v = st.list_clis(cli_name.as_deref());
+                    match (&cli_name, v.is_empty()) {
+                        (_, true) => println!("（没有 CLI 凭证登记）"),
+                        (Some(c), false) => {
+                            println!("{c} 的 profile（{} 个）：", v.len());
+                            for p in v {
+                                println!("  - {p}");
+                            }
+                        }
+                        (None, false) => {
+                            println!("已登记的 CLI（{} 个）：", v.len());
+                            for c in v {
+                                println!("  - {c}");
+                            }
+                        }
+                    }
+                }
+                "delete" => {
+                    let (Some(c), Some(pf)) = (cli_name, profile) else {
+                        return Err(anyhow!("delete 需要 cli_name 和 profile"));
+                    };
+                    if st.delete_cli_token(&c, &pf)? {
+                        println!("✓ 已删除 {pf}@{c}");
+                    } else {
+                        return Err(anyhow!("未找到 {pf}@{c}"));
+                    }
+                }
+                a => return Err(anyhow!("未知操作 {a}（set / get / list / delete）")),
             }
         }
         Cmd::Doctor => kyvault::doctor::run()?,

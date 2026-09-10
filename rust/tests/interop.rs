@@ -161,3 +161,94 @@ fn formats_are_not_interchangeable() {
         "file 后端的 key 竟然解开了 D1 密文，说明派生逻辑被写成一样了"
     );
 }
+
+// ── _servers / _clis 两个桶的结构兼容 ───────────────────────────────────────
+//
+// 上面几条只覆盖 crypto 层（一段明文加密解密能不能对上）。但 server / cli 台账
+// 存的是**嵌套结构**：_servers[host] = {ip, root-password, cost?, provider?}、
+// _clis[cli][profile] = 密文。结构错一层，crypto 全对也读不出来 —— 2026-09-10
+// 补 Rust 版这两个命令时，`root-password` 这个带连字符的字段名就是照抄 Python
+// 才对上的，写成 root_password 就会静默读不到。
+//
+// 用临时 HOME 跑 Python（它的路径写死在 Path.home()），Rust 侧用 Store::new
+// 指向同一个 .keyring 目录 —— 不动进程的全局 HOME，避免和其他测试抢。
+
+fn py_in_home(home: &std::path::Path, script: &str) -> std::process::Output {
+    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .to_path_buf();
+    let mut cmd = Command::new("python3");
+    cmd.arg("-c").arg(script).env("HOME", home);
+    // 让 python 既能 import 本仓的 kyvault 包，也能找到用户级装的 cryptography
+    let mut paths = vec![repo.to_string_lossy().to_string()];
+    if let Ok(out) = Command::new("python3")
+        .args(["-c", "import cryptography,os;print(os.path.dirname(os.path.dirname(cryptography.__file__)))"])
+        .output()
+    {
+        let p = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !p.is_empty() {
+            paths.push(p);
+        }
+    }
+    cmd.env("PYTHONPATH", paths.join(":"));
+    cmd.output().expect("python3 跑不起来")
+}
+
+#[test]
+fn server_and_cli_buckets_survive_both_directions() {
+    if !python_ready() {
+        eprintln!("跳过：没有 python3 + cryptography");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+    let store = kyvault::store::Store::new(home.join(".keyring"));
+    store.init_master_key().unwrap();
+
+    // ① Python 写 → Rust 读（老库能不能打开）
+    let out = py_in_home(
+        home,
+        "from kyvault.store import set_server, set_cli_token\n\
+         set_server('py-host','9.9.9.9','pypass','66','aliyun')\n\
+         set_cli_token('py-cli','main','py_token_999')\n",
+    );
+    assert!(
+        out.status.success(),
+        "python 写入失败：{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let fields = store.get_server("py-host", None).unwrap().expect("Rust 读不到 Python 写的服务器");
+    let map: std::collections::HashMap<_, _> = fields.into_iter().collect();
+    assert_eq!(map.get("ip").map(String::as_str), Some("9.9.9.9"));
+    assert_eq!(
+        map.get("root-password").map(String::as_str),
+        Some("pypass"),
+        "root-password 这个字段名带连字符，写成下划线就会静默读不到"
+    );
+    assert_eq!(map.get("cost").map(String::as_str), Some("66"));
+    assert_eq!(map.get("provider").map(String::as_str), Some("aliyun"));
+    assert_eq!(
+        store.get_cli_token("py-cli", "main").unwrap().as_deref(),
+        Some("py_token_999")
+    );
+
+    // ② Rust 写 → Python 读（新写的东西 Python/Go 端还认不认）
+    store.set_server("rs-host", "8.8.8.8", "rspass", "", "").unwrap();
+    store.set_cli_token("rs-cli", "prof", "rs_tok_777").unwrap();
+    let out = py_in_home(
+        home,
+        "from kyvault.store import get_server, get_cli_token\n\
+         s = get_server('rs-host')\n\
+         assert s['ip']=='8.8.8.8', s\n\
+         assert s['root-password']=='rspass', s\n\
+         assert 'cost' not in s, '空字段不该落库：'+str(s)\n\
+         assert get_cli_token('rs-cli','prof')=='rs_tok_777'\n\
+         print('ok')\n",
+    );
+    assert!(
+        out.status.success(),
+        "Python 读不回 Rust 写的桶：{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}

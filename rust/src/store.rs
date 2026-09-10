@@ -380,6 +380,145 @@ impl Store {
         self.decrypt_at(&self.load(), &[platform, "accounts", user], &key)
     }
 
+    // ── _servers / _clis 命名空间 ─────────────────────────
+    //
+    // 这两组同样只有 file 后端有（与 account/key 同理）。它们是**顶层特殊 key**
+    // （`_servers` / `_clis`），不是某个 platform 下的桶 —— 结构必须和 Python 版
+    // 逐字一致，否则老库读不出来：
+    //   _servers[hostname] = { ip, root-password, cost?, provider? }   每个值单独加密
+    //   _clis[cli_name][profile] = <密文>
+    // 注意 `root-password` 带连字符，不是下划线（Python 版就这么写的，别顺手改）。
+
+    pub fn set_server(
+        &self,
+        hostname: &str,
+        ip: &str,
+        root_password: &str,
+        cost: &str,
+        provider: &str,
+    ) -> Result<()> {
+        let key = self.aes_key()?;
+        let mut entry = Map::new();
+        entry.insert("ip".into(), Value::String(encrypt_joined(ip, &key)?));
+        entry.insert(
+            "root-password".into(),
+            Value::String(encrypt_joined(root_password, &key)?),
+        );
+        // 空字段不写：写了空密文，get 时会解出空串，看着像"存过但丢了"
+        if !cost.is_empty() {
+            entry.insert("cost".into(), Value::String(encrypt_joined(cost, &key)?));
+        }
+        if !provider.is_empty() {
+            entry.insert(
+                "provider".into(),
+                Value::String(encrypt_joined(provider, &key)?),
+            );
+        }
+        let mut data = self.load();
+        Self::obj_mut(&mut data, "_servers").insert(hostname.to_string(), Value::Object(entry));
+        self.save(&data)
+    }
+
+    /// field 为 None 时返回全部字段（已解密）；指定 field 只返回那一项。
+    pub fn get_server(
+        &self,
+        hostname: &str,
+        field: Option<&str>,
+    ) -> Result<Option<Vec<(String, String)>>> {
+        let key = self.aes_key()?;
+        let data = self.load();
+        let Some(entry) = data.get("_servers").and_then(|v| v.get(hostname)) else {
+            return Ok(None);
+        };
+        let Some(obj) = entry.as_object() else { return Ok(None) };
+        let mut out = Vec::new();
+        for (k, v) in obj {
+            if let Some(f) = field {
+                if k != f {
+                    continue;
+                }
+            }
+            if let Some(ct) = v.as_str() {
+                out.push((k.clone(), decrypt_joined(ct, &key)?));
+            }
+        }
+        if out.is_empty() {
+            return Ok(None);
+        }
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        Ok(Some(out))
+    }
+
+    pub fn list_servers(&self) -> Vec<String> {
+        let mut v: Vec<String> = self
+            .load()
+            .get("_servers")
+            .and_then(|s| s.as_object())
+            .map(|o| o.keys().cloned().collect())
+            .unwrap_or_default();
+        v.sort();
+        v
+    }
+
+    pub fn delete_server(&self, hostname: &str) -> Result<bool> {
+        let mut data = self.load();
+        let removed = Self::obj_mut(&mut data, "_servers")
+            .remove(hostname)
+            .is_some();
+        if removed {
+            self.save(&data)?;
+        }
+        Ok(removed)
+    }
+
+    pub fn set_cli_token(&self, cli_name: &str, profile: &str, token: &str) -> Result<()> {
+        let ct = encrypt_joined(token, &self.aes_key()?)?;
+        let mut data = self.load();
+        Self::obj_mut(&mut data, "_clis")
+            .entry(cli_name.to_string())
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .unwrap()
+            .insert(profile.to_string(), Value::String(ct));
+        self.save(&data)
+    }
+
+    pub fn get_cli_token(&self, cli_name: &str, profile: &str) -> Result<Option<String>> {
+        let key = self.aes_key()?;
+        self.decrypt_at(&self.load(), &["_clis", cli_name, profile], &key)
+    }
+
+    /// cli_name 为 None 时列出所有 CLI 名；给了就列它的 profile。
+    pub fn list_clis(&self, cli_name: Option<&str>) -> Vec<String> {
+        let data = self.load();
+        let Some(clis) = data.get("_clis").and_then(|v| v.as_object()) else {
+            return vec![];
+        };
+        let mut v: Vec<String> = match cli_name {
+            None => clis.keys().cloned().collect(),
+            Some(n) => clis
+                .get(n)
+                .and_then(|v| v.as_object())
+                .map(|o| o.keys().cloned().collect())
+                .unwrap_or_default(),
+        };
+        v.sort();
+        v
+    }
+
+    pub fn delete_cli_token(&self, cli_name: &str, profile: &str) -> Result<bool> {
+        let mut data = self.load();
+        let removed = Self::obj_mut(&mut data, "_clis")
+            .get_mut(cli_name)
+            .and_then(|v| v.as_object_mut())
+            .and_then(|o| o.remove(profile))
+            .is_some();
+        if removed {
+            self.save(&data)?;
+        }
+        Ok(removed)
+    }
+
     pub fn set_key(&self, platform: &str, name: &str, value: &str) -> Result<()> {
         let ct = encrypt_joined(value, &self.aes_key()?)?;
         let mut data = self.load();
