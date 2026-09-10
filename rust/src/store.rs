@@ -314,7 +314,197 @@ impl Store {
         out
     }
 
+    // ── account / key / platform 命名空间 ─────────────────
+    //
+    // 这三组是**只有本地 file 后端**的能力（Python 版同样如此）：D1 那张
+    // secret_vault 表是扁平的 id→密文，没有 accounts 这个桶。所以 CLI 层
+    // 直接用 Store，不走后端分发 —— 假装支持再静默落到别处，比明确只支持本地糟。
+
+    pub fn set_account(&self, platform: &str, user: &str, password: &str) -> Result<()> {
+        let ct = encrypt_joined(password, &self.aes_key()?)?;
+        let mut data = self.load();
+        let p = Self::obj_mut(&mut data, platform);
+        p.entry("keys".to_string()).or_insert_with(|| json!({}));
+        p.entry("accounts".to_string())
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .unwrap()
+            .insert(user.to_string(), Value::String(ct));
+        self.save(&data)
+    }
+
+    pub fn get_account(&self, platform: &str, user: &str) -> Result<Option<String>> {
+        let key = self.aes_key()?;
+        self.decrypt_at(&self.load(), &[platform, "accounts", user], &key)
+    }
+
+    pub fn set_key(&self, platform: &str, name: &str, value: &str) -> Result<()> {
+        let ct = encrypt_joined(value, &self.aes_key()?)?;
+        let mut data = self.load();
+        let p = Self::obj_mut(&mut data, platform);
+        p.entry("accounts".to_string()).or_insert_with(|| json!({}));
+        p.entry("keys".to_string())
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .unwrap()
+            .insert(name.to_string(), Value::String(ct));
+        self.save(&data)
+    }
+
+    pub fn get_key(&self, platform: &str, name: &str) -> Result<Option<String>> {
+        let key = self.aes_key()?;
+        self.decrypt_at(&self.load(), &[platform, "keys", name], &key)
+    }
+
+    /// bucket 传 "accounts" 或 "keys"
+    pub fn list_bucket(&self, platform: &str, bucket: &str) -> Vec<String> {
+        self.load()
+            .get(platform)
+            .and_then(|v| v.get(bucket))
+            .and_then(|v| v.as_object())
+            .map(|m| m.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    pub fn delete_from_bucket(&self, platform: &str, bucket: &str, name: &str) -> Result<bool> {
+        let mut data = self.load();
+        let hit = data
+            .get_mut(platform)
+            .and_then(|v| v.get_mut(bucket))
+            .and_then(|v| v.as_object_mut())
+            .map(|m| m.remove(name).is_some())
+            .unwrap_or(false);
+        if hit {
+            self.save(&data)?;
+        }
+        Ok(hit)
+    }
+
+    /// 平台 → (accounts, keys)。跳过 _servers / _clis 这些系统保留键。
+    pub fn platforms(&self) -> std::collections::BTreeMap<String, (Vec<String>, Vec<String>)> {
+        let data = self.load();
+        let mut out = std::collections::BTreeMap::new();
+        if let Some(root) = data.as_object() {
+            for (platform, v) in root {
+                if platform.starts_with('_') {
+                    continue;
+                }
+                let take = |b: &str| {
+                    v.get(b)
+                        .and_then(|x| x.as_object())
+                        .map(|m| m.keys().cloned().collect::<Vec<_>>())
+                        .unwrap_or_default()
+                };
+                out.insert(platform.clone(), (take("accounts"), take("keys")));
+            }
+        }
+        out
+    }
+
     pub fn exists(&self) -> bool {
         Path::new(&self.secrets_file()).exists()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn store() -> (tempfile::TempDir, Store) {
+        let d = tempfile::tempdir().unwrap();
+        let s = Store::new(d.path());
+        s.init_master_key().unwrap();
+        (d, s)
+    }
+
+    #[test]
+    fn secret_roundtrip_and_delete() {
+        let (_d, s) = store();
+        s.set_secret("secret://github/token", "ghp_x").unwrap();
+        assert_eq!(s.get_secret("secret://github/token").unwrap().unwrap(), "ghp_x");
+        assert!(s.delete_secret("secret://github/token").unwrap());
+        assert!(s.get_secret("secret://github/token").unwrap().is_none());
+        assert!(!s.delete_secret("secret://github/token").unwrap(), "删不存在的要返回 false");
+    }
+
+    /// cli/server 走各自的命名空间，别落进普通平台的 keys 里 ——
+    /// CLAUDE.md 里 secret://cli/<cli>/<profile> 这种三段寻址依赖它
+    #[test]
+    fn cli_and_server_namespaces() {
+        let (_d, s) = store();
+        s.set_secret("secret://cli/gh/main", "gho_1").unwrap();
+        s.set_secret("secret://server/vex/root-password", "pw").unwrap();
+        assert_eq!(s.get_secret("secret://cli/gh/main").unwrap().unwrap(), "gho_1");
+        assert_eq!(
+            s.get_secret("secret://server/vex/root-password").unwrap().unwrap(),
+            "pw"
+        );
+        // 不带字段时返回整台机器的 json
+        let all = s.get_secret("secret://server/vex").unwrap().unwrap();
+        assert!(all.contains("root-password"), "应返回整机 json：{all}");
+    }
+
+    /// 读-改-写必须保住没建模的字段。对密钥库来说丢字段就是丢密钥。
+    #[test]
+    fn unknown_fields_survive_write() {
+        let (d, s) = store();
+        let f = d.path().join("secrets.json");
+        fs::write(
+            &f,
+            r#"{"legacy/flat":{"ciphertext":"x","kind":"K"},"future_thing":{"a":1}}"#,
+        )
+        .unwrap();
+        s.set_secret("secret://github/token", "v").unwrap();
+        let after: Value = serde_json::from_str(&fs::read_to_string(&f).unwrap()).unwrap();
+        assert!(after.get("future_thing").is_some(), "未知字段被写掉了");
+        assert!(after.get("legacy/flat").is_some(), "旧扁平格式被写掉了");
+    }
+
+    #[test]
+    fn old_flat_format_readable() {
+        let (d, s) = store();
+        let key = s.aes_key().unwrap();
+        let ct = encrypt_joined("old-value", &key).unwrap();
+        fs::write(
+            d.path().join("secrets.json"),
+            serde_json::to_string(&json!({ "legacy/thing": { "ciphertext": ct } })).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(s.get_secret("secret://legacy/thing").unwrap().unwrap(), "old-value");
+    }
+
+    #[test]
+    fn account_and_key_buckets() {
+        let (_d, s) = store();
+        s.set_account("github", "webkubor", "pw1").unwrap();
+        s.set_key("github", "pat", "ghp_2").unwrap();
+        assert_eq!(s.get_account("github", "webkubor").unwrap().unwrap(), "pw1");
+        assert_eq!(s.get_key("github", "pat").unwrap().unwrap(), "ghp_2");
+        assert_eq!(s.list_bucket("github", "accounts"), vec!["webkubor"]);
+        assert_eq!(s.list_bucket("github", "keys"), vec!["pat"]);
+        let p = s.platforms();
+        assert_eq!(p["github"].0, vec!["webkubor"]);
+        assert!(s.delete_from_bucket("github", "keys", "pat").unwrap());
+        assert!(s.list_bucket("github", "keys").is_empty());
+    }
+
+    #[test]
+    fn master_key_never_overwritten() {
+        let (_d, s) = store();
+        let first = s.master_key().unwrap();
+        let again = s.init_master_key().unwrap();
+        assert_eq!(first, again, "init 第二次绝不能换 key —— 换了存量密文全部解不开");
+    }
+
+    #[test]
+    fn broken_json_does_not_panic() {
+        let d = tempfile::tempdir().unwrap();
+        let s = Store::new(d.path());
+        s.init_master_key().unwrap();
+        fs::write(d.path().join("secrets.json"), "{不是 json").unwrap();
+        assert!(s.list_secrets().is_empty(), "坏库当空库，不能 panic");
+        // 还能继续写（新内容覆盖坏文件）
+        s.set_secret("secret://a/b", "v").unwrap();
+        assert_eq!(s.get_secret("secret://a/b").unwrap().unwrap(), "v");
     }
 }

@@ -14,6 +14,7 @@ use std::process::Command;
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 
+use kyvault::alias::Aliases;
 use kyvault::d1::D1;
 use kyvault::model::SecretMeta;
 use kyvault::store::Store;
@@ -63,6 +64,29 @@ enum Cmd {
     },
     /// 列出所有平台及密钥数量
     Platforms,
+    /// 管理账户（用户名+密码）—— 仅本地 file 后端
+    Account {
+        /// set / get / list / delete
+        action: String,
+        platform: String,
+        username: Option<String>,
+        password: Option<String>,
+    },
+    /// 管理平台密钥 —— 仅本地 file 后端
+    Key {
+        /// set / get / list / delete
+        action: String,
+        platform: String,
+        key_name: Option<String>,
+        value: Option<String>,
+    },
+    /// 查看平台列表和详情 —— 仅本地 file 后端
+    Platform { platform_name: Option<String> },
+    /// 管理别名（人设好映射，AI 只用别名）
+    Alias {
+        #[command(subcommand)]
+        action: AliasCmd,
+    },
     /// 把密钥注入子进程环境变量后执行命令（不打印明文）
     Run {
         /// NAME=secret://platform/name，可重复
@@ -72,6 +96,18 @@ enum Cmd {
         #[arg(last = true, required = true)]
         command: Vec<String>,
     },
+}
+
+#[derive(Subcommand)]
+enum AliasCmd {
+    /// 设置别名：github_token → secret://github/my-pat
+    Set { name: String, r#ref: String },
+    /// 查别名指向哪个 ref
+    Get { name: String },
+    /// 列出所有别名
+    List,
+    /// 删除别名
+    Delete { name: String },
 }
 
 enum Backend {
@@ -192,6 +228,8 @@ fn run() -> Result<()> {
             );
         }
         Cmd::Get { r#ref } => {
+            // 先解析别名 —— 老用户脚本里写的多是 `kyvault get github_token`
+            let r#ref = Aliases::default_location()?.resolve(&r#ref);
             let b = Backend::select()?;
             match b.get(&r#ref)? {
                 Some(v) => println!("{v}"),
@@ -242,16 +280,149 @@ fn run() -> Result<()> {
                 println!("{p:<24} {n}");
             }
         }
+        // account / key / platform 只有本地 file 后端有（D1 那张表是扁平的
+        // id→密文，没有 accounts 这个桶），所以这里直接用 Store，不走后端分发
+        Cmd::Account { action, platform, username, password } => {
+            let s = Store::default_location()?;
+            match action.as_str() {
+                "set" => {
+                    let u = username.ok_or_else(|| anyhow!("set 需要 username"))?;
+                    let p = read_value(&password.ok_or_else(|| anyhow!("set 需要 password（传 - 从 stdin 读）"))?)?;
+                    s.set_account(&platform, &u, &p)?;
+                    println!("已写入账户 {platform}/{u}（{} 字节）", p.len());
+                }
+                "get" => {
+                    let u = username.ok_or_else(|| anyhow!("get 需要 username"))?;
+                    match s.get_account(&platform, &u)? {
+                        Some(v) => println!("{v}"),
+                        None => return Err(anyhow!("找不到账户 {platform}/{u}")),
+                    }
+                }
+                "list" => {
+                    let list = s.list_bucket(&platform, "accounts");
+                    if list.is_empty() {
+                        println!("（没有账户）");
+                    }
+                    for u in list {
+                        println!("  {u}");
+                    }
+                }
+                "delete" => {
+                    let u = username.ok_or_else(|| anyhow!("delete 需要 username"))?;
+                    if s.delete_from_bucket(&platform, "accounts", &u)? {
+                        println!("已删除账户 {platform}/{u}");
+                    } else {
+                        return Err(anyhow!("找不到账户 {platform}/{u}"));
+                    }
+                }
+                other => return Err(anyhow!("未知操作 {other}，应为 set / get / list / delete")),
+            }
+        }
+        Cmd::Key { action, platform, key_name, value } => {
+            let s = Store::default_location()?;
+            match action.as_str() {
+                "set" => {
+                    let n = key_name.ok_or_else(|| anyhow!("set 需要 key_name"))?;
+                    let v = read_value(&value.ok_or_else(|| anyhow!("set 需要 value（传 - 从 stdin 读）"))?)?;
+                    s.set_key(&platform, &n, &v)?;
+                    println!("已写入 {platform}/{n}（{} 字节）", v.len());
+                }
+                "get" => {
+                    let n = key_name.ok_or_else(|| anyhow!("get 需要 key_name"))?;
+                    match s.get_key(&platform, &n)? {
+                        Some(v) => println!("{v}"),
+                        None => return Err(anyhow!("找不到 {platform}/{n}")),
+                    }
+                }
+                "list" => {
+                    let list = s.list_bucket(&platform, "keys");
+                    if list.is_empty() {
+                        println!("（没有密钥）");
+                    }
+                    for n in list {
+                        println!("  {n}");
+                    }
+                }
+                "delete" => {
+                    let n = key_name.ok_or_else(|| anyhow!("delete 需要 key_name"))?;
+                    if s.delete_from_bucket(&platform, "keys", &n)? {
+                        println!("已删除 {platform}/{n}");
+                    } else {
+                        return Err(anyhow!("找不到 {platform}/{n}"));
+                    }
+                }
+                other => return Err(anyhow!("未知操作 {other}，应为 set / get / list / delete")),
+            }
+        }
+        Cmd::Platform { platform_name } => {
+            let s = Store::default_location()?;
+            let all = s.platforms();
+            match platform_name {
+                Some(p) => {
+                    let Some((accounts, keys)) = all.get(&p) else {
+                        return Err(anyhow!("找不到平台 {p}"));
+                    };
+                    println!("平台 {p}");
+                    println!("  账户 ({}):", accounts.len());
+                    for a in accounts {
+                        println!("    {a}");
+                    }
+                    println!("  密钥 ({}):", keys.len());
+                    for k in keys {
+                        println!("    {k}");
+                    }
+                }
+                None => {
+                    if all.is_empty() {
+                        println!("（没有平台）");
+                    }
+                    for (p, (accounts, keys)) in all {
+                        println!("{p:<24} 账户 {:<3} 密钥 {}", accounts.len(), keys.len());
+                    }
+                }
+            }
+        }
+        Cmd::Alias { action } => {
+            let a = Aliases::default_location()?;
+            match action {
+                AliasCmd::Set { name, r#ref } => {
+                    a.set(&name, &r#ref)?;
+                    println!("✓ {name} → {ref}", r#ref = r#ref);
+                }
+                AliasCmd::Get { name } => match a.get(&name) {
+                    Some(r) => println!("{r}"),
+                    None => return Err(anyhow!("未找到别名：{name}")),
+                },
+                AliasCmd::List => {
+                    let m = a.load();
+                    if m.is_empty() {
+                        println!("（空）");
+                    }
+                    for (n, r) in m {
+                        println!("  {n} → {r}");
+                    }
+                }
+                AliasCmd::Delete { name } => {
+                    if a.delete(&name)? {
+                        println!("✓ 已删除别名：{name}");
+                    } else {
+                        return Err(anyhow!("未找到别名：{name}"));
+                    }
+                }
+            }
+        }
         Cmd::Run { envs, command } => {
             let b = Backend::select()?;
+            let aliases = Aliases::default_location()?;
             let mut cmd = Command::new(&command[0]);
             cmd.args(&command[1..]);
             for spec in &envs {
                 let (name, r) = spec
                     .split_once('=')
                     .ok_or_else(|| anyhow!("--env 应写成 NAME=secret://platform/name：{spec}"))?;
+                let r = aliases.resolve(r);
                 let v = b
-                    .get(r)?
+                    .get(&r)?
                     .ok_or_else(|| anyhow!("找不到 {r}（后端 {}）", b.name()))?;
                 cmd.env(name, v);
             }
