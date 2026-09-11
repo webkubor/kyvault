@@ -67,12 +67,11 @@ pub fn run() -> Result<()> {
     let backend = std::env::var("KYVAULT_BACKEND").unwrap_or_else(|_| "file".into());
     println!("  - 当前后端：{backend}（KYVAULT_BACKEND，缺省 file）");
     if backend == "d1" {
-        // D1 三件套缺任何一个都会在下一次读写时才炸，这里提前点出来
-        for v in [
-            "KYVAULT_D1_ACCOUNT_ID",
-            "KYVAULT_D1_DATABASE_ID",
-            "CF_API_TOKEN",
-        ] {
+        // D1 三件套缺任何一个都会在下一次读写时才炸，这里提前点出来。
+        // token 那项必须和 d1.rs 读的口径完全一致：它先看 CLOUDFLARE_API_TOKEN、
+        // 再退回 CF_API_TOKEN。doctor 只查后者的话，cs kyvault（注入的正是前者）
+        // 下会报 FAIL 而实际能用 —— 报假警的自检比没有自检更糟，人会学着无视它。
+        for v in ["KYVAULT_D1_ACCOUNT_ID", "KYVAULT_D1_DATABASE_ID"] {
             let ok = std::env::var(v).map(|s| !s.is_empty()).unwrap_or(false);
             println!(
                 "  - {v}：{}",
@@ -82,6 +81,13 @@ pub fn run() -> Result<()> {
                     "缺失 (FAIL)"
                 }
             );
+        }
+        match ["CLOUDFLARE_API_TOKEN", "CF_API_TOKEN"]
+            .iter()
+            .find(|v| std::env::var(v).map(|s| !s.is_empty()).unwrap_or(false))
+        {
+            Some(v) => println!("  - CF token：已注入 (OK，来自 {v})"),
+            None => println!("  - CF token：缺失 (FAIL，设 CLOUDFLARE_API_TOKEN 或 CF_API_TOKEN)"),
         }
     } else {
         println!("  - 提示：cs kyvault 会自动注入 d1 三件套；裸跑走 file，两套数据不通");

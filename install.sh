@@ -72,9 +72,18 @@ install_from_release() {
   trap 'rm -rf "$tmp"' RETURN
 
   say "📦 下载 $target …"
-  if ! curl -fsSL "$url" -o "$tmp/pkg.tar.gz"; then
-    warn "下载失败：$url"
-    return 1
+  # 先按默认（HTTP/2）下，失败就退 HTTP/1.1 重试一次。
+  #
+  # 2026-09-10 实测：本机默认 curl 报 `(16) Error in the HTTP2 framing layer`，
+  # 同一个 URL 加 --http1.1 立刻成功 —— 这类故障常见于中间有代理/企业网关，
+  # 用户看到的现象却是「安装脚本说下载失败」，完全看不出是协议协商的问题。
+  # 重试一次几乎零成本，能救掉相当一部分装不上的情况。
+  if ! curl -fsSL --retry 2 --retry-delay 1 "$url" -o "$tmp/pkg.tar.gz"; then
+    warn "HTTP/2 下载失败，退 HTTP/1.1 重试…"
+    if ! curl -fsSL --http1.1 --retry 2 --retry-delay 1 "$url" -o "$tmp/pkg.tar.gz"; then
+      warn "下载失败：$url"
+      return 1
+    fi
   fi
   tar -xzf "$tmp/pkg.tar.gz" -C "$tmp"
   local found
@@ -88,11 +97,29 @@ install_from_release() {
 install_from_source() {
   command -v cargo >/dev/null 2>&1 || return 1
   local here
-  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  [ -f "$here/rust/Cargo.toml" ] || return 1
-  say "🔨 用本地源码编译（cargo）…"
-  cargo install --path "$here/rust" --root "${INSTALL_DIR%/bin}" --force >/dev/null
-  return 0
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || here=""
+  # 脚本就在源码树里（git clone 后本地跑）
+  if [ -n "$here" ] && [ -f "$here/rust/Cargo.toml" ]; then
+    say "🔨 用本地源码编译（cargo）…"
+    cargo install --path "$here/rust" --root "${INSTALL_DIR%/bin}" --force >/dev/null
+    return 0
+  fi
+  # 否则现取源码再编。README 教的是 `curl … | bash`，那种跑法下 BASH_SOURCE
+  # 指向管道/临时文件，仓库根本不在本地 —— 原来这里直接 return 1，于是错误信息
+  # 变成「本机没有 cargo + 源码可兜底」，而本机明明装着 cargo。
+  # 兜底就该自己把源码弄来，而不是怪用户没有。
+  command -v git >/dev/null 2>&1 || return 1
+  local src
+  src=$(mktemp -d) || return 1
+  say "🔨 没有本地源码，现拉一份再编译（cargo）…"
+  if ! git clone --depth 1 "https://github.com/$REPO.git" "$src" >/dev/null 2>&1; then
+    rm -rf "$src"
+    return 1
+  fi
+  cargo install --path "$src/rust" --root "${INSTALL_DIR%/bin}" --force >/dev/null
+  local rc=$?
+  rm -rf "$src"
+  return $rc
 }
 
 say "🔐 kyvault (Rust) — 安装中…"
@@ -100,7 +127,7 @@ cleanup_python_version
 
 if ! install_from_release; then
   say "改用源码编译兜底…"
-  install_from_source || die "预编译二进制下载失败，且本机没有 cargo + 源码可兜底"
+  install_from_source || die "装不上：预编译二进制下载失败，源码兜底也没成（需要 cargo + git）。手动装：git clone https://github.com/$REPO && cd kyvault/rust && cargo install --path ."
 fi
 
 BIN="$INSTALL_DIR/$BIN_NAME"
