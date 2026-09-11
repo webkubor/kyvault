@@ -50,9 +50,17 @@ fn write_whole(path: &Path, content: &str) -> Result<Action> {
 }
 
 /// 往共享文件里插一块（.clauderules / AGENTS.md 这种还有别人内容的）。
+///
+/// 统一走一条路径：**先把标记块整个抠掉，剩下的是「块外文本」**，在块外做去重与
+/// 旧版检测，最后把新块追到末尾。
+///
+/// 一开始写成了两条分支（有块就替换、没块才去重），结果是：已有标记块的文件
+/// 根本走不到去重和旧版检测那段 —— 本机 ~/.clauderules 正是这种（块内是新版、
+/// 块外躺着一份缺了第 4 条规则的旧版），跑多少次都不吭声。两条路径处理同一件事
+/// 却只在其中一条上实现，是这类 bug 的常见形状。
 fn upsert_block(path: &Path, content: &str) -> Result<Action> {
     let block = format!("{BEGIN}\n{}\n{END}\n", content.trim_end());
-    let Ok(mut text) = fs::read_to_string(path) else {
+    let Ok(original) = fs::read_to_string(path) else {
         if let Some(d) = path.parent() {
             fs::create_dir_all(d)?;
         }
@@ -60,41 +68,59 @@ fn upsert_block(path: &Path, content: &str) -> Result<Action> {
         return Ok(Action::Created);
     };
 
-    // 已有标记块 → 整块替换
-    if let (Some(i), Some(j)) = (text.find(BEGIN), text.find(END)) {
+    // ① 抠掉标记块，得到块外文本
+    let mut outside = original.clone();
+    let mut had_block = false;
+    if let (Some(i), Some(j)) = (outside.find(BEGIN), outside.find(END)) {
         if i < j {
-            let old = &text[i..j + END.len()];
-            if old.trim() == block.trim() {
-                return Ok(Action::Unchanged);
-            }
-            text.replace_range(i..j + END.len(), block.trim_end());
-            fs::write(path, text)?;
-            return Ok(Action::Updated);
+            outside.replace_range(i..j + END.len(), "");
+            had_block = true;
         }
     }
 
-    // 没标记块：先清掉与当前内容完全一致的无标记旧副本（那些一定是 connect 写的）
+    // ② 块外清掉与当前内容完全一致的副本（那些一定是本工具早先追加的）
     let needle = content.trim();
     let mut removed = 0;
-    while let Some(i) = text.find(needle) {
-        text.replace_range(i..i + needle.len(), "");
+    while let Some(i) = outside.find(needle) {
+        outside.replace_range(i..i + needle.len(), "");
         removed += 1;
         if removed > 20 {
             break; // 兜底：别在异常内容上转圈
         }
     }
-    while text.contains("\n\n\n") {
-        text = text.replace("\n\n\n", "\n\n");
+
+    // ③ 块外若还留着本工具**旧版本**的内容，出声但不动它。
+    //    精确整段匹配删不掉它（内容变过版本就对不上），保守不删是对的 —— 猜边界
+    //    去删可能连用户自己写的一起削掉。但只保留不吭声同样不行：两份互相不一致
+    //    的规则并存在同一个文件里，agent 读到哪份全看运气。
+    //    判据用内容首行（标题行）：它在版本间稳定，而整段会变。
+    let head = needle.lines().next().unwrap_or("").trim();
+    let stale = !head.is_empty() && outside.contains(head);
+
+    while outside.contains("\n\n\n") {
+        outside = outside.replace("\n\n\n", "\n\n");
     }
-    if !text.ends_with('\n') && !text.is_empty() {
+    let mut text = outside.trim_end().to_string();
+    if !text.is_empty() {
         text.push('\n');
     }
     text.push_str(&block);
+
+    if stale {
+        println!(
+            "     ⚠ {} 块外还有一份旧版规则（内容和当前版本对不上，没敢自动删）",
+            path.display()
+        );
+        println!("       搜 \"{head}\" 手动清掉 —— 否则同一份文件里两套规则并存");
+    }
+    if text == original {
+        return Ok(Action::Unchanged);
+    }
     fs::write(path, text)?;
-    Ok(if removed > 0 {
-        Action::Deduped(removed)
-    } else {
-        Action::Updated
+    Ok(match (removed > 0, had_block) {
+        (true, _) => Action::Deduped(removed),
+        (false, true) => Action::Updated,
+        (false, false) => Action::Updated,
     })
 }
 
@@ -237,6 +263,22 @@ mod tests {
             !t.contains("旧规则"),
             "升级规则时旧内容要被替换掉，不是并存"
         );
+    }
+
+    #[test]
+    fn stale_version_is_kept_not_deleted() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join(".clauderules");
+        // 旧版本：标题相同但正文少一条 —— 精确匹配对不上
+        fs::write(&p, "# 规则标题\n旧的第一条\n").unwrap();
+        upsert_block(&p, "# 规则标题\n新的第一条\n新的第二条").unwrap();
+        let t = fs::read_to_string(&p).unwrap();
+        assert!(
+            t.contains("旧的第一条"),
+            "内容变过版本的旧副本不该被猜边界删掉"
+        );
+        assert!(t.contains("新的第二条"), "新版本要写进去");
+        assert_eq!(t.matches(BEGIN).count(), 1);
     }
 
     #[test]
