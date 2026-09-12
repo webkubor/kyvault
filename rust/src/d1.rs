@@ -28,13 +28,48 @@ pub struct D1 {
 }
 
 impl D1 {
-    /// 从环境变量读配置。缺哪个就把缺的全列出来 —— 一次说清比让人试三遍好。
+    /// 连 D1 需要的三件套。**自举**：本地加密库里存了就用它，
+    /// 没有才要求环境变量。
+    ///
+    /// 为什么要自举：连 D1 的 Cloudflare token 本身就是密钥，不能明文放配置
+    /// 文件；而只认环境变量的后果是——裸跑 kyvault 连不上真源，必须靠外部
+    /// 包装器（此前是 `cs kyvault`）注入。于是调度系统被迫持有所有密钥，
+    /// 而且 kyvault 每加一个字段，包装器就得跟着改一次。
+    ///
+    /// 解法是用它自己的本地库自举：`~/.keyring/`（master.key 0600）加密存
+    /// 这三件套，启动时先解出来再连 D1。密钥库自己管住了连自己的钥匙，
+    /// 外部就不需要再知道任何东西。
+    ///
+    /// 顺序刻意是「环境变量优先」：CI、容器、临时覆盖都靠它，
+    /// 而且不破坏任何现有调用方式。
+    fn from_local_store() -> (String, String, String) {
+        let Ok(st) = crate::store::Store::default_location() else {
+            return (String::new(), String::new(), String::new());
+        };
+        let g = |k: &str| {
+            st.get_secret(&format!("secret://_kyvault/{k}"))
+                .ok()
+                .flatten()
+                .unwrap_or_default()
+        };
+        (g("d1-account-id"), g("d1-database-id"), g("d1-token"))
+    }
+
     pub fn from_env() -> Result<Self> {
-        let account_id = std::env::var("KYVAULT_D1_ACCOUNT_ID").unwrap_or_default();
-        let database_id = std::env::var("KYVAULT_D1_DATABASE_ID").unwrap_or_default();
+        let (l_acct, l_db, l_tok) = Self::from_local_store();
+        let account_id = std::env::var("KYVAULT_D1_ACCOUNT_ID")
+            .ok()
+            .filter(|v| !v.is_empty())
+            .unwrap_or(l_acct);
+        let database_id = std::env::var("KYVAULT_D1_DATABASE_ID")
+            .ok()
+            .filter(|v| !v.is_empty())
+            .unwrap_or(l_db);
         let token = std::env::var("CLOUDFLARE_API_TOKEN")
             .or_else(|_| std::env::var("CF_API_TOKEN"))
-            .unwrap_or_default();
+            .ok()
+            .filter(|v| !v.is_empty())
+            .unwrap_or(l_tok);
         let missing: Vec<&str> = [
             ("KYVAULT_D1_ACCOUNT_ID", &account_id),
             ("KYVAULT_D1_DATABASE_ID", &database_id),
@@ -46,7 +81,9 @@ impl D1 {
         .collect();
         if !missing.is_empty() {
             return Err(anyhow!(
-                "KYVAULT_BACKEND=d1 缺少环境变量：{}",
+                "KYVAULT_BACKEND=d1 缺少配置：{}。\n\
+                 要么设环境变量，要么跑一次 `kyvault d1 setup` 把它们存进本地加密库\n\
+                 （存完之后裸跑 kyvault 就能连真源，不再需要外部注入）。",
                 missing.join(", ")
             ));
         }

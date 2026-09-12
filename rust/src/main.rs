@@ -61,6 +61,17 @@ enum Cmd {
         #[arg(long)]
         scopes: Option<String>,
     },
+    /// 把连 D1 用的三件套存进本地加密库 —— 存完裸跑 kyvault 就能连真源，
+    /// 不再需要外部注入环境变量（这是让调度系统不必持有密钥的前提）
+    D1Setup {
+        #[arg(long)]
+        account_id: String,
+        #[arg(long)]
+        database_id: String,
+        /// Cloudflare API Token。传 - 从 stdin 读，避免出现在 ps 和 history 里
+        #[arg(long)]
+        token: String,
+    },
     /// 删除密钥
     Delete { r#ref: String },
     /// 列出密钥元信息（不含明文）
@@ -366,6 +377,21 @@ fn run() -> Result<()> {
                 ))
             }
         },
+        Cmd::D1Setup {
+            account_id,
+            database_id,
+            token,
+        } => {
+            // **刻意只写本地库**，不看 KYVAULT_BACKEND：这三件套是「怎么连 D1」，
+            // 存进 D1 自己就成了鸡生蛋。本地库是它唯一能自举的地方。
+            let tok = read_value(&token)?;
+            let st = kyvault::store::Store::default_location()?;
+            st.set_secret("secret://_kyvault/d1-account-id", &account_id)?;
+            st.set_secret("secret://_kyvault/d1-database-id", &database_id)?;
+            st.set_secret("secret://_kyvault/d1-token", &tok)?;
+            println!("✅ D1 配置已存进本地加密库（~/.keyring，0600）");
+            println!("   现在裸跑 `KYVAULT_BACKEND=d1 kyvault list` 就能连真源，不用再注入环境变量。");
+        }
         Cmd::Delete { r#ref } => {
             let b = Backend::select()?;
             if b.delete(&r#ref)? {
