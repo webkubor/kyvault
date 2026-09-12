@@ -397,9 +397,9 @@ fn run() -> Result<()> {
             // 存进 D1 自己就成了鸡生蛋。本地库是它唯一能自举的地方。
             let tok = read_value(&token)?;
             let st = kyvault::store::Store::default_location()?;
-            st.set_secret("secret://_kyvault/d1-account-id", &account_id)?;
-            st.set_secret("secret://_kyvault/d1-database-id", &database_id)?;
-            st.set_secret("secret://_kyvault/d1-token", &tok)?;
+            st.set_secret("secret://kyvault/d1-account-id", &account_id)?;
+            st.set_secret("secret://kyvault/d1-database-id", &database_id)?;
+            st.set_secret("secret://kyvault/d1-token", &tok)?;
             println!("✅ D1 配置已存进本地加密库（~/.keyring，0600）");
             println!(
                 "   现在裸跑 `KYVAULT_BACKEND=d1 kyvault list` 就能连真源，不用再注入环境变量。"

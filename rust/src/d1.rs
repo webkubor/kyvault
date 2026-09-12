@@ -37,7 +37,7 @@ impl D1 {
     /// 而且 kyvault 每加一个字段，包装器就得跟着改一次。
     ///
     /// 解法是用它自己的本地库自举：`~/.keyring/`（master.key 0600）加密存
-    /// 这三件套，启动时先解出来再连 D1。密钥库自己管住了连自己的钥匙，
+    /// 这三件套（platform=kyvault，不能用下划线开头 —— 那是保留命名空间，get 读不到），启动时先解出来再连 D1。密钥库自己管住了连自己的钥匙，
     /// 外部就不需要再知道任何东西。
     ///
     /// 顺序刻意是「环境变量优先」：CI、容器、临时覆盖都靠它，
@@ -47,7 +47,7 @@ impl D1 {
             return (String::new(), String::new(), String::new());
         };
         let g = |k: &str| {
-            st.get_secret(&format!("secret://_kyvault/{k}"))
+            st.get_secret(&format!("secret://kyvault/{k}"))
                 .ok()
                 .flatten()
                 .unwrap_or_default()
