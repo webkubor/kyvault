@@ -445,10 +445,7 @@ fn run() -> Result<()> {
                     .or_default()
                     .push((part, m.account.clone()));
             }
-            println!(
-                "{:<10} {:<26} {:<10} {}",
-                "平台", "身份", "凭据", "组织/备注"
-            );
+            println!("{:<10} {:<26} {:<10} 组织/备注", "平台", "身份", "凭据");
             for ((plat, name), parts) in &groups {
                 let kinds: Vec<&str> = parts.iter().map(|(k, _)| k.as_str()).collect();
                 // 能不能直接拿去装 lark-cli：必须 id 和 secret 都在
