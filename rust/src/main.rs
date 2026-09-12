@@ -369,8 +369,13 @@ fn run() -> Result<()> {
             scopes,
         } => match Backend::select()? {
             Backend::D1(d) => {
-                if d.annotate(&r#ref, account.as_deref(), kind.as_deref(),
-                              org.as_deref(), scopes.as_deref())? {
+                if d.annotate(
+                    &r#ref,
+                    account.as_deref(),
+                    kind.as_deref(),
+                    org.as_deref(),
+                    scopes.as_deref(),
+                )? {
                     println!("已更新备注：{ref}", r#ref = r#ref);
                 } else {
                     return Err(anyhow!("{ref} 不存在，没有改动任何东西", r#ref = r#ref));
@@ -396,7 +401,9 @@ fn run() -> Result<()> {
             st.set_secret("secret://_kyvault/d1-database-id", &database_id)?;
             st.set_secret("secret://_kyvault/d1-token", &tok)?;
             println!("✅ D1 配置已存进本地加密库（~/.keyring，0600）");
-            println!("   现在裸跑 `KYVAULT_BACKEND=d1 kyvault list` 就能连真源，不用再注入环境变量。");
+            println!(
+                "   现在裸跑 `KYVAULT_BACKEND=d1 kyvault list` 就能连真源，不用再注入环境变量。"
+            );
         }
         Cmd::Identity { org } => {
             // 飞书/Lark 的机器人凭据是**一对**（app-id + app-secret），
@@ -407,8 +414,14 @@ fn run() -> Result<()> {
             // 这里按 name 去掉后缀聚合回「身份」：同一个前缀下的
             // app-id / app-secret / open-id / webhook 属于同一个机器人。
             const SUFFIXES: &[&str] = &[
-                "-app-id", "-app-secret", "-open-id", "-allowed-users",
-                "-webhook", "-encrypt-key", "-verification-token", "-bind-secret",
+                "-app-id",
+                "-app-secret",
+                "-open-id",
+                "-allowed-users",
+                "-webhook",
+                "-encrypt-key",
+                "-verification-token",
+                "-bind-secret",
             ];
             let b = Backend::select()?;
             let mut groups: std::collections::BTreeMap<(String, String), Vec<(String, String)>> =
@@ -421,28 +434,46 @@ fn run() -> Result<()> {
                 }
                 let (base, part) = SUFFIXES
                     .iter()
-                    .find_map(|sfx| m.name.strip_suffix(sfx).map(|b| (b.to_string(), sfx.trim_start_matches('-').to_string())))
+                    .find_map(|sfx| {
+                        m.name
+                            .strip_suffix(sfx)
+                            .map(|b| (b.to_string(), sfx.trim_start_matches('-').to_string()))
+                    })
                     .unwrap_or((m.name.clone(), "—".into()));
                 groups
                     .entry((m.platform.clone(), base))
                     .or_default()
                     .push((part, m.account.clone()));
             }
-            println!("{:<10} {:<26} {:<10} {}", "平台", "身份", "凭据", "组织/备注");
+            println!(
+                "{:<10} {:<26} {:<10} {}",
+                "平台", "身份", "凭据", "组织/备注"
+            );
             for ((plat, name), parts) in &groups {
                 let kinds: Vec<&str> = parts.iter().map(|(k, _)| k.as_str()).collect();
                 // 能不能直接拿去装 lark-cli：必须 id 和 secret 都在
                 let ready = kinds.contains(&"app-id") && kinds.contains(&"app-secret");
-                let note = parts.iter().map(|(_, a)| a.as_str()).find(|a| !a.is_empty()).unwrap_or("");
+                let note = parts
+                    .iter()
+                    .map(|(_, a)| a.as_str())
+                    .find(|a| !a.is_empty())
+                    .unwrap_or("");
                 println!(
                     "{:<10} {:<26} {:<10} {}",
                     plat,
                     name,
-                    if ready { "✅ 成对".to_string() } else { kinds.join(",") },
+                    if ready {
+                        "✅ 成对".to_string()
+                    } else {
+                        kinds.join(",")
+                    },
                     note
                 );
             }
-            println!("\n共 {} 个身份。✅ 表示 app-id + app-secret 齐全，可直接装进 lark-cli。", groups.len());
+            println!(
+                "\n共 {} 个身份。✅ 表示 app-id + app-secret 齐全，可直接装进 lark-cli。",
+                groups.len()
+            );
         }
         Cmd::Delete { r#ref } => {
             let b = Backend::select()?;
@@ -452,7 +483,11 @@ fn run() -> Result<()> {
                 return Err(anyhow!("{ref} 不存在", r#ref = r#ref));
             }
         }
-        Cmd::List { platform, org, json } => {
+        Cmd::List {
+            platform,
+            org,
+            json,
+        } => {
             let b = Backend::select()?;
             print_list(&b.list()?, platform.as_deref(), org.as_deref(), json)?;
         }
