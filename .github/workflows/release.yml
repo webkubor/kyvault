@@ -42,6 +42,10 @@ jobs:
             os: ubuntu-latest
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
+          # Windows：agent 不只跑在 Mac 和服务器上。缺这一档，Windows 那边
+          # 就只能把密钥明文抄进配置文件 —— 密钥库的意义当场归零。
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

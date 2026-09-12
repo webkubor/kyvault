@@ -10,6 +10,7 @@
 //! 不会去动真的 ~/.keyring。
 
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -21,6 +22,21 @@ use crate::model::{parse_ref, SecretMeta};
 
 pub struct Store {
     root: PathBuf,
+}
+
+/// 把文件权限收紧到「只有本人可读写」。
+///
+/// Unix 上就是 0600。Windows 没有 mode 这个概念，文件继承的是用户目录的 ACL
+/// （`C:\Users\<name>` 默认只有本人和管理员能进），所以这里不做额外处理 ——
+/// 但**不能因此就让 `from_mode` 出现在 Windows 的编译路径里**：
+/// `std::os::unix` 在 Windows 上根本不存在，无条件 use 会直接编译失败。
+/// 这正是此前 CI 里没有 Windows target 的隐性原因之一。
+fn harden(path: &std::path::Path) -> Result<()> {
+    #[cfg(unix)]
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
 }
 
 impl Store {
@@ -80,7 +96,7 @@ impl Store {
         fs::create_dir_all(&self.root)?;
         let key = new_master_key_b64();
         fs::write(&f, &key)?;
-        fs::set_permissions(&f, fs::Permissions::from_mode(0o600))?;
+        harden(&f)?;
         Ok(key)
     }
 
@@ -104,7 +120,7 @@ impl Store {
         let tmp = path.with_extension("json.tmp");
         fs::write(&tmp, serde_json::to_string_pretty(data)?)
             .with_context(|| format!("写 {} 失败", tmp.display()))?;
-        fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
+        harden(&tmp)?;
         fs::rename(&tmp, &path)?;
         Ok(())
     }
