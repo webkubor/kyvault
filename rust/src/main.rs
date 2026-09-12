@@ -52,6 +52,14 @@ enum Cmd {
         account: Option<String>,
         #[arg(long)]
         kind: Option<String>,
+        /// 所属组织（如 hym / modelgo / museav / personal）—— 用来回答
+        /// 「哪个公司有哪些机器人」，是过滤维度不是备注
+        #[arg(long)]
+        org: Option<String>,
+        /// 权限范围，逗号分隔（如 im:message,bitable:record）——
+        /// agent 拿到 key 之前就该知道自己能干什么，而不是试了才知道
+        #[arg(long)]
+        scopes: Option<String>,
     },
     /// 删除密钥
     Delete { r#ref: String },
@@ -59,6 +67,9 @@ enum Cmd {
     List {
         #[arg(long)]
         platform: Option<String>,
+        /// 只看某个组织的（如 --org hym）
+        #[arg(long)]
+        org: Option<String>,
         #[arg(long)]
         json: bool,
     },
@@ -241,10 +252,16 @@ fn read_value(v: &str) -> Result<String> {
     Ok(v)
 }
 
-fn print_list(items: &[SecretMeta], platform: Option<&str>, as_json: bool) -> Result<()> {
+fn print_list(
+    items: &[SecretMeta],
+    platform: Option<&str>,
+    org: Option<&str>,
+    as_json: bool,
+) -> Result<()> {
     let filtered: Vec<&SecretMeta> = items
         .iter()
         .filter(|m| platform.map_or(true, |p| m.platform == p))
+        .filter(|m| org.map_or(true, |o| m.org == o))
         .collect();
     if as_json {
         println!("{}", serde_json::to_string_pretty(&filtered)?);
@@ -265,8 +282,15 @@ fn print_list(items: &[SecretMeta], platform: Option<&str>, as_json: bool) -> Re
         if !m.last4.is_empty() {
             line.push_str(&format!("  …{}", m.last4));
         }
+        // org 放在 account 前面：回答「哪个公司的」比「备注写了啥」更常被问
+        if !m.org.is_empty() {
+            line.push_str(&format!("  [{}]", m.org));
+        }
         if !m.account.is_empty() {
             line.push_str(&format!("  {}", m.account));
+        }
+        if !m.scopes.is_empty() {
+            line.push_str(&format!("  scopes={}", m.scopes));
         }
         if !m.updated_at.is_empty() {
             line.push_str(&format!("  {}", m.updated_at));
@@ -324,9 +348,12 @@ fn run() -> Result<()> {
             r#ref,
             account,
             kind,
+            org,
+            scopes,
         } => match Backend::select()? {
             Backend::D1(d) => {
-                if d.annotate(&r#ref, account.as_deref(), kind.as_deref())? {
+                if d.annotate(&r#ref, account.as_deref(), kind.as_deref(),
+                              org.as_deref(), scopes.as_deref())? {
                     println!("已更新备注：{ref}", r#ref = r#ref);
                 } else {
                     return Err(anyhow!("{ref} 不存在，没有改动任何东西", r#ref = r#ref));
@@ -347,9 +374,9 @@ fn run() -> Result<()> {
                 return Err(anyhow!("{ref} 不存在", r#ref = r#ref));
             }
         }
-        Cmd::List { platform, json } => {
+        Cmd::List { platform, org, json } => {
             let b = Backend::select()?;
-            print_list(&b.list()?, platform.as_deref(), json)?;
+            print_list(&b.list()?, platform.as_deref(), org.as_deref(), json)?;
         }
         Cmd::Platforms => {
             let b = Backend::select()?;

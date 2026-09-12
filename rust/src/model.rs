@@ -12,6 +12,12 @@ pub struct SecretMeta {
     pub last4: String,
     pub length: u64,
     pub updated_at: String,
+    /// 所属组织。空串表示还没登记 —— 存量数据都是这样，不当错误处理。
+    #[serde(default)]
+    pub org: String,
+    /// 权限范围，逗号分隔。同上，空串是「未登记」不是「无权限」。
+    #[serde(default)]
+    pub scopes: String,
 }
 
 impl SecretMeta {

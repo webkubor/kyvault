@@ -183,12 +183,40 @@ impl D1 {
         Ok(())
     }
 
+    /// 确保 org / scopes 两列存在。
+    ///
+    /// D1 没有 migration 工具，而这两列是后加的 —— 已经有 170 条存量记录，
+    /// 不能要求人手动跑 SQL（那等于把升级门槛推给每一台机器）。
+    /// ALTER TABLE ADD COLUMN 在列已存在时会报错，这里**吞掉那个错**：
+    /// 幂等是目的，报错只是 SQLite 表达「已经有了」的方式。
+    ///
+    /// 为什么是两列而不是塞进 account 备注：备注是给人看的自由文本，
+    /// org 要能过滤（「好易美有哪些机器人」）、scopes 要能校验
+    /// （「这个 key 有没有权限发消息」）—— 结构化字段才做得到。
+    fn ensure_schema(&self) -> Result<()> {
+        for col in ["org", "scopes"] {
+            let _ = self.query(
+                &format!("ALTER TABLE secret_vault ADD COLUMN {col} TEXT"),
+                vec![],
+            );
+        }
+        Ok(())
+    }
+
     /// 只改元信息，不碰密文 —— 改一句备注不该要求把密钥明文再交一遍
     /// （每交一趟都是一次泄漏机会，而且「手上没有明文」时根本做不到）。
-    pub fn annotate(&self, r: &str, account: Option<&str>, kind: Option<&str>) -> Result<bool> {
-        if account.is_none() && kind.is_none() {
+    pub fn annotate(
+        &self,
+        r: &str,
+        account: Option<&str>,
+        kind: Option<&str>,
+        org: Option<&str>,
+        scopes: Option<&str>,
+    ) -> Result<bool> {
+        self.ensure_schema()?;
+        if account.is_none() && kind.is_none() && org.is_none() && scopes.is_none() {
             return Err(anyhow!(
-                "至少要给 --account 或 --kind 之一，否则这次调用什么都不会改"
+                "至少要给 --account / --kind / --org / --scopes 之一，否则这次调用什么都不会改"
             ));
         }
         if Self::rows(&self.query(
@@ -208,6 +236,14 @@ impl D1 {
         if let Some(k) = kind {
             params.push(json!(k));
             sets.push(format!("kind=?{}", params.len()));
+        }
+        if let Some(o) = org {
+            params.push(json!(o));
+            sets.push(format!("org=?{}", params.len()));
+        }
+        if let Some(sc) = scopes {
+            params.push(json!(sc));
+            sets.push(format!("scopes=?{}", params.len()));
         }
         params.push(json!(now_utc()));
         sets.push(format!("updated_at=?{}", params.len()));
@@ -235,8 +271,12 @@ impl D1 {
     }
 
     pub fn list_secrets(&self) -> Result<Vec<SecretMeta>> {
+        // 先确保列在 —— 老库没有 org/scopes，直接 SELECT 会整条查询失败，
+        // 那会让「升级后 list 全挂」，比没有新字段严重得多。
+        self.ensure_schema()?;
         let body = self.query(
-            "SELECT platform, name, kind, account, last4, length, updated_at \
+            "SELECT platform, name, kind, account, last4, length, updated_at, \
+             COALESCE(org,'') AS org, COALESCE(scopes,'') AS scopes \
              FROM secret_vault ORDER BY platform, name",
             vec![],
         )?;
@@ -250,6 +290,8 @@ impl D1 {
                 last4: str_of(r, "last4"),
                 length: r.get("length").and_then(|v| v.as_u64()).unwrap_or(0),
                 updated_at: str_of(r, "updated_at"),
+                org: str_of(r, "org"),
+                scopes: str_of(r, "scopes"),
             })
             .collect())
     }
