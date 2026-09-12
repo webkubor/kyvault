@@ -1,6 +1,6 @@
 [package]
 name = "kyvault"
-version = "2.1.2"
+version = "2.2.0"
 edition = "2021"
 rust-version = "1.80"
 description = "本地加密密钥管理 CLI — AES-256-GCM 纯本地存储，AI 只拿别名"

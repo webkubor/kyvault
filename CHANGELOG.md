@@ -2,6 +2,35 @@
 
 所有对 `kyvault` 项目的重大变更都将记录在本文档中。
 
+## [2.2.0] - 2026-09-12
+
+围绕一件事:让 kyvault 能独当身份 + 密钥两摊,不再让调度系统(cs)夹在中间管密钥。
+
+### ✨ 新增
+- **`org` / `scopes` 两个正式字段**（`annotate --org --scopes`、`list --org` 过滤）。
+  此前机器人的组织归属只能塞在 `account` 备注里 —— 备注是自由文本，
+  过滤不了、也校验不了。org 用来回答「哪个公司有哪些机器人」，
+  scopes 让 agent 拿到 key 之前就知道自己能干什么。
+- **`identity` 视图**：飞书/Lark 机器人凭据是**一对**（app-id + app-secret），
+  单独一条谁也用不了。`kyvault identity [--org]` 按前缀聚合回「身份」，
+  标出「✅ 成对」= 可直接装进 lark-cli。
+- **`d1-setup` 自举**：把连 D1 的三件套存进本地加密库（`~/.keyring`），
+  之后裸跑 kyvault 直连 D1，不再需要外部注入环境变量。
+  连 D1 的 token 本身就是密钥，本地加密库是它唯一能自举的地方。
+- **Windows 支持**：CI 加 `x86_64-pc-windows-msvc`，产物覆盖
+  Mac（Intel/ARM）+ Linux（x64/ARM）+ Windows。
+
+### 🐛 修复
+- **跨平台编译硬伤**：`store.rs` 无条件 `use std::os::unix`，Windows 上直接
+  编译失败。抽出 `harden()`：Unix 收 0600，Windows 继承用户目录 ACL。
+  这是此前 CI 一直没有 Windows target 的隐性原因。
+- **老库升级不炸**：D1 加列用幂等 `ALTER`，`list` 先 `ensure_schema` 再查 ——
+  老库直接 SELECT 新列会整条失败。
+
+### 🔒 兼容
+- `from_env()` 改为「环境变量优先，缺了才读本地库」：CI、容器、临时覆盖
+  照旧，不破坏任何现有调用方式。
+
 ## [2.1.2] - 2026-09-11
 
 装完 2.1.1 做端到端实测时发现的。
