@@ -486,7 +486,26 @@ fn run() -> Result<()> {
             json,
         } => {
             let b = Backend::select()?;
-            print_list(&b.list()?, platform.as_deref(), org.as_deref(), json)?;
+            let items = b.list()?;
+            // 先说清这份清单来自哪个库。kyvault 同一个命令有两个后端，而 list 从前
+            // 不说自己读的是哪一个 —— 于是「我 list 过了，库里没有 X」这句话可能完全
+            // 是错的：读的是 file 后端的几条本地数据，而要找的密钥在 d1 里。
+            // 2026-09-14 实测有 agent 正是这样断言「库里没有 CF 凭证」，然后回头找人
+            // 要 token —— 而它就在另一个后端里躺着。
+            if !json {
+                // 走 stdout 而不是 stderr：agent 常用 `kyvault list | grep xxx`，
+                // stderr 不进管道，提示就丢在最需要它的场景里。用 # 开头不碍 grep。
+                println!(
+                    "# 后端 {} · {} 条{}",
+                    b.name(),
+                    items.len(),
+                    match b.name() {
+                        "file" => "（本机 ~/.keyring；如果找不到期望的密钥，确认是否该设 KYVAULT_BACKEND=d1）",
+                        _ => "",
+                    }
+                );
+            }
+            print_list(&items, platform.as_deref(), org.as_deref(), json)?;
         }
         Cmd::Platforms => {
             let b = Backend::select()?;
