@@ -220,18 +220,19 @@ impl D1 {
         Ok(())
     }
 
-    /// 确保 org / scopes 两列存在。
+    /// 确保 org / scopes / visibility 三列存在。
     ///
-    /// D1 没有 migration 工具，而这两列是后加的 —— 已经有 170 条存量记录，
+    /// D1 没有 migration 工具，而这三列是后加的 —— 已经有 170 条存量记录，
     /// 不能要求人手动跑 SQL（那等于把升级门槛推给每一台机器）。
     /// ALTER TABLE ADD COLUMN 在列已存在时会报错，这里**吞掉那个错**：
     /// 幂等是目的，报错只是 SQLite 表达「已经有了」的方式。
     ///
-    /// 为什么是两列而不是塞进 account 备注：备注是给人看的自由文本，
+    /// 为什么是三列而不是塞进 account 备注：备注是给人看的自由文本，
     /// org 要能过滤（「好易美有哪些机器人」）、scopes 要能校验
-    /// （「这个 key 有没有权限发消息」）—— 结构化字段才做得到。
+    /// （「这个 key 有没有权限发消息」）、visibility 要能被服务端拿来做判据
+    /// （「这个 agent 能不能读这条」）—— 结构化字段才做得到。
     fn ensure_schema(&self) -> Result<()> {
-        for col in ["org", "scopes"] {
+        for col in ["org", "scopes", "visibility"] {
             let _ = self.query(
                 &format!("ALTER TABLE secret_vault ADD COLUMN {col} TEXT"),
                 vec![],
@@ -249,11 +250,17 @@ impl D1 {
         kind: Option<&str>,
         org: Option<&str>,
         scopes: Option<&str>,
+        visibility: Option<&str>,
     ) -> Result<bool> {
         self.ensure_schema()?;
-        if account.is_none() && kind.is_none() && org.is_none() && scopes.is_none() {
+        if account.is_none()
+            && kind.is_none()
+            && org.is_none()
+            && scopes.is_none()
+            && visibility.is_none()
+        {
             return Err(anyhow!(
-                "至少要给 --account / --kind / --org / --scopes 之一，否则这次调用什么都不会改"
+                "至少要给 --account / --kind / --org / --scopes / --visibility 之一，否则这次调用什么都不会改"
             ));
         }
         if Self::rows(&self.query(
@@ -281,6 +288,10 @@ impl D1 {
         if let Some(sc) = scopes {
             params.push(json!(sc));
             sets.push(format!("scopes=?{}", params.len()));
+        }
+        if let Some(v) = visibility {
+            params.push(json!(v));
+            sets.push(format!("visibility=?{}", params.len()));
         }
         params.push(json!(now_utc()));
         sets.push(format!("updated_at=?{}", params.len()));
@@ -313,7 +324,8 @@ impl D1 {
         self.ensure_schema()?;
         let body = self.query(
             "SELECT platform, name, kind, account, last4, length, updated_at, \
-             COALESCE(org,'') AS org, COALESCE(scopes,'') AS scopes \
+             COALESCE(org,'') AS org, COALESCE(scopes,'') AS scopes, \
+             COALESCE(visibility,'') AS visibility \
              FROM secret_vault ORDER BY platform, name",
             vec![],
         )?;
@@ -329,6 +341,7 @@ impl D1 {
                 updated_at: str_of(r, "updated_at"),
                 org: str_of(r, "org"),
                 scopes: str_of(r, "scopes"),
+                visibility: str_of(r, "visibility"),
             })
             .collect())
     }

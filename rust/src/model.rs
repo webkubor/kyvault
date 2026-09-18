@@ -18,6 +18,10 @@ pub struct SecretMeta {
     /// 权限范围，逗号分隔。同上，空串是「未登记」不是「无权限」。
     #[serde(default)]
     pub scopes: String,
+    /// 谁能读这条。空串 = 不限（存量默认，收紧是逐条做的）；
+    /// `local` = 仅本机环境；`agent:a,b` = 仅点名的 agent。
+    #[serde(default)]
+    pub visibility: String,
 }
 
 impl SecretMeta {

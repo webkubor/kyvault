@@ -60,6 +60,11 @@ enum Cmd {
         /// agent 拿到 key 之前就该知道自己能干什么，而不是试了才知道
         #[arg(long)]
         scopes: Option<String>,
+        /// 谁能读这条：留空=不限；local=仅本机；agent:a,b=仅点名的 agent。
+        /// 本机 Mac 上跑的一切（WorkBuddy/Claude Code/Codex…）天然可读全部，
+        /// 这一列约束的是远程服务器上的 agent（南烛/顾栖月/Vex…）。
+        #[arg(long)]
+        visibility: Option<String>,
     },
     /// 把连 D1 用的三件套存进本地加密库 —— 存完裸跑 kyvault 就能连真源，
     /// 不再需要外部注入环境变量（这是让调度系统不必持有密钥的前提）
@@ -367,6 +372,7 @@ fn run() -> Result<()> {
             kind,
             org,
             scopes,
+            visibility,
         } => match Backend::select()? {
             Backend::D1(d) => {
                 if d.annotate(
@@ -375,6 +381,7 @@ fn run() -> Result<()> {
                     kind.as_deref(),
                     org.as_deref(),
                     scopes.as_deref(),
+                    visibility.as_deref(),
                 )? {
                     println!("已更新备注：{ref}", r#ref = r#ref);
                 } else {
