@@ -1,6 +1,6 @@
 ---
 name: kyvault
-version: 1.3.0
+version: 1.4.0
 description: "轻量级加密密钥管理 — 支持多账户多密钥，AI 安全注入。触发条件: 需要管理密钥、密码、API Token、服务器台账或 CLI 令牌时触发。触发词: 密钥、secret、token、API key、password、kyvault、server ledger、cli token。"
 license: MIT
 author: webkubor
@@ -10,7 +10,7 @@ metadata:
   openclaw:
     tags: [security, secrets, passwords, encryption, kyvault]
     requires:
-      python: [>=3.10, cryptography>=41.0]
+      python: [">=3.10", "cryptography>=41.0"]
 ---
 
 # Kyvault
@@ -228,3 +228,51 @@ ky providers
 |------|------|------|--------------|
 | 交互式 | `kyk get github ghp_xxx` | 人 | 能（但不该） |
 | 非交互式 | `kyr --env X=ghp_xxx -- cmd` | AI | **不能** |
+
+## 多 agent 环境：谁能读哪条
+
+一个密钥库被多个 AI agent 共用时（本机 Mac + 若干远程服务器），**不是每个 agent 都该
+读到全部密钥**。这就是 `visibility` 的用途 —— 它标记「谁能读这一条」。
+
+```bash
+# 仅本机环境可读（远程 agent 一律拿不到）
+kyvault annotate secret://cloudflare/api-token --visibility local
+
+# 仅点名的 agent 可读
+kyvault annotate secret://feishu/nanzhu-app-id --visibility "agent:nanzhu,vex"
+
+# 改回不限（空串是显式清空，跟不给这个 flag 是两回事）
+kyvault annotate secret://github/pat --visibility ""
+```
+
+| 取值 | 含义 |
+|------|------|
+| 空 / `all` | 不限（默认，收紧是逐条做的） |
+| `local` | 仅本机环境可读 |
+| `agent:a,b` | 仅点名的 agent 可读 |
+
+### 三条会影响你判断的行为
+
+1. **越权读返回 404，不是 403。** 服务端故意让「没有这条」和「你没有权限」返回同一个
+   响应 —— `403` 会确认这条密钥确实存在，等于把密钥库目录告诉了撞名字的人。
+   **所以取不到一条密钥时，不要断定它不存在**，先用 `cs kyvault whoami` 确认自己的边界。
+
+2. **远程 agent 不能写。** 写入/删除一律 `403 Forbidden: write requires local environment`。
+   轮换密钥只能在本机做 —— 远程机器能改密钥库意味着被拿下之后可以投毒。
+
+3. **本机环境一律放行。** 机器是所有者本人的，本机上跑什么形态
+   （WorkBuddy / Claude Code / Codex / agy）都在这条信任边界内。
+   `visibility` 约束的**只是远程机器上的 agent**，不会把所有者关在门外。
+
+### 拿 key 之前先问一句
+
+```bash
+cs kyvault whoami
+# 身份:     nanzhu
+# 环境:     server — 远程环境，按白名单
+# 可写:     否
+# 可读:     111 / 169 条
+```
+
+远程 agent 尤其需要这个：越权读一律 404，没有这条命令就只能靠撞墙来学自己的边界，
+每一次学习都是一条噪音审计记录。
