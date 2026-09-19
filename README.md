@@ -37,7 +37,7 @@
 ## 🔥 一屏特性亮点
 
 * 🔒 **AI 安全别名注入 (AI-Safe)**: AI 只能看到无害别名（如 `github_token`），运行时单向注入，彻底防止密钥在 AI 聊天日志或训练数据中泄露。
-* 🤖 **多平台 CLI 智能对接 (AI Connect)**: 一键 `kyconnect`，自动将规则和技能注入 `Gemini/agy/Claude/Codex/Hermes/OpenCode` 规则库。
+* 🤖 **多平台 CLI 智能对接 (AI Connect)**: 一键 `kyvault connect`，自动将规则和技能注入 `Gemini/agy/Claude/Codex/Hermes/OpenCode` 规则库。
 * 🖥️ **开发者加密台账中心 (Developer Ledger)**: 加密管理服务器账号密码、云服务租金、CLI 客户端多 Profile 凭证令牌，支持 URI 寻址。
 * 🛡️ **失效密钥覆写防腐 (Overwrite Policy)**: 拦截 API 401 报错，刚性规定 Agent 必须立刻覆写（Overwrite）修改失效 Key，杜绝保守残留。
 
@@ -50,13 +50,13 @@
 curl -fsSL https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh | bash
 
 # 一键连接本地所有 AI 智能体 (Claude/Codex/Hermes/OpenCode/Cursor)
-kyconnect
+kyvault connect
 
 # AI 零明文注入运行
-kyr --env GITHUB_TOKEN=secret://github/personal-pat -- git push
+kyvault run --env GITHUB_TOKEN=secret://github/personal-pat -- git push
 ```
 
-**快捷别名：** `ky`=kyvault `kyp`=platform `kya`=account `kyk`=key `kyi`=init `kyr`=run `kyconnect`=kyvault connect
+> **关于「快捷别名」：** Python 实现确实有 `ky` / `kyi` / `kya` / `kyk` / `kyp` / `kyr` / `kyconnect` 这些短名（用 Click 装饰器），Rust 实现把这些去掉了——子命令从 `kyvault` 起，**`kyvault init` / `kyvault run` / `kyvault connect` 已经是 shell-completion 友好的最短路径**。这是有意的取舍：少一个名字就少一份维护负担，硬要让 Rust 也带短名只会让两条命令面漂得更远。常用 shell 别名可以自己在 `~/.zshrc` / `~/.bashrc` 加。
 
 ---
 
@@ -88,10 +88,12 @@ kyr --env GITHUB_TOKEN=secret://github/personal-pat -- git push
 > ❌ kyvault set secret://deepseek/sk-9dcea1111... - # 密钥当 name
 > ```
 >
-> v1.4 起 `set` 会自动拦下疑似密钥的 name（认已知前缀 `sk-`/`ghp_`/`glpat-`/`AKIA`/
-> `AIza` 等，以及长随机串），确有需要可加 `--force`。历史数据里已存在的这类条目，
-> `list` 会打码显示并提示 —— 建议 `delete` 后用别名重存，且**到对应平台吊销重签**
-> （name 曾被打印过就该视为已泄露）。
+> **当前（v2.2.0）`set` 不会校验 name** —— 上述「密钥当 name」会被原样接受、`list` 也会
+> 原样打印出来。这个判断只能靠人做，所以把它写进红线清单：往 `set` 里塞
+> `sk-...` / `ghp_...` 之类当 name 的，等于自废加密。
+>
+> 如果将来加了 name 校验（按 `sk-`/`ghp_`/`glpat-`/`AKIA`/`AIza` 等已知前缀匹配），届时 `list`
+> 对历史数据会打码显示 `…{last4}`（值的最后 4 位，目前已是这个格式）。在此之前——守住入参即可。
 
 ### 🔄 5. 极简无缝迁移 (.env Migration)
 * **无感导入**：支持一键导入项目已有的 `.env` 配置文件，并自动匹配最适合 AI 使用的变量别名。
@@ -105,80 +107,80 @@ kyr --env GITHUB_TOKEN=secret://github/personal-pat -- git push
 
 ```bash
 # 保存账户（用户名+密码）
-kya set github user@gmail.com mypassword123
-kya set github admin@gmail.com adminpass456
+kyvault account set github user@gmail.com mypassword123
+kyvault account set github admin@gmail.com adminpass456
 
 # 读取密码
-kya get github user@gmail.com
+kyvault account get github user@gmail.com
 
 # 列出平台下所有账户
-kya list github
+kyvault account list github
 
 # 删除账户
-kya delete github user@gmail.com
+kyvault account delete github user@gmail.com
 ```
 
 ### 密钥管理
 
 ```bash
 # 保存平台密钥（API Key、Token 等）
-kyk set github ghp_xxxxxxxxxxxx
-kyk set openai sk-xxxxxxxxxxxx
+kyvault key set github ghp_xxxxxxxxxxxx
+kyvault key set openai sk-xxxxxxxxxxxx
 
 # 读取密钥
-kyk get github ghp_xxxxxxxxxxxx
+kyvault key get github ghp_xxxxxxxxxxxx
 
 # 列出平台下所有密钥
-kyk list github
+kyvault key list github
 
 # 删除密钥
-kyk delete github ghp_xxxxxxxxxxxx
+kyvault key delete github ghp_xxxxxxxxxxxx
 ```
 
 ### 平台查询
 
 ```bash
 # 列出所有平台及摘要
-kyp
+kyvault platform
 
 # 查看指定平台详情
-kyp github
+kyvault platform github
 ```
 
 ### AI 集成
 
 ```bash
 # 推代码
-kyr --env GITHUB_TOKEN=ghp_xxxxxxxxxxxx -- git push
+kyvault run --env GITHUB_TOKEN=ghp_xxxxxxxxxxxx -- git push
 
 # 调 API
-kyr --env OPENAI_API_KEY=sk-xxxxxxxxxxxx -- python app.py
+kyvault run --env OPENAI_API_KEY=sk-xxxxxxxxxxxx -- python app.py
 
 # 多个密钥
-kyr --env TOKEN1=secret1 --env TOKEN2=secret2 -- python script.py
+kyvault run --env TOKEN1=secret1 --env TOKEN2=secret2 -- python script.py
 ```
 
 ### 别名系统
 
 ```bash
 # 创建别名（AI 只认识这个）
-ky alias set github_token secret://github/ghp_xxxxxxxxxxxx
+kyvault alias set github_token secret://github/ghp_xxxxxxxxxxxx
 
 # 用别名注入
-kyr --env GITHUB_TOKEN=github_token -- git push
+kyvault run --env GITHUB_TOKEN=github_token -- git push
 ```
 
 ### 从 .env 迁移
 
 ```bash
 # 预览（不实际导入）
-ky import --file .env --dry-run
+kyvault import --file .env --dry-run
 
 # 导入全部
-ky import --file .env
+kyvault import --file .env
 
 # 只导入 GitHub 相关
-ky import --file .env --prefix GITHUB_
+kyvault import --file .env --prefix GITHUB_
 ```
 
 ### 🤖 AI 智能体一键连接 (AI Connect)
@@ -255,26 +257,26 @@ kyvault get secret://cli/studio-cli/test-user   # 输出: jwt_token_test
 
 | 快捷 | 完整 | 用途 | 示例 |
 |------|------|------|------|
-| `kyi` | `kyvault init` | 初始化 | `kyi` |
+| - | `kyvault init` | 初始化 | `kyvault init` |
 | **账户管理** | | | |
-| `kya set` | `kyvault account set` | 存账户 | `kya set github user@gmail pass` |
-| `kya get` | `kyvault account get` | 读密码 | `kya get github user@gmail` |
-| `kya list` | `kyvault account list` | 列账户 | `kya list github` |
-| `kya delete` | `kyvault account delete` | 删账户 | `kya delete github user@gmail` |
+| `kyvault account set` | `kyvault account set` | 存账户 | `kyvault account set github user@gmail pass` |
+| `kyvault account get` | `kyvault account get` | 读密码 | `kyvault account get github user@gmail` |
+| `kyvault account list` | `kyvault account list` | 列账户 | `kyvault account list github` |
+| `kyvault account delete` | `kyvault account delete` | 删账户 | `kyvault account delete github user@gmail` |
 | **密钥管理** | | | |
-| `kyk set` | `kyvault key set` | 存密钥 | `kyk set github ghp_xxx value` |
-| `kyk get` | `kyvault key get` | 读密钥 | `kyk get github ghp_xxx` |
-| `kyk list` | `kyvault key list` | 列密钥 | `kyk list github` |
-| `kyk delete` | `kyvault key delete` | 删密钥 | `kyk delete github ghp_xxx` |
+| `kyvault key set` | `kyvault key set` | 存密钥 | `kyvault key set github ghp_xxx value` |
+| `kyvault key get` | `kyvault key get` | 读密钥 | `kyvault key get github ghp_xxx` |
+| `kyvault key list` | `kyvault key list` | 列密钥 | `kyvault key list github` |
+| `kyvault key delete` | `kyvault key delete` | 删密钥 | `kyvault key delete github ghp_xxx` |
 | **平台查询** | | | |
-| `kyp` | `kyvault platform` | 平台列表 | `kyp` |
-| `kyp <name>` | `kyvault platform <name>` | 平台详情 | `kyp github` |
+| - | `kyvault platform` | 平台列表 | `kyvault platform` |
+| `kyvault platform <name>` | `kyvault platform <name>` | 平台详情 | `kyvault platform github` |
 | **API 验证** | | | |
-| `ky check` | `kyvault check` | 验证 key | `ky check openai --key sk-xxx` |
-| `ky providers` | `kyvault providers` | 支持平台 | `ky providers` |
+| - | `kyvault check` | 验证 key | `kyvault check openai --key sk-xxx` |
+| - | `kyvault providers` | 支持平台 | `kyvault providers` |
 | **AI 集成** | | | |
-| `kyr` | `kyvault run` | 注入env | `kyr --env X=val -- cmd` |
-| `kyconnect` | `kyvault connect` | AI 智能对接 | `kyconnect` |
+| - | `kyvault run` | 注入env | `kyvault run --env X=val -- cmd` |
+| - | `kyvault connect` | AI 智能对接 | `kyvault connect` |
 | **加密资产台账** | | | |
 | - | `kyvault server set` | 存服务器 | `kyvault server set host 1.1.1.1 pw` |
 | - | `kyvault server get` | 读服务器 | `kyvault server get host` |
@@ -296,32 +298,32 @@ kyvault get secret://cli/studio-cli/test-user   # 输出: jwt_token_test
 
 | 平台 | Logo | 验证 | 别名注入 |
 |------|------|------|----------|
-| OpenAI | 🟢 | `ky check openai --key sk-xxx` | ✅ |
-| DeepSeek | 🔵 | `ky check deepseek --key sk-xxx`（含余额） | ✅ |
-| 智谱 AI | 🟣 | `ky check zhipu --key xxx`（含余额） | ✅ |
-| Moonshot (Kimi) | 🌙 | `ky check moonshot --key sk-xxx`（含余额） | ✅ |
-| Anthropic (Claude) | 🟠 | `ky check anthropic --key sk-ant-xxx` | ✅ |
-| Google Gemini | 💎 | `ky check gemini --key xxx` | ✅ |
-| 通义千问 | ☁️ | `ky check qwen --key sk-xxx` | ✅ |
-| MiniMax | 🔷 | `ky check minimax --key xxx` | ✅ |
-| 字节豆包 | 🫘 | `ky check doubao --key xxx`（含余额） | ✅ |
-| Groq | ⚡ | `ky check groq --key gsk_xxx` | ✅ |
-| Together AI | 🤝 | `ky check together --key xxx` | ✅ |
-| OpenRouter | 🔀 | `ky check openrouter --key sk-or-xxx` | ✅ |
-| Fireworks AI | 🔥 | `ky check fireworks --key xxx` | ✅ |
-| SiliconFlow | 🧊 | `ky check siliconflow --key sk-xxx` | ✅ |
-| 百川 | 🌊 | `ky check baichuan --key xxx` | ✅ |
-| 讯飞星火 | ✨ | `ky check spark --key xxx` | ✅ |
-| 阿里云百炼 | ☁️ | `ky check aliyun --key xxx`（含余额） | ✅ |
+| OpenAI | 🟢 | `kyvault check openai --key sk-xxx` | ✅ |
+| DeepSeek | 🔵 | `kyvault check deepseek --key sk-xxx`（含余额） | ✅ |
+| 智谱 AI | 🟣 | `kyvault check zhipu --key xxx`（含余额） | ✅ |
+| Moonshot (Kimi) | 🌙 | `kyvault check moonshot --key sk-xxx`（含余额） | ✅ |
+| Anthropic (Claude) | 🟠 | `kyvault check anthropic --key sk-ant-xxx` | ✅ |
+| Google Gemini | 💎 | `kyvault check gemini --key xxx` | ✅ |
+| 通义千问 | ☁️ | `kyvault check qwen --key sk-xxx` | ✅ |
+| MiniMax | 🔷 | `kyvault check minimax --key xxx` | ✅ |
+| 字节豆包 | 🫘 | `kyvault check doubao --key xxx`（含余额） | ✅ |
+| Groq | ⚡ | `kyvault check groq --key gsk_xxx` | ✅ |
+| Together AI | 🤝 | `kyvault check together --key xxx` | ✅ |
+| OpenRouter | 🔀 | `kyvault check openrouter --key sk-or-xxx` | ✅ |
+| Fireworks AI | 🔥 | `kyvault check fireworks --key xxx` | ✅ |
+| SiliconFlow | 🧊 | `kyvault check siliconflow --key sk-xxx` | ✅ |
+| 百川 | 🌊 | `kyvault check baichuan --key xxx` | ✅ |
+| 讯飞星火 | ✨ | `kyvault check spark --key xxx` | ✅ |
+| 阿里云百炼 | ☁️ | `kyvault check aliyun --key xxx`（含余额） | ✅ |
 
 ### 开发与运维平台
 
 | 平台 | Logo | 验证 | 别名注入 |
 |------|------|------|----------|
-| GitHub | 🐙 | `ky check github --key ghp_xxx` | ✅ |
-| Cloudflare | 🧡 | `ky check cloudflare --key cloudflare_token` | ✅ |
-| GitLab | 🦊 | `ky check gitlab --key glpat-xxx` | ✅ |
-| Feishu | 🐦 | `ky check feishu --key tenant_access_token` | ✅ |
+| GitHub | 🐙 | `kyvault check github --key ghp_xxx` | ✅ |
+| Cloudflare | 🧡 | `kyvault check cloudflare --key cloudflare_token` | ✅ |
+| GitLab | 🦊 | `kyvault check gitlab --key glpat-xxx` | ✅ |
+| Feishu | 🐦 | `kyvault check feishu --key tenant_access_token` | ✅ |
 
 ## 🤝 贡献
 
@@ -340,6 +342,10 @@ cargo clippy --all-targets -- -D warnings
 ## 📄 许可证
 
 本项目基于 MIT 许可证开源，详情见 [LICENSE](LICENSE)。
+
+## 🌐 线上文档
+
+发布/渠道/配图等运营资料不在本仓库维护，迁到了 [gitlab.com/webkubor/hermes-ops-skills](https://gitlab.com/webkubor/hermes-ops-skills) 的 `docs/kyvault-ops-plan.md`。原因：本仓库的密钥后端之一是 Cloudflare D1（远程 HTTP 数据库），线上文档不应该被 D1 的网络抖动绑住。
 
 ## ❓ FAQ & 常见问题
 
