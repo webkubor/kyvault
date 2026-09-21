@@ -245,7 +245,7 @@ impl Backend {
 
     fn list(&self) -> Result<Vec<SecretMeta>> {
         match self {
-            Backend::File(s) => Ok(s.list_secrets()),
+            Backend::File(s) => Ok(s.list_secrets()?),
             Backend::D1(d) => d.list_secrets(),
         }
     }
@@ -551,7 +551,7 @@ fn run() -> Result<()> {
                     }
                 }
                 "list" => {
-                    let list = s.list_bucket(&platform, "accounts");
+                    let list = s.list_bucket(&platform, "accounts")?;
                     if list.is_empty() {
                         println!("（没有账户）");
                     }
@@ -594,7 +594,7 @@ fn run() -> Result<()> {
                     }
                 }
                 "list" => {
-                    let list = s.list_bucket(&platform, "keys");
+                    let list = s.list_bucket(&platform, "keys")?;
                     if list.is_empty() {
                         println!("（没有密钥）");
                     }
@@ -615,7 +615,7 @@ fn run() -> Result<()> {
         }
         Cmd::Platform { platform_name } => {
             let s = Store::default_location()?;
-            let all = s.platforms();
+            let all = s.platforms()?;
             match platform_name {
                 Some(p) => {
                     let Some((accounts, keys)) = all.get(&p) else {
@@ -714,7 +714,7 @@ fn run() -> Result<()> {
                     }
                 }
                 "list" => {
-                    let v = st.list_servers();
+                    let v = st.list_servers()?;
                     if v.is_empty() {
                         println!(
                             "（没有服务器台账 —— kyvault server set <主机名> <IP> <root密码>）"
@@ -763,7 +763,7 @@ fn run() -> Result<()> {
                     }
                 }
                 "list" => {
-                    let v = st.list_clis(cli_name.as_deref());
+                    let v = st.list_clis(cli_name.as_deref())?;
                     match (&cli_name, v.is_empty()) {
                         (_, true) => println!("（没有 CLI 凭证登记）"),
                         (Some(c), false) => {

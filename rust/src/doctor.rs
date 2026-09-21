@@ -125,7 +125,7 @@ pub fn run() -> Result<()> {
     } else {
         match store.master_key() {
             Ok(_) => {
-                let metas = store.list_secrets();
+                let metas = store.list_secrets()?;
                 println!("  - 解密状态：成功 (OK)");
                 println!("  - 条目数：{}", metas.len());
             }

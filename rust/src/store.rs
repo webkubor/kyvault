@@ -104,13 +104,55 @@ impl Store {
         derive_file_key(&self.master_key()?)
     }
 
-    fn load(&self) -> Value {
-        // 读不出来就当空库：这里绝不能 panic，否则一个手改坏的 json
-        // 会让 kyvault 整个用不了（包括本来能救场的 init）。
-        fs::read_to_string(self.secrets_file())
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_else(|| json!({}))
+    /// 加载库内容。文件不存在 → 空对象（init 流程需要）；其余读不出 / JSON
+    /// 损坏 / 含 git 冲突标记 → 报错返回。
+    ///
+    /// 旧的"读不出来就当空库"是有意的（不想让手改坏的 json 把整个工具锁死），
+    /// 但代价是 rebase 冲突标记进入 secrets.json 时，下一次 `set` 会**拿空对象
+    /// 覆盖整库**。Codex 在 2026-09 抓到这个 bug 后，把宽容只留给"文件不存在"
+    /// 这一种合法空库场景；其他所有"读不出"都拒绝写入。
+    fn load(&self) -> Result<Value> {
+        let path = self.secrets_file();
+        let content = match fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(json!({})),
+            Err(e) => {
+                return Err(anyhow!(
+                    "读 {} 失败：{}。先确认文件权限，未恢复前不要写入。",
+                    path.display(),
+                    e
+                ));
+            }
+        };
+        // 顺序：先试 JSON 解析；**只在解析失败**时才细化冲突标记。
+        // 合法 JSON 里也可以包含 "=======" 这样的字符串（作为 base64 密文或
+        // 名称 / 备注），如果先 contains 就会**误判合法数据**，比旧 bug 还糟。
+        match serde_json::from_str(&content) {
+            Ok(v) => Ok(v),
+            Err(_) if Self::has_git_conflict_markers(&content) => Err(anyhow!(
+                "{} 含 git 冲突标记（<<<<<<< / >>>>>>>）。\n\
+                 先 git rebase --abort 或手动解冲突，再 kyvault list 验证库能正常读出。\n\
+                 未解决冲突前 set / delete 都会被拒绝，原数据保持不变。",
+                path.display()
+            )),
+            Err(e) => Err(anyhow!(
+                "{} 不是合法 JSON：{}",
+                path.display(),
+                e
+            )),
+        }
+    }
+
+    /// 检测 git conflict markers。**只在 JSON 解析失败后调用**，所以可以用
+    /// 粗粒度 contains —— 合法 JSON 里碰巧包含这些字符串是合法的，误判风险
+    /// 由外层 `Err(_) if ...` 兜住：JSON 合法就根本不会走到这里。
+    ///
+    /// `<<<<<<<` / `=======` / `>>>>>>>` 是合并冲突；`|||||||` 是 diff3 风格的
+    /// 共同祖先段（merge.conflictStyle=diff3 时出现）。
+    fn has_git_conflict_markers(content: &str) -> bool {
+        content.contains("<<<<<<<")
+            || content.contains(">>>>>>>")
+            || content.contains("|||||||")
     }
 
     fn save(&self, data: &Value) -> Result<()> {
@@ -139,7 +181,7 @@ impl Store {
     pub fn get_secret(&self, r: &str) -> Result<Option<String>> {
         let (platform, name) = parse_ref(r)?;
         let key = self.aes_key()?;
-        let data = self.load();
+        let data = self.load()?;
 
         if platform == "server" {
             let mut it = name.splitn(2, '/');
@@ -206,7 +248,7 @@ impl Store {
         let (platform, name) = parse_ref(r)?;
         let key = self.aes_key()?;
         let ct = encrypt_joined(value, &key)?;
-        let mut data = self.load();
+        let mut data = self.load()?;
 
         if platform == "cli" {
             if let Some((cli, profile)) = name.split_once('/') {
@@ -243,7 +285,7 @@ impl Store {
 
     pub fn delete_secret(&self, r: &str) -> Result<bool> {
         let (platform, name) = parse_ref(r)?;
-        let mut data = self.load();
+        let mut data = self.load()?;
         let removed = {
             let root = data.as_object_mut().ok_or_else(|| anyhow!("库结构损坏"))?;
             let mut hit = false;
@@ -282,11 +324,11 @@ impl Store {
         Ok(removed)
     }
 
-    pub fn list_secrets(&self) -> Vec<SecretMeta> {
-        let data = self.load();
+    pub fn list_secrets(&self) -> Result<Vec<SecretMeta>> {
+        let data = self.load()?;
         let mut out = Vec::new();
         let Some(root) = data.as_object() else {
-            return out;
+            return Ok(out);
         };
 
         if let Some(servers) = root.get("_servers").and_then(|v| v.as_object()) {
@@ -369,7 +411,7 @@ impl Store {
             }
         }
         out.sort_by(|a, b| (&a.platform, &a.name).cmp(&(&b.platform, &b.name)));
-        out
+        Ok(out)
     }
 
     // ── account / key / platform 命名空间 ─────────────────
@@ -380,7 +422,7 @@ impl Store {
 
     pub fn set_account(&self, platform: &str, user: &str, password: &str) -> Result<()> {
         let ct = encrypt_joined(password, &self.aes_key()?)?;
-        let mut data = self.load();
+        let mut data = self.load()?;
         let p = Self::obj_mut(&mut data, platform);
         p.entry("keys".to_string()).or_insert_with(|| json!({}));
         p.entry("accounts".to_string())
@@ -393,7 +435,8 @@ impl Store {
 
     pub fn get_account(&self, platform: &str, user: &str) -> Result<Option<String>> {
         let key = self.aes_key()?;
-        self.decrypt_at(&self.load(), &[platform, "accounts", user], &key)
+        let data = self.load()?;
+        self.decrypt_at(&data, &[platform, "accounts", user], &key)
     }
 
     // ── _servers / _clis 命名空间 ─────────────────────────
@@ -430,7 +473,7 @@ impl Store {
                 Value::String(encrypt_joined(provider, &key)?),
             );
         }
-        let mut data = self.load();
+        let mut data = self.load()?;
         Self::obj_mut(&mut data, "_servers").insert(hostname.to_string(), Value::Object(entry));
         self.save(&data)
     }
@@ -442,7 +485,7 @@ impl Store {
         field: Option<&str>,
     ) -> Result<Option<Vec<(String, String)>>> {
         let key = self.aes_key()?;
-        let data = self.load();
+        let data = self.load()?;
         let Some(entry) = data.get("_servers").and_then(|v| v.get(hostname)) else {
             return Ok(None);
         };
@@ -467,19 +510,19 @@ impl Store {
         Ok(Some(out))
     }
 
-    pub fn list_servers(&self) -> Vec<String> {
+    pub fn list_servers(&self) -> Result<Vec<String>> {
         let mut v: Vec<String> = self
-            .load()
+            .load()?
             .get("_servers")
             .and_then(|s| s.as_object())
             .map(|o| o.keys().cloned().collect())
             .unwrap_or_default();
         v.sort();
-        v
+        Ok(v)
     }
 
     pub fn delete_server(&self, hostname: &str) -> Result<bool> {
-        let mut data = self.load();
+        let mut data = self.load()?;
         let removed = Self::obj_mut(&mut data, "_servers")
             .remove(hostname)
             .is_some();
@@ -491,7 +534,7 @@ impl Store {
 
     pub fn set_cli_token(&self, cli_name: &str, profile: &str, token: &str) -> Result<()> {
         let ct = encrypt_joined(token, &self.aes_key()?)?;
-        let mut data = self.load();
+        let mut data = self.load()?;
         Self::obj_mut(&mut data, "_clis")
             .entry(cli_name.to_string())
             .or_insert_with(|| json!({}))
@@ -503,14 +546,15 @@ impl Store {
 
     pub fn get_cli_token(&self, cli_name: &str, profile: &str) -> Result<Option<String>> {
         let key = self.aes_key()?;
-        self.decrypt_at(&self.load(), &["_clis", cli_name, profile], &key)
+        let data = self.load()?;
+        self.decrypt_at(&data, &["_clis", cli_name, profile], &key)
     }
 
     /// cli_name 为 None 时列出所有 CLI 名；给了就列它的 profile。
-    pub fn list_clis(&self, cli_name: Option<&str>) -> Vec<String> {
-        let data = self.load();
+    pub fn list_clis(&self, cli_name: Option<&str>) -> Result<Vec<String>> {
+        let data = self.load()?;
         let Some(clis) = data.get("_clis").and_then(|v| v.as_object()) else {
-            return vec![];
+            return Ok(vec![]);
         };
         let mut v: Vec<String> = match cli_name {
             None => clis.keys().cloned().collect(),
@@ -521,11 +565,11 @@ impl Store {
                 .unwrap_or_default(),
         };
         v.sort();
-        v
+        Ok(v)
     }
 
     pub fn delete_cli_token(&self, cli_name: &str, profile: &str) -> Result<bool> {
-        let mut data = self.load();
+        let mut data = self.load()?;
         let removed = Self::obj_mut(&mut data, "_clis")
             .get_mut(cli_name)
             .and_then(|v| v.as_object_mut())
@@ -539,7 +583,7 @@ impl Store {
 
     pub fn set_key(&self, platform: &str, name: &str, value: &str) -> Result<()> {
         let ct = encrypt_joined(value, &self.aes_key()?)?;
-        let mut data = self.load();
+        let mut data = self.load()?;
         let p = Self::obj_mut(&mut data, platform);
         p.entry("accounts".to_string()).or_insert_with(|| json!({}));
         p.entry("keys".to_string())
@@ -552,21 +596,23 @@ impl Store {
 
     pub fn get_key(&self, platform: &str, name: &str) -> Result<Option<String>> {
         let key = self.aes_key()?;
-        self.decrypt_at(&self.load(), &[platform, "keys", name], &key)
+        let data = self.load()?;
+        self.decrypt_at(&data, &[platform, "keys", name], &key)
     }
 
     /// bucket 传 "accounts" 或 "keys"
-    pub fn list_bucket(&self, platform: &str, bucket: &str) -> Vec<String> {
-        self.load()
+    pub fn list_bucket(&self, platform: &str, bucket: &str) -> Result<Vec<String>> {
+        Ok(self
+            .load()?
             .get(platform)
             .and_then(|v| v.get(bucket))
             .and_then(|v| v.as_object())
             .map(|m| m.keys().cloned().collect())
-            .unwrap_or_default()
+            .unwrap_or_default())
     }
 
     pub fn delete_from_bucket(&self, platform: &str, bucket: &str, name: &str) -> Result<bool> {
-        let mut data = self.load();
+        let mut data = self.load()?;
         let hit = data
             .get_mut(platform)
             .and_then(|v| v.get_mut(bucket))
@@ -580,8 +626,10 @@ impl Store {
     }
 
     /// 平台 → (accounts, keys)。跳过 _servers / _clis 这些系统保留键。
-    pub fn platforms(&self) -> std::collections::BTreeMap<String, (Vec<String>, Vec<String>)> {
-        let data = self.load();
+    pub fn platforms(
+        &self,
+    ) -> Result<std::collections::BTreeMap<String, (Vec<String>, Vec<String>)>> {
+        let data = self.load()?;
         let mut out = std::collections::BTreeMap::new();
         if let Some(root) = data.as_object() {
             for (platform, v) in root {
@@ -597,7 +645,7 @@ impl Store {
                 out.insert(platform.clone(), (take("accounts"), take("keys")));
             }
         }
-        out
+        Ok(out)
     }
 
     pub fn exists(&self) -> bool {
@@ -694,12 +742,12 @@ mod tests {
         s.set_key("github", "pat", "ghp_2").unwrap();
         assert_eq!(s.get_account("github", "webkubor").unwrap().unwrap(), "pw1");
         assert_eq!(s.get_key("github", "pat").unwrap().unwrap(), "ghp_2");
-        assert_eq!(s.list_bucket("github", "accounts"), vec!["webkubor"]);
-        assert_eq!(s.list_bucket("github", "keys"), vec!["pat"]);
-        let p = s.platforms();
+        assert_eq!(s.list_bucket("github", "accounts").unwrap(), vec!["webkubor"]);
+        assert_eq!(s.list_bucket("github", "keys").unwrap(), vec!["pat"]);
+        let p = s.platforms().unwrap();
         assert_eq!(p["github"].0, vec!["webkubor"]);
         assert!(s.delete_from_bucket("github", "keys", "pat").unwrap());
-        assert!(s.list_bucket("github", "keys").is_empty());
+        assert!(s.list_bucket("github", "keys").unwrap().is_empty());
     }
 
     #[test]
@@ -713,15 +761,134 @@ mod tests {
         );
     }
 
+    /// 坏 JSON 必须拒绝写入 —— 不能拿空对象覆盖整库。
+    ///
+    /// 这条原本是"宽容地当空库继续用"，代价是 rebase 冲突标记进入
+    /// secrets.json 时，set 会**覆盖整库**（Codex 2026-09 review 抓到的 bug）。
+    /// 现在把宽容只留给"文件不存在"这一种合法空库场景。
     #[test]
-    fn broken_json_does_not_panic() {
+    fn broken_json_blocks_writes() {
         let d = tempfile::tempdir().unwrap();
         let s = Store::new(d.path());
         s.init_master_key().unwrap();
         fs::write(d.path().join("secrets.json"), "{不是 json").unwrap();
-        assert!(s.list_secrets().is_empty(), "坏库当空库，不能 panic");
-        // 还能继续写（新内容覆盖坏文件）
-        s.set_secret("secret://a/b", "v").unwrap();
-        assert_eq!(s.get_secret("secret://a/b").unwrap().unwrap(), "v");
+        // 读：报错
+        let err = s.list_secrets().unwrap_err().to_string();
+        assert!(err.contains("不是合法 JSON"), "应提示 JSON 损坏：{err}");
+        // 写：拒绝，库文件不被破坏
+        let before = fs::read_to_string(d.path().join("secrets.json")).unwrap();
+        let set_err = s.set_secret("secret://a/b", "v").unwrap_err().to_string();
+        assert!(
+            set_err.contains("不是合法 JSON"),
+            "set 应继承 load 的错误：{set_err}"
+        );
+        let after = fs::read_to_string(d.path().join("secrets.json")).unwrap();
+        assert_eq!(before, after, "坏库被 set 覆盖了！");
+    }
+
+    /// git 冲突标记（rebase / merge 未解）必须拒绝写入。
+    ///
+    /// 这是 Codex 2026-09 review 的核心：<<<<<<< / >>>>>>> 进入 secrets.json 后，
+    /// `set` 不能拿空对象覆盖，否则 rebase 一冲突整库就丢。
+    ///
+    /// 关键细节：冲突标记**必须在 JSON 解析失败的上下文里**才检测（load 里
+    /// `Err(_) if has_git_conflict_markers(...)`）—— 见下一个测试的反例。
+    #[test]
+    fn git_conflict_markers_block_writes() {
+        let d = tempfile::tempdir().unwrap();
+        let s = Store::new(d.path());
+        s.init_master_key().unwrap();
+        // 真实 git 冲突：JSON 不合法 + 行首含 <<<<<<< 等标记
+        let conflicted = r#"{
+  "github/token": "ghp_one"
+<<<<<<< HEAD
+  "github/token": "ghp_other"
+=======
+  "github/token": "ghp_three"
+>>>>>>> branch
+}"#;
+        fs::write(d.path().join("secrets.json"), conflicted).unwrap();
+
+        let err = s.list_secrets().unwrap_err().to_string();
+        assert!(err.contains("git 冲突标记"), "应提示冲突：{err}");
+
+        let before = fs::read_to_string(d.path().join("secrets.json")).unwrap();
+        let set_err = s.set_secret("secret://github/a", "v").unwrap_err().to_string();
+        assert!(
+            set_err.contains("git 冲突标记"),
+            "set 应继承 load 的错误：{set_err}"
+        );
+        let after = fs::read_to_string(d.path().join("secrets.json")).unwrap();
+        assert_eq!(before, after, "冲突标记被 set 覆盖了！");
+    }
+
+    /// 反例：合法 JSON 里包含 "=======" 等字符串不能被误判为冲突。
+    ///
+    /// Codex v2 review 抓到的回归：原 `has_git_conflict_markers` 用全文件 contains，
+    /// 如果**先检测**冲突标记再尝试 JSON 解析，合法库含 "=======" 字符串就会被
+    /// 锁死（即使 JSON 完全合法）。现在 load() 是先 JSON 解析，失败后才细化检测，
+    /// 这里守住这条边界。
+    #[test]
+    fn legal_strings_with_marker_chars_remain_readable() {
+        let d = tempfile::tempdir().unwrap();
+        let s = Store::new(d.path());
+        s.init_master_key().unwrap();
+        // 合法 JSON，键名 / 值里都包含冲突标记字符
+        let legal = r#"{
+  "github": {
+    "keys": {
+      "note": "we use ======= for headers",
+      "syntax": "<<<<<<< is not a real marker here"
+    }
+  }
+}"#;
+        fs::write(d.path().join("secrets.json"), legal).unwrap();
+        // list_secrets 不报错，正常列出 keys 桶里的两条
+        let metas = s.list_secrets().unwrap();
+        assert_eq!(
+            metas.len(),
+            2,
+            "合法 JSON 应列出两条（github/note + github/syntax），实际：{metas:?}"
+        );
+        // has_git_conflict_markers 单测本身的边界：
+        // contains 在合法 JSON 上确实会返回 true，但 load() 不会到这一步
+        assert!(
+            Store::has_git_conflict_markers(legal),
+            "contains 本身确实返回 true —— 但 load() 不会到这一步"
+        );
+    }
+
+    /// init 场景：文件不存在时 load 应返回空对象，set 应正常写入。
+    ///
+    /// 这条证明"宽容地当空库"还保留给 init 用 —— 跟坏库严格拒绝是两个不同分支。
+    #[test]
+    fn missing_file_still_works_for_init() {
+        let d = tempfile::tempdir().unwrap();
+        let s = Store::new(d.path());
+        s.init_master_key().unwrap();
+        // 文件还不存在
+        assert!(!d.path().join("secrets.json").exists());
+        // set 应创建文件
+        s.set_secret("secret://github/init", "v").unwrap();
+        assert!(d.path().join("secrets.json").exists());
+        assert_eq!(
+            s.get_secret("secret://github/init").unwrap().unwrap(),
+            "v"
+        );
+    }
+
+    /// 单元测试 has_git_conflict_markers 自身 —— 几个变体都该识别。
+    #[test]
+    fn conflict_marker_detection() {
+        assert!(Store::has_git_conflict_markers("<<<<<<<"));
+        assert!(Store::has_git_conflict_markers(">>>>>>>"));
+        assert!(Store::has_git_conflict_markers("|||||||")); // diff3 风格
+        assert!(Store::has_git_conflict_markers(
+            r#"{"a": "<<<<<<< HEAD"}"#
+        ));
+        assert!(!Store::has_git_conflict_markers(r#"{"a": "x"}"#));
+        assert!(!Store::has_git_conflict_markers(
+            "密文里包含 < 和 > 字符也不该误判"
+        ));
     }
 }
