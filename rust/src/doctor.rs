@@ -89,11 +89,14 @@ pub fn run() -> Result<()> {
             Some(v) => println!("  - CF token：已注入 (OK，来自 {v})"),
             None => println!("  - CF token：缺失 (FAIL，设 CLOUDFLARE_API_TOKEN 或 CF_API_TOKEN)"),
         }
+        println!(
+            "  - 提示：D1 后端处于过渡期，推荐迁移至 GitLab 团队密钥库（kyvault gitlab setup）"
+        );
     } else {
-        println!("  - 提示：cs kyvault 会自动注入 d1 三件套；裸跑走 file，两套数据不通");
+        println!("  - 模式：本地存储 / GitLab 团队仓库（断网可用，纯本地解密）");
     }
 
-    // ② 文件与权限（只对 file 后端有意义）
+    // ② 文件与权限（只对 file / gitlab 后端有意义）
     let store = Store::default_location()?;
     println!("\n📁  2. 本地文件与权限：");
     println!(
@@ -105,6 +108,22 @@ pub fn run() -> Result<()> {
             "未初始化"
         }
     );
+
+    let is_git = store.root().join(".git").exists();
+    if is_git {
+        println!("  - Git 托管：是（GitLab 团队密钥库模式）");
+        let status = std::process::Command::new("git")
+            .args(["check-ignore", "-q", "master.key"])
+            .current_dir(store.root())
+            .status();
+        let safe = status.map(|s| s.success()).unwrap_or(false);
+        if safe {
+            println!("  - 排除规则：master.key 已被 .gitignore 忽略 (OK)");
+        } else {
+            println!("  - 排除规则：⚠️ master.key 未被 .gitignore 忽略！请立即加至 .gitignore");
+        }
+    }
+
     let mk = store.master_key_path();
     if mk.exists() {
         println!("  - master.key：存在, {}", perm_desc(&mk));
@@ -116,6 +135,10 @@ pub fn run() -> Result<()> {
         println!("  - secrets.json：存在, {}", perm_desc(&sf));
     } else {
         println!("  - secrets.json：不存在（空密钥库）");
+    }
+    let mf = store.meta_file();
+    if mf.exists() {
+        println!("  - meta.json：存在, {}", perm_desc(&mf));
     }
 
     // ③ 解密自检 —— 能不能真的解开，而不是文件在不在

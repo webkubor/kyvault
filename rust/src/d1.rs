@@ -16,7 +16,7 @@ use anyhow::{anyhow, Context, Result};
 use serde_json::{json, Value};
 
 use crate::crypto::{d1_key, decrypt_split, encrypt_split};
-use crate::model::{last4, parse_ref, SecretMeta};
+use crate::model::{last4, now_utc, parse_ref, sha256_hex, SecretMeta};
 
 const TIMEOUT_SECS: u64 = 15;
 
@@ -354,48 +354,10 @@ fn str_of(v: &Value, k: &str) -> String {
         .to_string()
 }
 
-fn now_utc() -> String {
-    // 只需要 D1 那一列的 %Y-%m-%dT%H:%M:%SZ，为此拉一个 chrono 不值得
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let (y, mo, d, h, mi, s) = civil_from_unix(secs as i64);
-    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}Z")
-}
-
-/// Unix 秒 → UTC 年月日时分秒（Howard Hinnant 的 civil_from_days 算法）
-fn civil_from_unix(secs: i64) -> (i64, u32, u32, u32, u32, u32) {
-    let days = secs.div_euclid(86400);
-    let rem = secs.rem_euclid(86400);
-    let z = days + 719_468;
-    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
-    let y = if m <= 2 { y + 1 } else { y };
-    (
-        y,
-        m,
-        d,
-        (rem / 3600) as u32,
-        ((rem % 3600) / 60) as u32,
-        (rem % 60) as u32,
-    )
-}
-
-fn sha256_hex(v: &str) -> String {
-    use sha2::{Digest, Sha256};
-    format!("{:x}", Sha256::digest(v.as_bytes()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::civil_from_unix;
 
     #[test]
     fn rows_flattens_result_groups() {

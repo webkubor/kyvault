@@ -286,6 +286,12 @@ kyvault get secret://cli/studio-cli/test-user   # 输出: jwt_token_test
 | - | `kyvault cli get` | 读 CLI Token | `kyvault cli get tool prof` |
 | - | `kyvault cli list` | 列 CLI Token | `kyvault cli list` |
 | - | `kyvault cli delete`| 删 CLI Token | `kyvault cli delete tool prof` |
+| **GitLab 团队协作** | | | |
+| - | `kyvault gitlab status` | 团队库状态 | `kyvault gitlab status` |
+| - | `kyvault gitlab pull` | 拉取最新密文 | `kyvault gitlab pull` |
+| - | `kyvault gitlab push` | 提交推送密文 | `kyvault gitlab push` |
+| - | `kyvault gitlab sync` | 自动同步 (pull+push) | `kyvault gitlab sync` |
+| - | `kyvault gitlab setup`| 克隆团队仓库 | `kyvault gitlab setup git@gitlab.com:org/vault.git` |
 | **自检与更新** | | | |
 | - | `kyvault doctor` | 工具自检修复 | `kyvault doctor` |
 | - | `kyvault update` | 在线升级工具 | `kyvault update` |

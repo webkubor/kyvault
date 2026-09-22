@@ -8,6 +8,7 @@ pub mod connect;
 pub mod crypto;
 pub mod d1;
 pub mod doctor;
+pub mod gitlab;
 pub mod import_env;
 pub mod model;
 pub mod providers;

@@ -16,6 +16,7 @@ use clap::{Parser, Subcommand};
 
 use kyvault::alias::Aliases;
 use kyvault::d1::D1;
+use kyvault::gitlab::GitLabRepo;
 use kyvault::model::SecretMeta;
 use kyvault::store::Store;
 
@@ -190,6 +191,31 @@ enum Cmd {
         #[arg(last = true, required = true)]
         command: Vec<String>,
     },
+    /// GitLab 团队密钥库同步与管理（status / pull / push / sync / setup）
+    Gitlab {
+        #[command(subcommand)]
+        action: GitLabCmd,
+    },
+}
+
+#[derive(Subcommand)]
+enum GitLabCmd {
+    /// 查看 GitLab 团队密钥库同步状态、远端分支与安全检查
+    Status,
+    /// 从 GitLab 远端拉取最新密文与元信息（自动 rebase + 冲突防护）
+    Pull,
+    /// 将本地加密密钥与元信息提交并推送到 GitLab 远端（严防 master.key 入仓）
+    Push,
+    /// 自动执行 pull 后 push 同步
+    Sync,
+    /// 克隆 GitLab 团队密钥库至本地（默认 ~/.config/kyvault/store）
+    Setup {
+        /// GitLab 仓库地址（如 git@gitlab.com:org/kyvault-store.git）
+        repo_url: String,
+        /// 可选目标目录，默认 ~/.config/kyvault/store
+        #[arg(long)]
+        dir: Option<std::path::PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -231,7 +257,7 @@ impl Backend {
 
     fn set(&self, r: &str, v: &str, kind: &str, account: &str) -> Result<()> {
         match self {
-            Backend::File(s) => s.set_secret(r, v),
+            Backend::File(s) => s.set_secret_with_meta(r, v, Some(kind), Some(account)),
             Backend::D1(d) => d.set_secret(r, v, kind, account),
         }
     }
@@ -388,11 +414,16 @@ fn run() -> Result<()> {
                     return Err(anyhow!("{ref} 不存在，没有改动任何东西", r#ref = r#ref));
                 }
             }
-            Backend::File(_) => {
-                return Err(anyhow!(
-                    "annotate 仅 D1 后端可用：本地 JSON 后端的 keys 结构里没有 account/kind 两列，\
-                     没有地方可写。设 KYVAULT_BACKEND=d1 后重试。"
-                ))
+            Backend::File(s) => {
+                s.annotate(
+                    &r#ref,
+                    account.as_deref(),
+                    kind.as_deref(),
+                    org.as_deref(),
+                    scopes.as_deref(),
+                    visibility.as_deref(),
+                )?;
+                println!("已更新备注：{ref}（后端 file/meta.json）", ref = r#ref);
             }
         },
         Cmd::D1Setup {
@@ -914,6 +945,31 @@ fn run() -> Result<()> {
                 .with_context(|| format!("执行 {} 失败", command[0]))?;
             std::process::exit(status.code().unwrap_or(1));
         }
+        Cmd::Gitlab { action } => match action {
+            GitLabCmd::Status => {
+                let store = Store::default_location()?;
+                let repo = GitLabRepo::new(&store);
+                repo.status()?;
+            }
+            GitLabCmd::Pull => {
+                let store = Store::default_location()?;
+                let repo = GitLabRepo::new(&store);
+                repo.pull()?;
+            }
+            GitLabCmd::Push => {
+                let store = Store::default_location()?;
+                let repo = GitLabRepo::new(&store);
+                repo.push()?;
+            }
+            GitLabCmd::Sync => {
+                let store = Store::default_location()?;
+                let repo = GitLabRepo::new(&store);
+                repo.sync()?;
+            }
+            GitLabCmd::Setup { repo_url, dir } => {
+                GitLabRepo::setup(&repo_url, dir.as_deref())?;
+            }
+        },
     }
     Ok(())
 }

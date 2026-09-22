@@ -2,6 +2,32 @@
 
 所有对 `kyvault` 项目的重大变更都将记录在本文档中。
 
+## [2.3.0] - 2026-09-22
+
+**核心架构决策：本地与远程直接迁移至最新版本，调度系统（CortexOS / cs）彻底不管理密钥。**
+
+密钥真源全面收拢并归宿于「本地存储 + GitLab 私有团队仓（`kyvault-store`）」，解密为纯本地离线计算，断网可用；`master.key` 永不入仓、永不经网络下发。调度系统不再参与密钥生命周期管理与代管，彻底消除因远程依赖、D1 网络抖动或静默重置 master key 导致存量密文孤立的严重事故隐患。
+
+### ✨ 新增
+- **GitLab 团队协作后端（`kyvault gitlab`）**：
+  - `status`：自检远端 origin 地址、分支跟踪、ahead/behind 提交数及工作区状态，带 `master.key` 绝对排除验证。
+  - `pull`：拉取最新密文与元信息，内置 `--autostash` 与冲突自动防护，防止覆盖本地改动。
+  - `push`：安全提交并推送 `secrets.json` 和 `meta.json` 到远端仓库，严格拒绝推送 `master.key`。
+  - `sync`：一键自动 pull 后 push。
+  - `setup <repo-url>`：快速将团队 Git 仓库克隆至 `~/.config/kyvault/store` 并引导带外导入 `master.key`。
+- **GitLab 仓库路径默认自动对齐**：
+  - `Store::default_store_dir()` 优先使用检测到的 `~/.config/kyvault/store`（若已就绪），无需手动指定 `KYVAULT_STORE_DIR`。
+- **`meta.json` 原生旁挂联动**：
+  - `list` 自动读取 `meta.json` 补齐 `kind`、`account`、`last4`、`created_at`、`updated_at`、`visibility`、`org`、`scopes`。
+  - `set` 和 `delete` 自动同步更新/清理 `meta.json`。
+  - `annotate` 命令不再局限于 D1，全面支持本地/GitLab 仓库的元信息修改。
+- **跨进程排他文件锁 (P0-3)**：
+  - 在 store 根目录下使用 `fs2` 实现跨平台进程文件锁（`.lock`），写操作全流程受互斥锁保护，防止多 Agent 并发破坏。
+
+### 🔒 兼容与平滑过渡
+- `d1` 后端代码完整保留，标记为过渡维护模式，`doctor` 提供清晰的团队 Git 仓库引导。
+- 调度系统（`cs`）全面退化为普通使用者，通过环境变量 `KYVAULT_STORE_DIR` 或默认目录调用 `kyvault` CLI，不再做数据源中转。
+
 ## [2.2.0] - 2026-09-12
 
 围绕一件事:让 kyvault 能独当身份 + 密钥两摊,不再让调度系统(cs)夹在中间管密钥。

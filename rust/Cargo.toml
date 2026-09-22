@@ -1,6 +1,6 @@
 [package]
 name = "kyvault"
-version = "2.2.0"
+version = "2.3.0"
 edition = "2021"
 rust-version = "1.80"
 description = "本地加密密钥管理 CLI — AES-256-GCM 纯本地存储，AI 只拿别名"
@@ -26,6 +26,7 @@ clap = { version = "4", features = ["derive"] }
 # rustls：不碰系统 OpenSSL —— 重写的主要动因就是 Python 那条 TLS 验证路径会整体失效
 ureq = { version = "2.10", default-features = false, features = ["tls", "json"] }
 dirs = "5"
+fs2 = "0.4.3"
 
 [dev-dependencies]
 tempfile = "3"

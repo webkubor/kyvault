@@ -15,10 +15,21 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
+use fs2::FileExt;
 use serde_json::{json, Map, Value};
 
 use crate::crypto::{decrypt_joined, derive_file_key, encrypt_joined, new_master_key_b64};
 use crate::model::{parse_ref, SecretMeta};
+
+pub struct StoreLock {
+    file: std::fs::File,
+}
+
+impl Drop for StoreLock {
+    fn drop(&mut self) {
+        let _ = fs2::FileExt::unlock(&self.file);
+    }
+}
 
 pub struct Store {
     root: PathBuf,
@@ -39,7 +50,7 @@ fn harden(path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-/// 密钥库根目录：`KYVAULT_STORE_DIR` 优先，回落 `~/.keyring`。
+/// 密钥库根目录：`KYVAULT_STORE_DIR` 优先，其次 `~/.config/kyvault/store`（若已就绪），回落 `~/.keyring`。
 ///
 /// store 和 alias 都用它，避免两处各读一次环境变量后走岔（一个指到 git 仓、
 /// 一个还在 ~/.keyring，表现是「密钥能读到但别名全丢」，很难往这上面想）。
@@ -51,6 +62,12 @@ pub fn default_store_dir() -> Result<PathBuf> {
         }
     }
     let home = dirs::home_dir().ok_or_else(|| anyhow!("找不到 home 目录"))?;
+    // 优先使用 ~/.config/kyvault/store（GitLab 私有团队仓）。
+    // 密文与 master.key 都在才算就绪，避免指到尚未初始化的空目录。
+    let preferred = home.join(".config").join("kyvault").join("store");
+    if preferred.join("secrets.json").exists() && preferred.join("master.key").exists() {
+        return Ok(preferred);
+    }
     Ok(home.join(".keyring"))
 }
 
@@ -105,6 +122,46 @@ impl Store {
         self.secrets_file()
     }
 
+    pub fn meta_file(&self) -> PathBuf {
+        self.root.join("meta.json")
+    }
+
+    /// 获取 store 目录的跨进程排他锁（~/.lock 文件）
+    pub fn lock(&self) -> Result<StoreLock> {
+        fs::create_dir_all(&self.root)?;
+        let lock_path = self.root.join(".lock");
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&lock_path)
+            .context("无法打开锁文件")?;
+        file.lock_exclusive()
+            .context("无法获取密钥库排他锁（可能被其他进程/Agent 占用）")?;
+        Ok(StoreLock { file })
+    }
+
+    pub fn load_meta(&self) -> Result<serde_json::Map<String, Value>> {
+        let f = self.meta_file();
+        if !f.exists() {
+            return Ok(serde_json::Map::new());
+        }
+        let content = fs::read_to_string(&f)?;
+        let val: Value = serde_json::from_str(&content).context("meta.json 语法损坏")?;
+        Ok(val.as_object().cloned().unwrap_or_default())
+    }
+
+    pub fn save_meta(&self, meta: &serde_json::Map<String, Value>) -> Result<()> {
+        let f = self.meta_file();
+        let content = serde_json::to_string_pretty(&Value::Object(meta.clone()))?;
+        let tmp = self.root.join("meta.json.tmp");
+        fs::write(&tmp, content)?;
+        harden(&tmp)?;
+        fs::rename(tmp, f)?;
+        Ok(())
+    }
+
     /// master key：环境变量优先，其次本地文件。与 Python 版同序，
     /// 否则 CI/容器里注入的 key 会被本地文件悄悄盖掉。
     pub fn master_key(&self) -> Result<String> {
@@ -144,7 +201,7 @@ impl Store {
     /// 但代价是 rebase 冲突标记进入 secrets.json 时，下一次 `set` 会**拿空对象
     /// 覆盖整库**。Codex 在 2026-09 抓到这个 bug 后，把宽容只留给"文件不存在"
     /// 这一种合法空库场景；其他所有"读不出"都拒绝写入。
-    fn load(&self) -> Result<Value> {
+    pub fn load(&self) -> Result<Value> {
         let path = self.secrets_file();
         let content = match fs::read_to_string(&path) {
             Ok(c) => c,
@@ -168,11 +225,7 @@ impl Store {
                  未解决冲突前 set / delete 都会被拒绝，原数据保持不变。",
                 path.display()
             )),
-            Err(e) => Err(anyhow!(
-                "{} 不是合法 JSON：{}",
-                path.display(),
-                e
-            )),
+            Err(e) => Err(anyhow!("{} 不是合法 JSON：{}", path.display(), e)),
         }
     }
 
@@ -183,9 +236,7 @@ impl Store {
     /// `<<<<<<<` / `=======` / `>>>>>>>` 是合并冲突；`|||||||` 是 diff3 风格的
     /// 共同祖先段（merge.conflictStyle=diff3 时出现）。
     fn has_git_conflict_markers(content: &str) -> bool {
-        content.contains("<<<<<<<")
-            || content.contains(">>>>>>>")
-            || content.contains("|||||||")
+        content.contains("<<<<<<<") || content.contains(">>>>>>>") || content.contains("|||||||")
     }
 
     fn save(&self, data: &Value) -> Result<()> {
@@ -278,6 +329,17 @@ impl Store {
     }
 
     pub fn set_secret(&self, r: &str, value: &str) -> Result<()> {
+        self.set_secret_with_meta(r, value, None, None)
+    }
+
+    pub fn set_secret_with_meta(
+        &self,
+        r: &str,
+        value: &str,
+        kind: Option<&str>,
+        account: Option<&str>,
+    ) -> Result<()> {
+        let _lock = self.lock()?;
         let (platform, name) = parse_ref(r)?;
         let key = self.aes_key()?;
         let ct = encrypt_joined(value, &key)?;
@@ -291,7 +353,9 @@ impl Store {
                     .as_object_mut()
                     .unwrap()
                     .insert(profile.to_string(), Value::String(ct));
-                return self.save(&data);
+                self.save(&data)?;
+                self.update_meta_for_set(&platform, &name, value, kind, account)?;
+                return Ok(());
             }
         }
         if platform == "server" {
@@ -303,7 +367,9 @@ impl Store {
                     .as_object_mut()
                     .unwrap()
                     .insert(field.to_string(), Value::String(ct));
-                return self.save(&data);
+                self.save(&data)?;
+                self.update_meta_for_set(&platform, &name, value, kind, account)?;
+                return Ok(());
             }
         }
         let p = Self::obj_mut(&mut data, &platform);
@@ -312,11 +378,97 @@ impl Store {
             .or_insert_with(|| json!({}))
             .as_object_mut()
             .unwrap()
-            .insert(name, Value::String(ct));
-        self.save(&data)
+            .insert(name.clone(), Value::String(ct));
+        self.save(&data)?;
+        self.update_meta_for_set(&platform, &name, value, kind, account)?;
+        Ok(())
+    }
+
+    fn update_meta_for_set(
+        &self,
+        platform: &str,
+        name: &str,
+        value: &str,
+        kind: Option<&str>,
+        account: Option<&str>,
+    ) -> Result<()> {
+        if self.meta_file().exists() {
+            let mut meta = self.load_meta().unwrap_or_default();
+            let key = format!("{platform}/{name}");
+            let mut entry = meta
+                .get(&key)
+                .and_then(|v| v.as_object())
+                .cloned()
+                .unwrap_or_default();
+            if let Some(k) = kind {
+                if !k.is_empty() {
+                    entry.insert("kind".into(), Value::String(k.to_string()));
+                }
+            } else if !entry.contains_key("kind") {
+                entry.insert("kind".into(), Value::String("API Key".to_string()));
+            }
+            if let Some(a) = account {
+                if !a.is_empty() {
+                    entry.insert("account".into(), Value::String(a.to_string()));
+                }
+            }
+            entry.insert("last4".into(), Value::String(crate::model::last4(value)));
+            entry.insert("length".into(), Value::Number(value.chars().count().into()));
+            entry.insert(
+                "sha256".into(),
+                Value::String(crate::model::sha256_hex(value)),
+            );
+            entry.insert("updated_at".into(), Value::String(crate::model::now_utc()));
+            if !entry.contains_key("created_at") {
+                entry.insert("created_at".into(), Value::String(crate::model::now_utc()));
+            }
+            meta.insert(key, Value::Object(entry));
+            let _ = self.save_meta(&meta);
+        }
+        Ok(())
+    }
+
+    pub fn annotate(
+        &self,
+        r: &str,
+        account: Option<&str>,
+        kind: Option<&str>,
+        org: Option<&str>,
+        scopes: Option<&str>,
+        visibility: Option<&str>,
+    ) -> Result<bool> {
+        let _lock = self.lock()?;
+        let (platform, name) = parse_ref(r)?;
+        let key = format!("{platform}/{name}");
+        let mut meta = self.load_meta()?;
+        let mut entry = meta
+            .get(&key)
+            .and_then(|v| v.as_object())
+            .cloned()
+            .unwrap_or_default();
+        if let Some(a) = account {
+            entry.insert("account".into(), Value::String(a.to_string()));
+        }
+        if let Some(k) = kind {
+            entry.insert("kind".into(), Value::String(k.to_string()));
+        }
+        if let Some(o) = org {
+            entry.insert("org".into(), Value::String(o.to_string()));
+        }
+        if let Some(s) = scopes {
+            entry.insert("scopes".into(), Value::String(s.to_string()));
+        }
+        if let Some(v) = visibility {
+            entry.insert("visibility".into(), Value::String(v.to_string()));
+        }
+        entry.insert("updated_at".into(), Value::String(crate::model::now_utc()));
+        meta.insert(key, Value::Object(entry));
+        self.save_meta(&meta)?;
+        Ok(true)
     }
 
     pub fn delete_secret(&self, r: &str) -> Result<bool> {
+        let _lock = self.lock()?;
         let (platform, name) = parse_ref(r)?;
         let mut data = self.load()?;
         let removed = {
@@ -353,6 +505,14 @@ impl Store {
         };
         if removed {
             self.save(&data)?;
+            if self.meta_file().exists() {
+                if let Ok(mut meta) = self.load_meta() {
+                    let key = format!("{platform}/{name}");
+                    if meta.remove(&key).is_some() {
+                        let _ = self.save_meta(&meta);
+                    }
+                }
+            }
         }
         Ok(removed)
     }
@@ -444,6 +604,43 @@ impl Store {
             }
         }
         out.sort_by(|a, b| (&a.platform, &a.name).cmp(&(&b.platform, &b.name)));
+        if self.meta_file().exists() {
+            if let Ok(meta_map) = self.load_meta() {
+                for item in &mut out {
+                    let key = format!("{}/{}", item.platform, item.name);
+                    if let Some(m) = meta_map.get(&key).and_then(|v| v.as_object()) {
+                        if let Some(kind) = m.get("kind").and_then(|v| v.as_str()) {
+                            if !kind.is_empty() {
+                                item.kind = kind.to_string();
+                            }
+                        }
+                        if let Some(account) = m.get("account").and_then(|v| v.as_str()) {
+                            if !account.is_empty() {
+                                item.account = account.to_string();
+                            }
+                        }
+                        if let Some(last4) = m.get("last4").and_then(|v| v.as_str()) {
+                            item.last4 = last4.to_string();
+                        }
+                        if let Some(len) = m.get("length").and_then(|v| v.as_u64()) {
+                            item.length = len;
+                        }
+                        if let Some(updated_at) = m.get("updated_at").and_then(|v| v.as_str()) {
+                            item.updated_at = updated_at.to_string();
+                        }
+                        if let Some(org) = m.get("org").and_then(|v| v.as_str()) {
+                            item.org = org.to_string();
+                        }
+                        if let Some(scopes) = m.get("scopes").and_then(|v| v.as_str()) {
+                            item.scopes = scopes.to_string();
+                        }
+                        if let Some(visibility) = m.get("visibility").and_then(|v| v.as_str()) {
+                            item.visibility = visibility.to_string();
+                        }
+                    }
+                }
+            }
+        }
         Ok(out)
     }
 
@@ -454,6 +651,7 @@ impl Store {
     // 直接用 Store，不走后端分发 —— 假装支持再静默落到别处，比明确只支持本地糟。
 
     pub fn set_account(&self, platform: &str, user: &str, password: &str) -> Result<()> {
+        let _lock = self.lock()?;
         let ct = encrypt_joined(password, &self.aes_key()?)?;
         let mut data = self.load()?;
         let p = Self::obj_mut(&mut data, platform);
@@ -489,6 +687,7 @@ impl Store {
         cost: &str,
         provider: &str,
     ) -> Result<()> {
+        let _lock = self.lock()?;
         let key = self.aes_key()?;
         let mut entry = Map::new();
         entry.insert("ip".into(), Value::String(encrypt_joined(ip, &key)?));
@@ -555,6 +754,7 @@ impl Store {
     }
 
     pub fn delete_server(&self, hostname: &str) -> Result<bool> {
+        let _lock = self.lock()?;
         let mut data = self.load()?;
         let removed = Self::obj_mut(&mut data, "_servers")
             .remove(hostname)
@@ -566,6 +766,7 @@ impl Store {
     }
 
     pub fn set_cli_token(&self, cli_name: &str, profile: &str, token: &str) -> Result<()> {
+        let _lock = self.lock()?;
         let ct = encrypt_joined(token, &self.aes_key()?)?;
         let mut data = self.load()?;
         Self::obj_mut(&mut data, "_clis")
@@ -602,6 +803,7 @@ impl Store {
     }
 
     pub fn delete_cli_token(&self, cli_name: &str, profile: &str) -> Result<bool> {
+        let _lock = self.lock()?;
         let mut data = self.load()?;
         let removed = Self::obj_mut(&mut data, "_clis")
             .get_mut(cli_name)
@@ -615,6 +817,7 @@ impl Store {
     }
 
     pub fn set_key(&self, platform: &str, name: &str, value: &str) -> Result<()> {
+        let _lock = self.lock()?;
         let ct = encrypt_joined(value, &self.aes_key()?)?;
         let mut data = self.load()?;
         let p = Self::obj_mut(&mut data, platform);
@@ -645,6 +848,7 @@ impl Store {
     }
 
     pub fn delete_from_bucket(&self, platform: &str, bucket: &str, name: &str) -> Result<bool> {
+        let _lock = self.lock()?;
         let mut data = self.load()?;
         let hit = data
             .get_mut(platform)
@@ -659,6 +863,7 @@ impl Store {
     }
 
     /// 平台 → (accounts, keys)。跳过 _servers / _clis 这些系统保留键。
+    #[allow(clippy::type_complexity)]
     pub fn platforms(
         &self,
     ) -> Result<std::collections::BTreeMap<String, (Vec<String>, Vec<String>)>> {
@@ -775,7 +980,10 @@ mod tests {
         s.set_key("github", "pat", "ghp_2").unwrap();
         assert_eq!(s.get_account("github", "webkubor").unwrap().unwrap(), "pw1");
         assert_eq!(s.get_key("github", "pat").unwrap().unwrap(), "ghp_2");
-        assert_eq!(s.list_bucket("github", "accounts").unwrap(), vec!["webkubor"]);
+        assert_eq!(
+            s.list_bucket("github", "accounts").unwrap(),
+            vec!["webkubor"]
+        );
         assert_eq!(s.list_bucket("github", "keys").unwrap(), vec!["pat"]);
         let p = s.platforms().unwrap();
         assert_eq!(p["github"].0, vec!["webkubor"]);
@@ -846,7 +1054,10 @@ mod tests {
         assert!(err.contains("git 冲突标记"), "应提示冲突：{err}");
 
         let before = fs::read_to_string(d.path().join("secrets.json")).unwrap();
-        let set_err = s.set_secret("secret://github/a", "v").unwrap_err().to_string();
+        let set_err = s
+            .set_secret("secret://github/a", "v")
+            .unwrap_err()
+            .to_string();
         assert!(
             set_err.contains("git 冲突标记"),
             "set 应继承 load 的错误：{set_err}"
@@ -904,10 +1115,7 @@ mod tests {
         // set 应创建文件
         s.set_secret("secret://github/init", "v").unwrap();
         assert!(d.path().join("secrets.json").exists());
-        assert_eq!(
-            s.get_secret("secret://github/init").unwrap().unwrap(),
-            "v"
-        );
+        assert_eq!(s.get_secret("secret://github/init").unwrap().unwrap(), "v");
     }
 
     /// 单元测试 has_git_conflict_markers 自身 —— 几个变体都该识别。
@@ -916,12 +1124,70 @@ mod tests {
         assert!(Store::has_git_conflict_markers("<<<<<<<"));
         assert!(Store::has_git_conflict_markers(">>>>>>>"));
         assert!(Store::has_git_conflict_markers("|||||||")); // diff3 风格
-        assert!(Store::has_git_conflict_markers(
-            r#"{"a": "<<<<<<< HEAD"}"#
-        ));
+        assert!(Store::has_git_conflict_markers(r#"{"a": "<<<<<<< HEAD"}"#));
         assert!(!Store::has_git_conflict_markers(r#"{"a": "x"}"#));
         assert!(!Store::has_git_conflict_markers(
             "密文里包含 < 和 > 字符也不该误判"
         ));
+    }
+
+    #[test]
+    fn meta_json_enrichment_and_annotate() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = Store::new(dir.path());
+        s.init_master_key().unwrap();
+        s.save_meta(&serde_json::Map::new()).unwrap();
+
+        // 写入初始密钥（meta.json 存在时自动记录 last4 / sha256 / length）
+        s.set_secret("secret://github/pat", "ghp_12345678").unwrap();
+
+        // 创建 meta.json 并 annotate
+        s.annotate(
+            "secret://github/pat",
+            Some("my-account"),
+            Some("Personal Token"),
+            Some("my-org"),
+            Some("repo,read:org"),
+            Some("local"),
+        )
+        .unwrap();
+
+        // list_secrets 应该富集这些字段
+        let list = s.list_secrets().unwrap();
+        let hit = list
+            .iter()
+            .find(|x| x.name == "pat" && x.platform == "github")
+            .unwrap();
+        assert_eq!(hit.account, "my-account");
+        assert_eq!(hit.kind, "Personal Token");
+        assert_eq!(hit.org, "my-org");
+        assert_eq!(hit.scopes, "repo,read:org");
+        assert_eq!(hit.visibility, "local");
+        assert_eq!(hit.last4, "5678");
+
+        // 删除密钥应同步清理 meta.json
+        s.delete_secret("secret://github/pat").unwrap();
+        let meta = s.load_meta().unwrap();
+        assert!(!meta.contains_key("github/pat"));
+    }
+
+    #[test]
+    fn store_lock_is_exclusive() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = Store::new(dir.path());
+        let lock1 = s.lock().unwrap();
+
+        // 另一个尝试应该失败或者无法立即获取
+        let lock_path = dir.path().join(".lock");
+        let f2 = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&lock_path)
+            .unwrap();
+        // try_lock_exclusive should fail because lock1 holds it
+        assert!(f2.try_lock_exclusive().is_err());
+        drop(lock1);
+        // now lock can be acquired
+        assert!(f2.try_lock_exclusive().is_ok());
     }
 }

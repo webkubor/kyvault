@@ -293,6 +293,12 @@ kyvault get secret://cli/studio-cli/test-user   # output: jwt_token_test
 | - | `kyvault cli get` | Read CLI token | `kyvault cli get tool prof` |
 | - | `kyvault cli list` | List CLI tokens | `kyvault cli list` |
 | - | `kyvault cli delete`| Delete CLI token | `kyvault cli delete tool prof` |
+| **GitLab Team Collaboration** | | | |
+| - | `kyvault gitlab status` | Vault status | `kyvault gitlab status` |
+| - | `kyvault gitlab pull` | Pull latest | `kyvault gitlab pull` |
+| - | `kyvault gitlab push` | Commit & push | `kyvault gitlab push` |
+| - | `kyvault gitlab sync` | Auto sync (pull+push)| `kyvault gitlab sync` |
+| - | `kyvault gitlab setup`| Clone team repo | `kyvault gitlab setup git@gitlab.com:org/vault.git` |
 | **Self-check & update** | | | |
 | - | `kyvault doctor` | Tool self-check + repair | `kyvault doctor` |
 | - | `kyvault update` | Online tool upgrade | `kyvault update` |
