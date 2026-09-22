@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 pub struct Aliases {
     path: PathBuf,
@@ -21,9 +21,10 @@ impl Aliases {
         }
     }
 
+    /// 跟 store 用同一个根目录（`KYVAULT_STORE_DIR` 优先，回落 `~/.keyring`），
+    /// 否则 store 指到 git 仓、别名还留在 ~/.keyring，会表现成「密钥读得到、别名全丢」。
     pub fn default_location() -> Result<Self> {
-        let home = dirs::home_dir().ok_or_else(|| anyhow!("找不到 home 目录"))?;
-        Ok(Self::new(home.join(".keyring")))
+        Ok(Self::new(crate::store::default_store_dir()?))
     }
 
     /// 读不出来当空表 —— 别名坏了不该让 get/run 整个不可用，

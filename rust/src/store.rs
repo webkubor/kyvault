@@ -39,15 +39,48 @@ fn harden(path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
+/// 密钥库根目录：`KYVAULT_STORE_DIR` 优先，回落 `~/.keyring`。
+///
+/// store 和 alias 都用它，避免两处各读一次环境变量后走岔（一个指到 git 仓、
+/// 一个还在 ~/.keyring，表现是「密钥能读到但别名全丢」，很难往这上面想）。
+pub fn default_store_dir() -> Result<PathBuf> {
+    if let Ok(dir) = std::env::var("KYVAULT_STORE_DIR") {
+        let dir = dir.trim();
+        if !dir.is_empty() {
+            return Ok(PathBuf::from(shellexpand_tilde(dir)));
+        }
+    }
+    let home = dirs::home_dir().ok_or_else(|| anyhow!("找不到 home 目录"))?;
+    Ok(home.join(".keyring"))
+}
+
+/// 只展开开头的 `~` —— 环境变量里写 `~/.config/kyvault/store` 很自然，
+/// 但它由 shell 展开，直接塞进 env 时不会展开，落到这里就是个字面量目录名。
+fn shellexpand_tilde(p: &str) -> String {
+    if let Some(rest) = p.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(rest).to_string_lossy().into_owned();
+        }
+    }
+    p.to_string()
+}
+
 impl Store {
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self { root: root.into() }
     }
 
-    /// 默认位置 ~/.keyring
+    /// 默认位置。`KYVAULT_STORE_DIR` 未设置时是 `~/.keyring`（历史默认，保持兼容）。
+    ///
+    /// 可配是为了让密钥库能放进一个 git 仓库 —— 把 store 指到 clone 下来的目录，
+    /// `secrets.json`（密文）入仓、`master.key` 靠 .gitignore 留在本机，就得到了
+    /// 「GitLab 私有托管」形态，而加密逻辑一行都不用改：GitLab 后端本质就是
+    /// file 后端 + 一个 git 远端。
+    ///
+    /// 2026-09-22 起这是推荐形态。原因见 docs/proposals 那份 GitLab 后端方案，
+    /// 以及 D1 后端那次事故：解密本该是纯本地计算，不该被任何远端服务的可用性绑架。
     pub fn default_location() -> Result<Self> {
-        let home = dirs::home_dir().ok_or_else(|| anyhow!("找不到 home 目录"))?;
-        Ok(Self::new(home.join(".keyring")))
+        Ok(Self::new(default_store_dir()?))
     }
 
     fn secrets_file(&self) -> PathBuf {
