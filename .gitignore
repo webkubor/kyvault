@@ -11,3 +11,6 @@ build/
 .copilotinstructions
 .clauderules
 
+
+# agent worktree（嵌套 git 仓，不该进本仓）
+.claude/
