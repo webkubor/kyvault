@@ -14,8 +14,6 @@
   <a href="https://github.com/webkubor/kyvault/releases/latest"><img src="https://img.shields.io/github/downloads/webkubor/kyvault/total?style=for-the-badge&color=orange" alt="Downloads"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-静态二进制-orange?style=for-the-badge" alt="Rust"></a>
   <a href="#-安装"><img src="https://img.shields.io/badge/依赖-零运行时-4c9a6b?style=for-the-badge" alt="零运行时依赖"></a>
-  <a href="https://github.com/astral-sh/uv"><img src="https://img.shields.io/badge/Built%20with-uv-000000?style=for-the-badge" alt="uv"></a>
-  <a href="https://github.com/psf/black"><img src="https://img.shields.io/badge/code%20style-black-000000?style=for-the-badge" alt="Black"></a>
 </p>
 
 ---
@@ -37,26 +35,34 @@
 ## 🔥 一屏特性亮点
 
 * 🔒 **AI 安全别名注入 (AI-Safe)**: AI 只能看到无害别名（如 `github_token`），运行时单向注入，彻底防止密钥在 AI 聊天日志或训练数据中泄露。
-* 🤖 **多平台 CLI 智能对接 (AI Connect)**: 一键 `kyvault connect`，自动将规则和技能注入 `Gemini/agy/Claude/Codex/Hermes/OpenCode` 规则库。
+* 🌐 **本地极客 Web GUI 与向导 (Web GUI & Wizard)**: 一键 `ky ui` 唤起本地极客暗黑风面板；`ky wizard` 提供终端四步分类引导，彻底告别命名不统一。
+* 🛡️ **Auth Guard 多因素授权守卫 (Multi-Factor Guard)**: 根密钥加密为 `master.key.enc`，支持本地 SSH 公钥无感解锁 + Google Authenticator 动态门禁。
+* 🤖 **多平台 CLI 智能对接 (AI Connect)**: 一键 `ky connect`，自动将规则和技能注入 `Gemini/agy/Claude/Codex/Hermes/DSH` 记忆与规则库。
 * 🖥️ **开发者加密台账中心 (Developer Ledger)**: 加密管理服务器账号密码、云服务租金、CLI 客户端多 Profile 凭证令牌，支持 URI 寻址。
-* 🛡️ **失效密钥覆写防腐 (Overwrite Policy)**: 拦截 API 401 报错，刚性规定 Agent 必须立刻覆写（Overwrite）修改失效 Key，杜绝保守残留。
+* ⚡ **极简短命令 (First-Class `ky`)**: `ky` 作为官方第一公民，敲 `ky list`、`ky run`、`ky ui` 享受最极客的开发者心流。
 
 ---
 
 ## ⚡ 30 秒上手
 
 ```bash
-# 安装并初始化
+# 1. 一键安装（自动就绪 kyvault 与短命令 ky）
 curl -fsSL https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh | bash
 
-# 一键连接本地所有 AI 智能体 (Claude/Codex/Hermes/OpenCode/Cursor)
-kyvault connect
+# 2. 一键连接本地所有 AI 智能体 (Claude / Codex / agy / Hermes / Cursor)
+ky connect
 
-# AI 零明文注入运行
-kyvault run --env GITHUB_TOKEN=secret://github/personal-pat -- git push
+# 3. 极客 Web GUI 可视化录入与检索（自动打开本地浏览器）
+ky ui
+
+# 4. 或命令行引导式规范录入
+ky wizard
+
+# 5. AI 零明文注入运行（代码与日志中绝对安全）
+ky run --env GITHUB_TOKEN=secret://github/pat -- git push
 ```
 
-> **关于「快捷别名」：** Python 实现确实有 `ky` / `kyi` / `kya` / `kyk` / `kyp` / `kyr` / `kyconnect` 这些短名（用 Click 装饰器），Rust 实现把这些去掉了——子命令从 `kyvault` 起，**`kyvault init` / `kyvault run` / `kyvault connect` 已经是 shell-completion 友好的最短路径**。这是有意的取舍：少一个名字就少一份维护负担，硬要让 Rust 也带短名只会让两条命令面漂得更远。常用 shell 别名可以自己在 `~/.zshrc` / `~/.bashrc` 加。
+> 💡 **关于快捷短命令 `ky`**：`ky` 是 `kyvault` 的官方第一公民短命令，两者完全等价。敲 `ky list`、`ky run`、`ky ui` 即可体验极致的极客开发流。
 
 ---
 

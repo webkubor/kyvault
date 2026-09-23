@@ -91,6 +91,7 @@ install_from_release() {
   [ -n "$found" ] || { warn "压缩包里找不到 $BIN_NAME"; return 1; }
   mkdir -p "$INSTALL_DIR"
   install -m 0755 "$found" "$INSTALL_DIR/$BIN_NAME"
+  ln -sf "$INSTALL_DIR/$BIN_NAME" "$INSTALL_DIR/ky"
   return 0
 }
 
@@ -132,10 +133,11 @@ fi
 
 BIN="$INSTALL_DIR/$BIN_NAME"
 [ -x "$BIN" ] || die "装完却找不到可执行文件：$BIN"
+ln -sf "$BIN" "$INSTALL_DIR/ky"
 
 say ""
 say "✅ 安装完成：$($BIN --version)"
-say "   位置：$BIN"
+say "   命令：$BIN （或快捷短命令 ky）"
 
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
