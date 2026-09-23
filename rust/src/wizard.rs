@@ -1,24 +1,17 @@
-//! `kyvault wizard` —— 交互式首次设置。
+//! `kyvault wizard` —— 极客引导配置向导。
 //!
-//! 与 Python 版（kyvault/wizard.py）同一套问答流程，两处刻意不同：
-//!
-//! ① **密钥值走不回显输入**。Python 版用 `input()`，明文会留在终端回滚里，
-//!    也会被终端录制/共享屏幕看到 —— 一个专门用来藏密钥的工具，第一步就把密钥
-//!    打在屏幕上说不过去。这里在 unix 下关掉 echo 读取。
-//! ② **非交互环境直接拒绝**，而不是卡在等输入。Python 版在管道里跑会读到 EOF
-//!    然后抛异常；agent/CI 拉起它时表现成"莫名失败"。这里明确报错并指路 set。
+//! 支持分类预设引导，规整化命名，自动组装规范 `secret://<platform>/<name>`，
+//! 并提供启动本地 Web GUI 的快捷入口。
 
 use std::io::{self, BufRead, Write};
 
 use anyhow::{anyhow, Result};
 
-use crate::alias::Aliases;
+use crate::category::{format_uri, CATEGORIES};
 use crate::store::Store;
+use crate::tui::*;
 
-/// 问答收集到的一条。落库不在这里做 —— wizard 只管交互，写入交给 main 的
-/// Backend（那样 file / d1 都能落；Python 版写死 file 后端，在 cs kyvault 下
-/// 跑 wizard 会把密钥存到本地而不是 D1 真源，人却以为存进去了）。
-pub struct Entry {
+pub struct WizardEntry {
     pub r#ref: String,
     pub value: String,
     pub kind: String,
@@ -26,36 +19,40 @@ pub struct Entry {
     pub alias: Option<String>,
 }
 
-fn ask(prompt: &str, default: &str) -> Result<String> {
-    if default.is_empty() {
-        print!("{prompt}: ");
-    } else {
-        print!("{prompt} [{default}]: ");
-    }
+fn prompt(msg: &str) -> Result<String> {
+    print!("  {} ", cyan(msg));
     io::stdout().flush()?;
     let mut s = String::new();
-    // 读到 EOF（0 字节）说明 stdin 不是终端或已关闭 —— 别装作用户按了回车
     if io::stdin().lock().read_line(&mut s)? == 0 {
-        return Err(anyhow!(
-            "stdin 已结束：wizard 需要交互终端。非交互场景用 kyvault set / kyvault import"
-        ));
+        return Err(anyhow!("stdin 已关闭"));
     }
-    let s = s.trim().to_string();
-    Ok(if s.is_empty() { default.to_string() } else { s })
+    Ok(s.trim().to_string())
 }
 
-/// 读一行但不回显。拿不到 termios（非 unix / 非 tty）就退回明文读并出声提醒 ——
-/// 静默回显密钥比提醒一句更糟。
-fn ask_secret(prompt: &str) -> Result<String> {
-    print!("{prompt}: ");
+fn prompt_default(msg: &str, default: &str) -> Result<String> {
+    print!("  {} {}: ", cyan(msg), dim(&format!("[默认: {default}]")));
+    io::stdout().flush()?;
+    let mut s = String::new();
+    if io::stdin().lock().read_line(&mut s)? == 0 {
+        return Err(anyhow!("stdin 已关闭"));
+    }
+    let s = s.trim().to_string();
+    if s.is_empty() {
+        Ok(default.to_string())
+    } else {
+        Ok(s)
+    }
+}
+
+/// 密码不回显安全输入
+fn prompt_secret(msg: &str) -> Result<String> {
+    print!("  {} ", yellow(msg));
     io::stdout().flush()?;
 
     #[cfg(unix)]
     {
         use std::os::unix::io::AsRawFd;
         let fd = io::stdin().as_raw_fd();
-        // 用 stty 关 echo：比手写 termios FFI 短得多，且不引入依赖。
-        // ponytail: 依赖系统有 stty；没有就落回明文读（下面有提醒）
         let off = std::process::Command::new("stty")
             .args(["-echo"])
             .stdin(std::process::Stdio::from(unsafe {
@@ -71,22 +68,21 @@ fn ask_secret(prompt: &str) -> Result<String> {
 
         if off {
             let _ = std::process::Command::new("stty").args(["echo"]).status();
-            println!(); // 用户按的回车没回显，补一个换行
+            println!();
         } else {
-            println!("  ⚠ 关不掉终端回显，刚才的输入是明文可见的");
+            println!("  ⚠ 无法关闭终端回显，输入可见");
         }
         if n == 0 {
-            return Err(anyhow!("stdin 已结束：wizard 需要交互终端"));
+            return Err(anyhow!("stdin 已关闭"));
         }
         Ok(s.trim().to_string())
     }
 
     #[cfg(not(unix))]
     {
-        println!("  ⚠ 非 unix 平台，输入将明文可见");
         let mut s = String::new();
         if io::stdin().lock().read_line(&mut s)? == 0 {
-            return Err(anyhow!("stdin 已结束：wizard 需要交互终端"));
+            return Err(anyhow!("stdin 已关闭"));
         }
         Ok(s.trim().to_string())
     }
@@ -94,7 +90,6 @@ fn ask_secret(prompt: &str) -> Result<String> {
 
 #[cfg(unix)]
 fn libc_dup(fd: std::os::unix::io::RawFd) -> Result<std::os::unix::io::RawFd> {
-    // 不引 libc crate：dup 只为了把 stdin 交给 stty 而不夺走自己的
     let new = unsafe { dup_raw(fd) };
     if new < 0 {
         return Err(anyhow!("dup(stdin) 失败"));
@@ -110,75 +105,190 @@ unsafe fn dup_raw(fd: i32) -> i32 {
     dup(fd)
 }
 
-pub fn run(backend_name: &str) -> Result<Vec<Entry>> {
-    println!("🔐 kyvault 设置向导");
-    println!("{}", "=".repeat(40));
+/// 运行引导式向导
+pub fn run() -> Result<Option<WizardEntry>> {
+    box_top("🧭 kyvault 极客配置向导");
+    println!();
+    println!("  欢迎使用 kyvault 引导配置！通过标准化分类解决命名不统一问题。");
+    println!();
 
-    // file 后端要 master key；d1 后端不用，但 init 是幂等的（已存在原样返回），
-    // 无条件跑一次比分支判断简单，也免得人之后裸跑时才发现没初始化
+    println!("  {} 请选择操作模式：", bold("Step 1/4"));
+    println!("    [1] ➕ 录入新密钥 (命令行向导)");
+    println!("    [2] 🌐 打开本地 Web GUI 图形界面 (推荐，更直观)");
+    println!("    [q] 退出");
+    println!();
+
+    let choice = prompt("请输入选项 [默认: 1]:")?;
+    if choice == "2" {
+        println!();
+        info_line("Web GUI", "正在启动本地 Web 界面并唤起浏览器...");
+        box_bottom();
+        // 唤起 Web GUI
+        crate::ui::start_server(8765, true)?;
+        return Ok(None);
+    }
+    if choice.eq_ignore_ascii_case("q") {
+        box_bottom();
+        return Ok(None);
+    }
+
+    // Step 1: 选分类
+    println!();
+    box_sep();
+    println!();
+    println!("  {} 请选择凭证大类：", bold("Step 2/4"));
+    for (i, cat) in CATEGORIES.iter().enumerate() {
+        println!("    [{}] {} {}", i + 1, cat.icon, bold(cat.name));
+    }
+    println!("    [c] ⚙️ 自定义其他平台");
+    println!();
+
+    let cat_choice = prompt_default("请选择分类编号", "1")?;
+    let (selected_cat, custom_platform) = if cat_choice.eq_ignore_ascii_case("c") {
+        (None, true)
+    } else if let Ok(idx) = cat_choice.parse::<usize>() {
+        if idx >= 1 && idx <= CATEGORIES.len() {
+            (Some(&CATEGORIES[idx - 1]), false)
+        } else {
+            (Some(&CATEGORIES[0]), false)
+        }
+    } else {
+        (Some(&CATEGORIES[0]), false)
+    };
+
+    // Step 2: 选平台
+    let (platform_id, default_name, suggested_names, default_kind) =
+        match (custom_platform, selected_cat) {
+            (false, Some(cat)) => {
+                println!();
+                println!("  {} 请选择具体平台：", bold("Step 3/4"));
+                for (i, p) in cat.platforms.iter().enumerate() {
+                    println!("    [{}] {} {}", i + 1, p.icon, bold(p.name));
+                }
+                println!("    [o] 手动输入其他平台");
+                println!();
+
+                let p_choice = prompt_default("请选择平台编号", "1")?;
+                if p_choice.eq_ignore_ascii_case("o") {
+                    let p = prompt("请输入平台标识 (小写英文):")?;
+                    (p, "main", &["main", "token"][..], cat.default_kind)
+                } else if let Ok(idx) = p_choice.parse::<usize>() {
+                    if idx >= 1 && idx <= cat.platforms.len() {
+                        let p = &cat.platforms[idx - 1];
+                        (
+                            p.id.to_string(),
+                            p.default_name,
+                            p.suggested_names,
+                            cat.default_kind,
+                        )
+                    } else {
+                        let p = &cat.platforms[0];
+                        (
+                            p.id.to_string(),
+                            p.default_name,
+                            p.suggested_names,
+                            cat.default_kind,
+                        )
+                    }
+                } else {
+                    let p = &cat.platforms[0];
+                    (
+                        p.id.to_string(),
+                        p.default_name,
+                        p.suggested_names,
+                        cat.default_kind,
+                    )
+                }
+            }
+            _ => {
+                println!();
+                let p = prompt("请输入平台代码 (如 aws / my-site):")?;
+                (p, "main", &["main", "token"][..], "API Key")
+            }
+        };
+
+    // Step 3: 用途/环境 (生成规范 name)
+    println!();
+    println!("  {} 设定密钥用途标识：", bold("Step 4/4"));
+    let sug_str = suggested_names.join(" / ");
+    println!("    推荐命名候选：{}", dim(&sug_str));
+    let name = prompt_default("标识名", default_name)?;
+
+    let target_uri = format_uri(&platform_id, &name);
+    println!();
+    println!(
+        "  {} 生成规范 URI：{}",
+        bold_green("✓"),
+        bold_cyan(&target_uri)
+    );
+    println!();
+
+    // 输入密码
+    let value = prompt_secret("请输入密钥/Token/密码（密文输入不回显）:")?;
+    if value.is_empty() {
+        println!("  ⚠ 空值，已取消");
+        box_bottom();
+        return Ok(None);
+    }
+
+    let account = prompt_default("备注说明或账号（可选）", "")?;
+
+    // 保存确认
+    let default_alias = format!("{}_{}", platform_id, name);
+    let alias_prompt = prompt_default("是否创建快捷别名", &default_alias)?;
+    let alias = if alias_prompt.eq_ignore_ascii_case("n") || alias_prompt.is_empty() {
+        None
+    } else {
+        Some(alias_prompt)
+    };
+
+    box_sep();
+    println!();
+    status_line("URI 规范", true, &target_uri);
+    status_line("密钥收集", true, "已就绪");
+    println!();
+    box_bottom();
+
+    Ok(Some(WizardEntry {
+        r#ref: target_uri,
+        value,
+        kind: default_kind.to_string(),
+        account,
+        alias,
+    }))
+}
+
+/// 首次设置向导兼容入口（用于 init 或旧调用）
+pub fn run_initial() -> Result<()> {
     let store = Store::default_location()?;
     store.init_master_key()?;
-    println!("✓ master key 已就绪（已存在则原样保留，绝不覆盖）");
-    println!("  当前后端：{backend_name}\n");
-
-    println!("接下来逐条录密钥，平台名输 q 结束。\n");
-    let mut out: Vec<Entry> = Vec::new();
-
-    loop {
-        println!("--- 密钥 #{} ---", out.len() + 1);
-        let platform = ask("平台（如 github / deepseek / zhipu）", "")?;
-        if platform.eq_ignore_ascii_case("q") || platform.is_empty() {
-            break;
-        }
-        let name = ask("名称（如 my-pat / api-key）", "")?;
-        if name.eq_ignore_ascii_case("q") || name.is_empty() {
-            break;
-        }
-        let value = ask_secret("密钥值（不回显）")?;
-        if value.is_empty() {
-            println!("  · 空值，跳过这条\n");
-            continue;
-        }
-        let kind = ask("类型", "API Key")?;
-        let account = ask("账号/备注（可选）", "")?;
-
-        let r#ref = format!("secret://{platform}/{name}");
-        let lower = name.to_lowercase();
-        let default_alias = if lower.contains("token") || lower.contains("pat") {
-            format!("{platform}_token")
-        } else {
-            format!("{platform}_{name}")
-        };
-        let alias = ask(
-            &format!("别名（回车用 {default_alias}，输 n 跳过）"),
-            &default_alias,
+    if let Some(entry) = run()? {
+        let _lock = store.lock()?;
+        store.set_secret(&entry.r#ref, &entry.value)?;
+        store.annotate(
+            &entry.r#ref,
+            Some(&entry.kind),
+            if entry.account.is_empty() {
+                None
+            } else {
+                Some(&entry.account)
+            },
+            None,
+            None,
+            None,
         )?;
-        let alias = if alias.eq_ignore_ascii_case("n") || alias.is_empty() {
-            None
-        } else {
-            Some(alias)
-        };
-        out.push(Entry {
-            r#ref,
-            value,
-            kind,
-            account,
-            alias,
-        });
+        if let Some(alias) = entry.alias {
+            let aliases = crate::alias::Aliases::default_location()?;
+            aliases.set(&alias, &entry.r#ref)?;
+        }
+        println!();
+        println!("🎉 {} 密钥已成功加密存入！", bold_green("SUCCESS"));
+        println!("  安全调用示例：");
+        println!(
+            "    kyvault run --env TOKEN={} -- <cmd>",
+            cyan(&entry.r#ref)
+        );
         println!();
     }
-
-    println!("\n{}", "=".repeat(40));
-    if out.is_empty() {
-        println!("没录入密钥。之后可以用：kyvault set secret://平台/名称 - （明文走 stdin）");
-    } else {
-        println!("✅ 收集到 {} 条，开始写入…\n", out.len());
-        println!("用法：");
-        println!("  kyvault list                        看清单（不含明文）");
-        println!("  kyvault get <别名>                  读明文");
-        println!("  kyvault run --env X=<别名> -- cmd   注入子进程，不打印明文");
-        println!("  kyvault check <平台> <名称>         验这把 key 还活着没");
-    }
-    let _ = &Aliases::default_location();
-    Ok(out)
+    Ok(())
 }

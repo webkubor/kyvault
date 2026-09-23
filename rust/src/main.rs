@@ -15,10 +15,13 @@ use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 
 use kyvault::alias::Aliases;
+use kyvault::auth_guard::AuthGuard;
 use kyvault::d1::D1;
+use kyvault::doctor;
 use kyvault::gitlab::GitLabRepo;
 use kyvault::model::SecretMeta;
 use kyvault::store::Store;
+use sha2::{Digest, Sha256};
 
 #[derive(Parser)]
 #[command(
@@ -158,8 +161,18 @@ enum Cmd {
         profile: Option<String>,
         token: Option<String>,
     },
-    /// 交互式首次设置（逐条录密钥 + 建别名）
+    /// 极客引导配置向导（分类引导 + 规范命名）
+    #[command(alias = "guide")]
     Wizard,
+    /// 启动本地极客 Web GUI 图形化管理界面（自动唤起浏览器）
+    Ui {
+        /// 监听端口（默认 8765）
+        #[arg(long, default_value = "8765")]
+        port: u16,
+        /// 禁止自动打开浏览器
+        #[arg(long)]
+        no_open: bool,
+    },
     /// 把密钥使用规则/技能包写进本地各家 AI 助手
     Connect,
     /// 检查并升级到最新版（走 GitHub Release + install.sh）
@@ -196,6 +209,41 @@ enum Cmd {
         #[command(subcommand)]
         action: GitLabCmd,
     },
+    /// 查看本地主密钥（master.key）信息、路径、指纹及备份导出
+    MasterKey {
+        /// 显示完整明文密钥（用于备份至 1Password / 离线密码库）
+        #[arg(long = "reveal", short = 'r')]
+        reveal: bool,
+    },
+    /// 多因素授权守卫管理（SSH Key 绑定 / TOTP 验证器）
+    Auth {
+        #[command(subcommand)]
+        action: AuthCmd,
+    },
+}
+
+#[derive(Subcommand)]
+enum AuthCmd {
+    /// 交互式首次配置（扫描 SSH 公钥 + 可选 TOTP）
+    Setup,
+    /// 添加一种授权方法（ssh \<pubkey_path\> 或 totp）
+    Add {
+        /// 方法类型：ssh 或 totp
+        method: String,
+        /// SSH 公钥路径（仅 ssh 类型需要）
+        path: Option<String>,
+    },
+    /// 列出已绑定的授权方法
+    List,
+    /// 移除一种授权方法（传 method id）
+    Remove {
+        /// 方法 ID（如 ssh-id_ed25519_github_new），用 `auth list` 查看
+        id: String,
+    },
+    /// 关闭 Auth Guard，恢复明文 master.key 模式
+    Disable,
+    /// 查看守卫状态概览
+    Status,
 }
 
 #[derive(Subcommand)]
@@ -363,7 +411,8 @@ fn run() -> Result<()> {
             let existed = store.exists();
             store.init_master_key()?;
             println!(
-                "master key 就绪（~/.keyring/master.key，0600）{}",
+                "master key 就绪（{}，0600）{}",
+                store.master_key_path().display(),
                 if existed {
                     "；已有密钥库，未改动"
                 } else {
@@ -825,20 +874,24 @@ fn run() -> Result<()> {
             }
         }
         Cmd::Wizard => {
-            let b = Backend::select()?;
-            let entries = kyvault::wizard::run(b.name())?;
-            let aliases = Aliases::default_location()?;
-            for e in &entries {
-                b.set(&e.r#ref, &e.value, &e.kind, &e.account)?;
-                println!("✓ 已保存 {}", e.r#ref);
-                if let Some(a) = &e.alias {
-                    aliases.set(a, &e.r#ref)?;
-                    println!("  别名 {a} → {}", e.r#ref);
+            if let Some(entry) = kyvault::wizard::run()? {
+                let b = Backend::select()?;
+                b.set(&entry.r#ref, &entry.value, &entry.kind, &entry.account)?;
+                println!("✓ 已保存 {}", entry.r#ref);
+                if let Some(a) = &entry.alias {
+                    let aliases = Aliases::default_location()?;
+                    aliases.set(a, &entry.r#ref)?;
+                    println!("  别名 {a} → {}", entry.r#ref);
                 }
+                println!("\n🎉 密钥已成功加密存入！");
+                println!(
+                    "  安全调用示例：kyvault run --env TOKEN={} -- <cmd>",
+                    entry.r#ref
+                );
             }
-            if !entries.is_empty() {
-                println!("\n共 {} 条已落到后端 {}", entries.len(), b.name());
-            }
+        }
+        Cmd::Ui { port, no_open } => {
+            kyvault::ui::start_server(port, !no_open)?;
         }
         Cmd::Connect => kyvault::connect::run()?,
         Cmd::Update { assume_yes } => kyvault::update::run(assume_yes)?,
@@ -970,6 +1023,73 @@ fn run() -> Result<()> {
                 GitLabRepo::setup(&repo_url, dir.as_deref())?;
             }
         },
+        Cmd::MasterKey { reveal } => {
+            let store = Store::default_location()?;
+            let mk_path = store.master_key_path();
+            println!("🔑 kyvault 主密钥 (master.key) 状态");
+            println!("{}", "-".repeat(52));
+            println!("  - 物理路径：{}", mk_path.display());
+            if !mk_path.exists() {
+                println!("  - 状态：缺失 (FAIL，请先运行 kyvault init 或从带外备份恢复)");
+                return Ok(());
+            }
+            println!("  - 文件权限：{}", doctor::perm_desc(&mk_path));
+            let key = store.master_key()?;
+            let key_trimmed = key.trim();
+
+            let mut hasher = Sha256::new();
+            hasher.update(key_trimmed.as_bytes());
+            let hash = format!("{:x}", hasher.finalize());
+            let fingerprint = &hash[..16];
+            println!("  - 密钥格式：Base64 编码 (32 字节 / 256 位随机根密钥)");
+            println!("  - 密钥指纹：SHA256:{fingerprint} (用于核对多设备/备份是否一致)");
+
+            if reveal {
+                println!("  - 密钥明文：{key_trimmed}");
+            } else {
+                let len = key_trimmed.len();
+                let masked = if len > 8 {
+                    format!("{}...{}", &key_trimmed[..4], &key_trimmed[len - 4..])
+                } else {
+                    "****".to_string()
+                };
+                println!("  - 密钥内容：{masked} (加 --reveal 或 -r 可显示完整明文)");
+            }
+            let sec_path = store.secrets_path();
+            if sec_path.exists() {
+                let count = match store.load() {
+                    Ok(v) => v.as_object().map(|m| m.len()).unwrap_or(0),
+                    Err(_) => 0,
+                };
+                println!(
+                    "  - 对应密文：{} (收纳 {} 条密钥)",
+                    sec_path.display(),
+                    count
+                );
+            }
+            println!("\n🛡️  安全备忘提示：");
+            println!("  1. master.key 是解密本地及 GitLab 密文的【唯一根密钥】；");
+            println!("  2. 它被 .gitignore 忽略，【绝对不会】也不能提交进 Git 仓库；");
+            println!(
+                "  3. 若在新设备使用，请将此密钥保存到 1Password / 加密便签，带外拷贝至目标机。"
+            );
+            println!("  4. 可运行 `kyvault auth setup` 启用 SSH Key / TOTP 多因素守卫保护。");
+            println!("{}", "-".repeat(52));
+        }
+        Cmd::Auth { action } => {
+            let store = Store::default_location()?;
+            let root = store.root();
+            match action {
+                AuthCmd::Setup => AuthGuard::setup(root)?,
+                AuthCmd::Add { method, path } => {
+                    AuthGuard::add_method(root, &method, path.as_deref())?;
+                }
+                AuthCmd::List => AuthGuard::list(root)?,
+                AuthCmd::Remove { id } => AuthGuard::remove_method(root, &id)?,
+                AuthCmd::Disable => AuthGuard::disable(root)?,
+                AuthCmd::Status => AuthGuard::status(root)?,
+            }
+        }
     }
     Ok(())
 }

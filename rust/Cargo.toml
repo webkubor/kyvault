@@ -1,6 +1,6 @@
 [package]
 name = "kyvault"
-version = "2.3.0"
+version = "2.4.0"
 edition = "2021"
 rust-version = "1.80"
 description = "本地加密密钥管理 CLI — AES-256-GCM 纯本地存储，AI 只拿别名"
@@ -27,6 +27,10 @@ clap = { version = "4", features = ["derive"] }
 ureq = { version = "2.10", default-features = false, features = ["tls", "json"] }
 dirs = "5"
 fs2 = "0.4.3"
+# Auth Guard：TOTP (RFC 6238) 需要 HMAC-SHA1 + Base32
+hmac = "0.12"
+sha-1 = "0.10"
+data-encoding = "2"
 
 [dev-dependencies]
 tempfile = "3"

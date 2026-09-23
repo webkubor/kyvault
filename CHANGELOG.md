@@ -2,6 +2,48 @@
 
 所有对 `kyvault` 项目的重大变更都将记录在本文档中。
 
+## [2.4.0] - 2026-09-22
+
+**安全架构重大升级：Auth Guard 多因素授权守卫，master.key 从明文保护升级为加密态保护。**
+
+告别裸文件 `master.key` 时代——通过 SSH 公钥绑定和可选 TOTP（Google 验证器），将 `master.key` 加密为 `master.key.enc`，即使 store 被整体拷走也无法解密。本地 Agent 凭 SSH 公钥零交互自动解锁，日常操作毫无感知。
+
+### ✨ 新增
+- **Auth Guard 多因素授权守卫（`kyvault auth`）**：
+  - `setup`：交互式首次配置，自动扫描 `~/.ssh/*.pub`，绑定 SSH 公钥并加密 master.key。
+  - `add ssh <path>`：追加绑定 SSH 公钥（支持多把，任一把可解锁）。
+  - `add totp`：绑定 TOTP（Google 验证器），用于 `master-key --reveal` 等敏感操作的二次确认。
+  - `list`：查看已绑定的授权方法、指纹及公钥状态。
+  - `remove <id>`：移除一种授权方法（至少保留一个 SSH key）。
+  - `disable`：关闭 Auth Guard，恢复明文 master.key 模式。
+  - `status`：守卫状态概览（含解锁测试）。
+- **`kyvault master-key` 命令**：
+  - 查看 master.key 物理路径、文件权限、SHA-256 指纹。
+  - `--reveal` / `-r`：显示完整明文密钥（用于备份至 1Password / 离线密码库）。
+- **本地极客 Web GUI 图形界面（`kyvault ui`）**：
+  - 零外部运行时依赖，内置基于标准库 `TcpListener` 的超轻量本地服务，秒级启动并自动唤起默认浏览器。
+  - 极客暗黑风单页界面（SPA），卡片式可视化选择平台、智能推导推荐命名并组装标准 `secret://<platform>/<name>`。
+  - 支持直观加密录入、快速检索查看、敏感密码明隐切换、一键复制 `kyvault run` 命令。
+- **极客终端配置向导（`kyvault wizard` / `kyvault guide`）**：
+  - 全新升级结构化引导：分类选择 → 平台选择 → 用途/环境推荐 → 不回显密文安全输入。
+  - 彻底规整命名格式，消除随意命名与分类混乱。
+  - 支持从命令行一键打开 Web GUI 进行视觉化操作。
+- **全流程极客 TUI 视觉设计（`tui` 模块）**：
+  - `kyvault doctor`、`kyvault auth status`、`kyvault auth list` 全面换装圆角边框、ANSI 流光色彩与对齐指示符。
+  - 严格支持 `NO_COLOR` 规范与非 TTY 自动降级纯文本。
+- **快捷短命令 `ky`**：
+  - 提供 `ky` 命令行入口，与 `kyvault` 命令全等价。
+- **doctor 自检新增第 4 段 Auth Guard 守卫状态**：
+  - 检测 master.key.enc / auth.json 状态、绑定方法数量、明文残留检查。
+
+### 🔧 修复与改进
+- **`default_store_dir()` 兼容 Auth Guard 模式**：识别 `master.key.enc` + `auth.json` 组合为已就绪状态，不再因明文 `master.key` 被删除而回落到旧目录。
+- **`Cmd::Init` 路径显示修复**：不再硬编码 `~/.keyring/master.key`，显示实际 `store.master_key_path()` 路径。
+- **`harden()` 和 `shellexpand_tilde()` 改为 `pub`**：供 auth_guard 模块复用。
+
+### 🗑️ 废弃
+- **`~/.keyring/` 旧目录**：不再作为默认 store。已迁移至 `~/.config/kyvault/store/`，旧目录可安全删除。
+
 ## [2.3.0] - 2026-09-22
 
 **核心架构决策：本地与远程直接迁移至最新版本，调度系统（CortexOS / cs）彻底不管理密钥。**

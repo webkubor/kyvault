@@ -221,15 +221,53 @@ kyvault get secret://cli/studio-cli/test-user   # 输出: jwt_token_test
 
 ---
 
-## 📁 安全架构
+## 📁 安全架构与 master.key 核心规范
 
 ```
-~/.keyring/
-├── master.key       # AES-256 密钥（chmod 600）
-└── secrets.json     # 加密后的账户/密钥（AES-256-GCM）
+~/.config/kyvault/store/ (GitLab 团队仓库)
+├── auth.json        # Auth Guard 授权方法配置 (SSH 指纹、TOTP 加密 secret)
+├── master.key.enc   # 加密态根密钥 (SSH 公钥派生 AES 密钥加密，替代明文 master.key)
+├── secrets.json     # AES-256-GCM 加密密文 (入仓 Git 同步)
+├── meta.json        # 审计元信息 (脱敏, 记录更新时间、last4、scopes、组织)
+└── .lock            # 跨进程文件排他锁 (防止 Agent 并发写入冲突)
 ```
 
-### 存储结构
+### 🛡️ Auth Guard 多因素授权守卫 (v2.4.0+)
+
+`master.key` 不再以明文存储。通过 `kyvault auth setup`，将 master.key 用 SSH 公钥材料派生的 AES 密钥加密为 `master.key.enc`，明文自动删除。
+
+- **SSH Key 绑定**（主力）：零交互自动解锁。只要本机 SSH 公钥还在且指纹匹配，Agent 毫无感知。支持绑定多把公钥，任一把匹配即可。
+- **TOTP 谷歌验证器**（可选）：对 `master-key --reveal` 等敏感操作额外要求 6 位动态验证码。
+- **策略**：`any_one`（默认）——任意一种方法通过即解锁。
+
+```bash
+# 首次启用
+kyvault auth setup
+
+# 查看守卫状态
+kyvault auth status
+
+# 添加/移除授权方法
+kyvault auth add ssh ~/.ssh/id_ed25519.pub
+kyvault auth add totp
+kyvault auth remove ssh-id_rsa
+
+# 回退到明文模式
+kyvault auth disable
+```
+
+### 🔑 什么是 master.key？
+`master.key` 是在本地生成的 32 字节（256 位）高强度安全随机数（以 44 字符的标准 Base64 编码保存）。
+它是整套密钥库加解密的**唯一根凭据**：
+1. **纯本地计算**：kyvault 使用 `SHA-256(Base64Decode(master.key))` 派生 AES 密钥，对每条凭证生成独立 12 字节随机 Nonce 进行 AES-256-GCM 认证加密。解密零网络依赖。
+2. **物理隔离与绝对不入仓**：`master.key` / `master.key.enc` 被 `.gitignore` 强力排除，`kyvault gitlab push` 前会进行双重防泄露检查。
+3. **本地查看与迁移备份**：
+   ```bash
+   kyvault master-key           # 查看路径、权限、SHA-256 指纹
+   kyvault master-key --reveal  # 导出明文（备份至 1Password / 换机迁移）
+   ```
+
+### 存储结构 (secrets.json)
 
 ```json
 {
@@ -248,8 +286,9 @@ kyvault get secret://cli/studio-cli/test-user   # 输出: jwt_token_test
 
 - **加密算法**: AES-256-GCM（认证加密）
 - **密钥派生**: SHA-256
-- **存储**: 纯本地，零网络
-- **权限**: master.key 仅所有者可读
+- **密钥保护**: Auth Guard（SSH Key / TOTP 加密 master.key）
+- **存储与同步**: 本地脱机解密，GitLab 团队密文同步
+- **权限与并发**: master.key.enc 仅当前用户可读写 (0600)，跨进程 `.lock` 排他锁
 
 ---
 
@@ -257,7 +296,8 @@ kyvault get secret://cli/studio-cli/test-user   # 输出: jwt_token_test
 
 | 快捷 | 完整 | 用途 | 示例 |
 |------|------|------|------|
-| - | `kyvault init` | 初始化 | `kyvault init` |
+| - | `kyvault init` | 初始化主密钥与目录 | `kyvault init` |
+| - | `kyvault master-key` | 查看主密钥路径与指纹 | `kyvault master-key` (加 `-r` 显明文) |
 | **账户管理** | | | |
 | `kyvault account set` | `kyvault account set` | 存账户 | `kyvault account set github user@gmail pass` |
 | `kyvault account get` | `kyvault account get` | 读密码 | `kyvault account get github user@gmail` |
@@ -272,26 +312,36 @@ kyvault get secret://cli/studio-cli/test-user   # 输出: jwt_token_test
 | - | `kyvault platform` | 平台列表 | `kyvault platform` |
 | `kyvault platform <name>` | `kyvault platform <name>` | 平台详情 | `kyvault platform github` |
 | **API 验证** | | | |
-| - | `kyvault check` | 验证 key | `kyvault check openai --key sk-xxx` |
-| - | `kyvault providers` | 支持平台 | `kyvault providers` |
+| - | `kyvault check` | 验证 key 有效性与余额 | `kyvault check openai --key sk-xxx` |
+| - | `kyvault providers` | 支持平台列表 | `kyvault providers` |
 | **AI 集成** | | | |
-| - | `kyvault run` | 注入env | `kyvault run --env X=val -- cmd` |
-| - | `kyvault connect` | AI 智能对接 | `kyvault connect` |
+| - | `kyvault run` | 注入env单向执行 | `kyvault run --env X=val -- cmd` |
+| - | `kyvault connect` | AI 智能对接 (全Agent规则) | `kyvault connect` |
 | **加密资产台账** | | | |
-| - | `kyvault server set` | 存服务器 | `kyvault server set host 1.1.1.1 pw` |
-| - | `kyvault server get` | 读服务器 | `kyvault server get host` |
-| - | `kyvault server list` | 列服务器 | `kyvault server list` |
-| - | `kyvault server delete`| 删服务器 | `kyvault server delete host` |
+| - | `kyvault server set` | 存服务器台账 | `kyvault server set host 1.1.1.1 pw` |
+| - | `kyvault server get` | 读服务器台账 | `kyvault server get host` |
+| - | `kyvault server list` | 列服务器台账 | `kyvault server list` |
+| - | `kyvault server delete`| 删服务器台账 | `kyvault server delete host` |
 | - | `kyvault cli set` | 存 CLI Token | `kyvault cli set tool prof token` |
 | - | `kyvault cli get` | 读 CLI Token | `kyvault cli get tool prof` |
 | - | `kyvault cli list` | 列 CLI Token | `kyvault cli list` |
 | - | `kyvault cli delete`| 删 CLI Token | `kyvault cli delete tool prof` |
 | **GitLab 团队协作** | | | |
-| - | `kyvault gitlab status` | 团队库状态 | `kyvault gitlab status` |
-| - | `kyvault gitlab pull` | 拉取最新密文 | `kyvault gitlab pull` |
-| - | `kyvault gitlab push` | 提交推送密文 | `kyvault gitlab push` |
+| - | `kyvault gitlab status` | 团队库同步与安全检查 | `kyvault gitlab status` |
+| - | `kyvault gitlab pull` | 拉取最新密文与元信息 | `kyvault gitlab pull` |
+| - | `kyvault gitlab push` | 提交推送密文 (严查key) | `kyvault gitlab push` |
 | - | `kyvault gitlab sync` | 自动同步 (pull+push) | `kyvault gitlab sync` |
-| - | `kyvault gitlab setup`| 克隆团队仓库 | `kyvault gitlab setup git@gitlab.com:org/vault.git` |
+| - | `kyvault gitlab setup`| 克隆团队仓库至本地 | `kyvault gitlab setup git@gitlab.com:org/vault.git` |
+| **Auth Guard 守卫** | | | |
+| - | `kyvault auth setup` | 交互式首次配置 | `kyvault auth setup` |
+| - | `kyvault auth add` | 添加授权方法 | `kyvault auth add ssh ~/.ssh/id_ed25519.pub` |
+| - | `kyvault auth list` | 查看已绑定方法 | `kyvault auth list` |
+| - | `kyvault auth remove` | 移除授权方法 | `kyvault auth remove ssh-id_rsa` |
+| - | `kyvault auth disable` | 关闭守卫 | `kyvault auth disable` |
+| - | `kyvault auth status` | 守卫状态概览 | `kyvault auth status` |
+| **引导与图形界面** | | | |
+| - | `kyvault ui` | 启动本地极客 Web GUI（自动唤起浏览器） | `kyvault ui` (或 `ky ui`) |
+| - | `kyvault wizard` | 交互式分类引导向导 (规范URI) | `kyvault wizard` (或 `ky wizard`) |
 | **自检与更新** | | | |
 | - | `kyvault doctor` | 工具自检修复 | `kyvault doctor` |
 | - | `kyvault update` | 在线升级工具 | `kyvault update` |

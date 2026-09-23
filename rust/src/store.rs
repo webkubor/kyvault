@@ -42,7 +42,7 @@ pub struct Store {
 /// 但**不能因此就让 `from_mode` 出现在 Windows 的编译路径里**：
 /// `std::os::unix` 在 Windows 上根本不存在，无条件 use 会直接编译失败。
 /// 这正是此前 CI 里没有 Windows target 的隐性原因之一。
-fn harden(path: &std::path::Path) -> Result<()> {
+pub fn harden(path: &std::path::Path) -> Result<()> {
     #[cfg(unix)]
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
     #[cfg(not(unix))]
@@ -63,9 +63,13 @@ pub fn default_store_dir() -> Result<PathBuf> {
     }
     let home = dirs::home_dir().ok_or_else(|| anyhow!("找不到 home 目录"))?;
     // 优先使用 ~/.config/kyvault/store（GitLab 私有团队仓）。
-    // 密文与 master.key 都在才算就绪，避免指到尚未初始化的空目录。
+    // 密文存在 + 根密钥可用（明文 master.key 或 Auth Guard 模式的 master.key.enc）
+    // 才算就绪，避免指到尚未初始化的空目录。
     let preferred = home.join(".config").join("kyvault").join("store");
-    if preferred.join("secrets.json").exists() && preferred.join("master.key").exists() {
+    let has_secrets = preferred.join("secrets.json").exists();
+    let has_master = preferred.join("master.key").exists()
+        || (preferred.join("master.key.enc").exists() && preferred.join("auth.json").exists());
+    if has_secrets && has_master {
         return Ok(preferred);
     }
     Ok(home.join(".keyring"))
@@ -73,7 +77,7 @@ pub fn default_store_dir() -> Result<PathBuf> {
 
 /// 只展开开头的 `~` —— 环境变量里写 `~/.config/kyvault/store` 很自然，
 /// 但它由 shell 展开，直接塞进 env 时不会展开，落到这里就是个字面量目录名。
-fn shellexpand_tilde(p: &str) -> String {
+pub fn shellexpand_tilde(p: &str) -> String {
     if let Some(rest) = p.strip_prefix("~/") {
         if let Some(home) = dirs::home_dir() {
             return home.join(rest).to_string_lossy().into_owned();
@@ -162,14 +166,21 @@ impl Store {
         Ok(())
     }
 
-    /// master key：环境变量优先，其次本地文件。与 Python 版同序，
-    /// 否则 CI/容器里注入的 key 会被本地文件悄悄盖掉。
+    /// master key：环境变量优先，其次 Auth Guard 解锁，最后明文文件。
+    /// 与 Python 版同序，否则 CI/容器里注入的 key 会被本地文件悄悄盖掉。
     pub fn master_key(&self) -> Result<String> {
+        // 1. 环境变量注入（CI / 容器 / Agent 场景，完全绕过 guard）
         if let Ok(k) = std::env::var("KEYRING_MASTER_KEY") {
             if !k.trim().is_empty() {
                 return Ok(k.trim().to_string());
             }
         }
+        // 2. Auth Guard 启用时，走 SSH Key 自动解锁
+        if crate::auth_guard::AuthGuard::is_enabled(&self.root) {
+            let guard = crate::auth_guard::AuthGuard::load(&self.root)?;
+            return guard.unlock();
+        }
+        // 3. 传统模式：直接读明文 master.key
         let f = self.master_key_file();
         if f.exists() {
             return Ok(fs::read_to_string(&f)?.trim().to_string());
