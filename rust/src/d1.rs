@@ -33,8 +33,7 @@ impl D1 {
     ///
     /// 为什么要自举：连 D1 的 Cloudflare token 本身就是密钥，不能明文放配置
     /// 文件；而只认环境变量的后果是——裸跑 kyvault 连不上真源，必须靠外部
-    /// 包装器（此前是 `cs kyvault`）注入。于是调度系统被迫持有所有密钥，
-    /// 而且 kyvault 每加一个字段，包装器就得跟着改一次。
+    /// 包装脚本注入，容易造成耦合。
     ///
     /// 解法是用它自己的本地库自举：`~/.keyring/`（master.key 0600）加密存
     /// 这三件套（platform=kyvault，不能用下划线开头 —— 那是保留命名空间，get 读不到），启动时先解出来再连 D1。密钥库自己管住了连自己的钥匙，
@@ -169,7 +168,7 @@ impl D1 {
             .ok_or_else(|| {
                 anyhow!(
                     "D1 的 site_config 里还没有 secret_vault_master_key。\
-                     先用 cs kyvault set 写入至少一条密钥完成初始化。"
+                     先用 kyvault set 写入至少一条密钥完成初始化。"
                 )
             })?;
         let k = d1_key(encoded)?;

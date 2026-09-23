@@ -12,13 +12,13 @@
 set -euo pipefail
 
 # 库里所有 -app-id 结尾的机器人（去掉后缀就是机器人名）
-mapfile -t ALL < <(cs kyvault list 2>/dev/null \
+mapfile -t ALL < <(kyvault list 2>/dev/null \
   | grep -oE 'secret://(feishu|lark)/[a-z0-9-]+-app-id' \
   | sed -E 's|secret://(feishu\|lark)/||; s|-app-id$||' | sort -u)
 
 if [ ${#ALL[@]} -eq 0 ]; then
   echo "✗ 从 kyvault 读不到机器人。"
-  echo "  多半是 D1 连不上（fleetvault 挂了？）—— 先确认 cs kyvault list 有输出。"
+  echo "  请确认本地密钥库 kyvault list 有输出。"
   exit 1
 fi
 
@@ -29,9 +29,9 @@ ok=0 skip=0 miss=0
 for bot in "${WANT[@]}"; do
   # 平台可能是 feishu 或 lark
   plat=feishu
-  cs kyvault get "secret://feishu/${bot}-app-id" >/dev/null 2>&1 || plat=lark
-  id=$(cs kyvault get "secret://${plat}/${bot}-app-id" 2>/dev/null | tail -1)
-  sec=$(cs kyvault get "secret://${plat}/${bot}-app-secret" 2>/dev/null | tail -1)
+  kyvault get "secret://feishu/${bot}-app-id" >/dev/null 2>&1 || plat=lark
+  id=$(kyvault get "secret://${plat}/${bot}-app-id" 2>/dev/null | tail -1)
+  sec=$(kyvault get "secret://${plat}/${bot}-app-secret" 2>/dev/null | tail -1)
   if [ ${#id} -lt 8 ] || [ ${#sec} -lt 8 ]; then
     echo "⊘ $bot：库里不成对（缺 app-id 或 app-secret），跳过"
     miss=$((miss+1)); continue

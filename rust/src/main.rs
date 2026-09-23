@@ -1,8 +1,7 @@
 //! kyvault CLI。
 //!
-//! 后端由 KYVAULT_BACKEND 选：默认 file（~/.keyring），设成 d1 走 Cloudflare D1。
-//! 这和 Python 版完全一致 —— 同一台机器上两个实现必须看到同一份数据，
-//! 否则「用 kyvault 存了、cs kyvault 读不到」这类事故会立刻发生。
+//! 后端由 KYVAULT_BACKEND 选：默认本地 store（~/.config/kyvault/store）。
+//! 确保数据真源统一，支持本地离线解密与团队密文同步。
 //!
 //! 输出纪律：**除了 get，任何命令都不打印明文**。list 只出元信息，
 //! run 把密钥注进子进程环境变量、不落盘不回显 —— 这是这个工具存在的理由，

@@ -72,7 +72,7 @@ kyvault run --env GITHUB_TOKEN=secret://github/personal-pat -- git push
 ### 🤖 2. Smart connect, AI zero-config aware (Zero-Config AI Connect)
 
 * **One-key connect**: Built-in `kyvault connect` discovers and injects the current machine's global Gemini/Claude rules and the current project's `.agents/` skill files.
-* **IDE-transparent**: Auto-detects project dir and appends safe-alias rules to `.cursorrules` and `.copilotinstructions`. AI agents "auto-learn" `cs secrets` usage when understanding your project — zero-touch active security ops.
+* **IDE-transparent**: Auto-detects project dir and appends safe-alias rules to `.cursorrules` and `.copilotinstructions`. AI agents "auto-learn" `kyvault` usage when understanding your project — zero-touch active security ops.
 
 ### 🖥️ 3. Encrypted asset ledger (Developer Ledger & CLI Multi-Tokens)
 

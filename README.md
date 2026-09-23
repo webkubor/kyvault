@@ -74,7 +74,7 @@ ky run --env GITHUB_TOKEN=secret://github/pat -- git push
 
 ### 🤖 2. 智能连接，AI 零配置感知 (Zero-Config AI Connect)
 * **一键连接**：内置 `kyvault connect` 命令，能自动发现并注入当前机器的全局 Gemini/Claude 规则与当前项目的 `.agents/` 技能文件。
-* **IDE 无感对接**：自动识别项目目录并追加安全别名规则到 `.cursorrules` 与 `.copilotinstructions`。AI 智能体在理解您的项目时会“自动学会”使用 `cs secrets`，实现零人工介入的主动安全运维。
+* **IDE 无感对接**：自动识别项目目录并追加安全别名规则到 `.cursorrules` 与 `.copilotinstructions`。AI 智能体在理解您的项目时会“自动学会”使用 `kyvault`，实现零人工介入的主动安全运维。
 
 ### 🖥️ 3. 加密资产台账中心 (Developer Ledger & CLI Multi-Tokens)
 * **服务器台账**：将服务器 IP、root 登录密码、云服务商及月度租用成本以第一公民的数据结构集中加密记录，统一支持 `secret://server/<host>/[ip|root-password]` 的 URI 寻址解密。

@@ -144,7 +144,7 @@ fn d1_backend_rust_encrypt_python_decrypt() {
     assert_eq!(
         py_args(PY_SPLIT_DEC, &[&master, &ct, &nonce]),
         SAMPLE,
-        "Python/Go 解不开 Rust 写的 D1 密文 —— cs kyvault 会读不出新写的密钥"
+        "Python/Go 解不开 Rust 写的 D1 密文 —— 跨语言客户端会读不出新写的密钥"
     );
 }
 

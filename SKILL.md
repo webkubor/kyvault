@@ -1,7 +1,7 @@
 ---
 name: kyvault-ops
 version: 2.4.0
-description: 使用 kyvault (或 cs kyvault、ky) 在本地与 GitLab 团队环境中端对端管理加密 API Key、服务器资产台账与多 Profile 凭证。支持 Claude、Codex、Gemini 与 Hermes 全自动读写与子进程安全注入。
+description: 使用 kyvault (或快捷短命令 ky) 在本地与 GitLab 团队环境中端对端管理加密 API Key、服务器资产台账与多 Profile 凭证。支持 Claude、Codex、Gemini 与 Hermes 全自动读写与子进程安全注入。
 license: MIT
 author: webkubor
 category: security
@@ -14,7 +14,7 @@ platforms: [linux, macos]
 
 ## 1. 核心操作命令
 
-Agent (Claude / Codex / Gemini / Hermes) 在需要读取或管理密钥时，应直接执行原生命令（或快捷短命令 `ky`、兼容别名 `cs kyvault`）：
+Agent (Claude / Codex / Gemini / Hermes) 在需要读取或管理密钥时，应直接执行原生命令（或快捷短命令 `ky`）：
 
 ```bash
 # 1. 查看密钥目录元信息（只出元信息与脱敏 last4，绝不暴露明文）
