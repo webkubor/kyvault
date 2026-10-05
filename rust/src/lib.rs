@@ -18,4 +18,5 @@ pub mod store;
 pub mod tui;
 pub mod ui;
 pub mod update;
+pub mod vaultrepo;
 pub mod wizard;

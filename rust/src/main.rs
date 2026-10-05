@@ -17,6 +17,7 @@ use kyvault::alias::Aliases;
 use kyvault::auth_guard::AuthGuard;
 use kyvault::d1::D1;
 use kyvault::doctor;
+use kyvault::vaultrepo::VaultRepo;
 use kyvault::gitlab::GitLabRepo;
 use kyvault::model::SecretMeta;
 use kyvault::store::Store;
@@ -35,8 +36,15 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// 生成 master key（已存在则原样返回，绝不覆盖）
-    Init,
+    /// 新建密钥库：生成 master key（已存在则原样返回），并默认给它建一个只装密文的 Git 仓库
+    Init {
+        /// 上传仓库地址（可以是自己的 GitLab）。不给就纯本地，只有版本历史
+        #[arg(long)]
+        remote: Option<String>,
+        /// 不建 Git 仓库（默认会建；密文进 Git 是安全的，master.key 永不入仓）
+        #[arg(long)]
+        no_git: bool,
+    },
     /// 读取密钥并打印明文 —— 唯一会输出明文的命令
     Get { r#ref: String },
     /// 写入/更新密钥；value 传 - 表示从 stdin 读（避免出现在进程参数里）
@@ -405,19 +413,43 @@ fn main() {
 fn run() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
-        Cmd::Init => {
+        Cmd::Init { remote, no_git } => {
             let store = Store::default_location()?;
             let existed = store.exists();
             store.init_master_key()?;
             println!(
                 "master key 就绪（{}，0600）{}",
                 store.master_key_path().display(),
-                if existed {
-                    "；已有密钥库，未改动"
-                } else {
-                    ""
-                }
+                if existed { "；已有密钥库，未改动" } else { "" }
             );
+            if no_git {
+                println!("已跳过 Git 仓库（--no-git）");
+                return Ok(());
+            }
+            // 默认行为：给这个库建自己的仓库，装密文。master.key / master.key.enc /
+            // auth.json 由 .gitignore 挡住，永远不进历史。
+            let repo = VaultRepo::new(store.root());
+            let created = repo.ensure_local()?;
+            println!(
+                "{}本地仓库：{}",
+                if created { "已建 " } else { "已存在 " },
+                store.root().display()
+            );
+            if let Some(url) = remote.as_deref() {
+                repo.set_remote(url)?;
+                println!("远端：{url}");
+                // 建远端仓库需要 token；没有就只设远端并说清楚「没建」，不假装成功
+                let token = std::env::var("KY_GITLAB_TOKEN").ok();
+                if token.is_none() {
+                    println!("  ℹ️  没有 KY_GITLAB_TOKEN，我不代你在远端建仓库。");
+                    println!("     远端仓库建好后再跑一次 init，或直接 git push。");
+                } else {
+                    repo.push_initial(token.as_deref())?;
+                    println!("  ✅ 已推送");
+                }
+            } else {
+                println!("  ℹ️  没给 --remote，纯本地（不联网，随时可以补远端）");
+            }
         }
         Cmd::Get { r#ref } => {
             // 先解析别名 —— 老用户脚本里写的多是 `kyvault get github_token`

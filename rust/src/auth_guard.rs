@@ -652,7 +652,11 @@ impl AuthGuard {
                 guard.config.methods.push(AuthMethod {
                     id,
                     method_type: "ssh_key".into(),
-                    key_path: Some(pk_path.to_string()),
+                    // 记 home 相对形式：这份 auth.json 会被带外复制到另一台机，
+                    // 而那台机 home 不同。记绝对路径会让目标机展开成自己的 home
+                    // 找不到文件、unlock 静默跳过，报成「没有匹配的 SSH 公钥」。
+                    // shell 里 ~ 默认先被 bash 展开，所以必须在工具这侧归一。
+                    key_path: Some(crate::vaultrepo::home_relative(&pk)),
                     fingerprint: Some(fp.clone()),
                     label: None,
                     secret_enc: Some(enc),
