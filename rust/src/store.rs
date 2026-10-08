@@ -310,6 +310,9 @@ impl Store {
         if !platform.starts_with('_') {
             for bucket in ["keys", "accounts"] {
                 if let Some(v) = self.decrypt_at(&data, &[&platform, bucket, &name], &key)? {
+                    // 校验放在成功之后返回之前：解密失败是另一类问题（key 不对/密文坏），
+                    // 校验失败是「解开了但内容不是当初写进去的那个」，分开报更好查。
+                    self.verify_meta(&platform, &name, &v)?;
                     return Ok(Some(v));
                 }
             }
@@ -337,6 +340,39 @@ impl Store {
             Some(ct) => Ok(Some(decrypt_joined(ct, key)?)),
             None => Ok(None),
         }
+    }
+
+    /// 解密后对着 meta.json 的 sha256 复算一遍，不符就拒收。
+    ///
+    /// **存量条目没有 sha256，直接放行** —— 它们是 2026-09 那次事故之前写的，
+    /// 拿「本来就没记」当「校验失败」会把整库变成不可用，那比不校验更糟。
+    /// 代价要说清楚：这个校验只对**记了 sha256 的条目**有效，也就是
+    /// 2026-09 之后经 `set` 写入的；更早被截断的存量密文它救不回来。
+    fn verify_meta(&self, platform: &str, name: &str, plain: &str) -> Result<()> {
+        let Ok(meta) = self.load_meta() else {
+            return Ok(());
+        };
+        let Some(entry) = meta
+            .get(&format!("{platform}/{name}"))
+            .and_then(|v| v.as_object())
+        else {
+            return Ok(());
+        };
+        let Some(want) = entry.get("sha256").and_then(|v| v.as_str()) else {
+            return Ok(()); // 存量：没记就不校验
+        };
+        let got = crate::model::sha256_hex(plain);
+        if got != want {
+            // 不返回明文：明文已经不对了，交给下游只会换一个更难查的报错
+            return Err(anyhow!(format!(
+                "完整性校验失败：{}/{} 的密文解出来的内容与写入时记录的 sha256 不符。\n\
+                 记录：{}\n实算：{}\n\
+                 密钥库可能被改动过，或密文写坏。**没有返回明文** —— \
+                 确认后可删掉 meta.json 里该条目的 sha256 再重试。",
+                platform, name, want, got,
+            )));
+        }
+        Ok(())
     }
 
     pub fn set_secret(&self, r: &str, value: &str) -> Result<()> {
@@ -428,6 +464,14 @@ impl Store {
             entry.insert(
                 "sha256".into(),
                 Value::String(crate::model::sha256_hex(value)),
+            );
+            // 字节数与行数：多行密钥（尤其 PEM）截断时这两个数最直观 ——
+            // 2026-09-19 那次私钥只剩一行，line_count=1 一眼就能看出来。
+            // 与 length（字符数）并存：UTF-8 下两者不等，不是重复。
+            entry.insert("byte_len".into(), Value::Number(value.len().into()));
+            entry.insert(
+                "line_count".into(),
+                Value::Number(value.lines().count().into()),
             );
             entry.insert("updated_at".into(), Value::String(crate::model::now_utc()));
             if !entry.contains_key("created_at") {
@@ -1142,7 +1186,91 @@ mod tests {
         ));
     }
 
+    /// 写入时记下 sha256；密文被换成别的内容后，get 必须拒收而不是把明文交出去。
     #[test]
+    fn get_fails_loud_when_ciphertext_swapped() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = Store::new(dir.path());
+        s.init_master_key().unwrap();
+        s.save_meta(&serde_json::Map::new()).unwrap();
+        s.set_secret("secret://wechatpay/pub", "REAL-PEM-BODY")
+            .unwrap();
+
+        // 正常时能取回
+        assert_eq!(
+            s.get_secret("secret://wechatpay/pub").unwrap().as_deref(),
+            Some("REAL-PEM-BODY")
+        );
+
+        // 把密文换成另一段内容的密文（模拟库被改动 / 密文写坏）
+        let key = s.aes_key().unwrap();
+        let other = crate::crypto::encrypt_joined("TAMPERED", &key).unwrap();
+        let mut data = s.load().unwrap();
+        data["wechatpay"]["keys"]["pub"] = Value::String(other);
+        let tmp = dir.path().join("secrets.json.tmp");
+        std::fs::write(&tmp, serde_json::to_string(&data).unwrap()).unwrap();
+        std::fs::rename(&tmp, s.secrets_path()).unwrap();
+
+        let err = s
+            .get_secret("secret://wechatpay/pub")
+            .expect_err("密文被换掉后必须报错");
+        let msg = err.to_string();
+        assert!(msg.contains("完整性校验失败"), "实际报错：{msg}");
+        // 关键：报错里不能带出明文
+        assert!(!msg.contains("TAMPERED"), "报错泄漏了明文：{msg}");
+    }
+
+    /// 存量条目没有 sha256 —— 必须放行。
+    ///
+    /// 拿「本来就没记」当「校验失败」会把整库变成不可用，比不校验更糟。
+    #[test]
+    fn legacy_entry_without_sha256_still_readable() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = Store::new(dir.path());
+        s.init_master_key().unwrap();
+        s.save_meta(&serde_json::Map::new()).unwrap();
+
+        // 直接写密文，绕过 set（= 模拟本次改动之前写进去的存量条目）
+        let key = s.aes_key().unwrap();
+        let ct = crate::crypto::encrypt_joined("legacy-value", &key).unwrap();
+        let mut data = s.load().unwrap();
+        data["legacy"]["keys"]["k"] = Value::String(ct);
+        let tmp = dir.path().join("secrets.json.tmp");
+        std::fs::write(&tmp, serde_json::to_string(&data).unwrap()).unwrap();
+        std::fs::rename(&tmp, s.secrets_path()).unwrap();
+
+        // meta.json 里没有这条 —— 应当照常读出
+        assert_eq!(
+            s.get_secret("secret://legacy/k").unwrap().as_deref(),
+            Some("legacy-value")
+        );
+    }
+
+    /// 多行密钥的行数要被记下来 —— 单行 PEM 是截断的信号（2026-09-19 那次事故）。
+    #[test]
+    fn meta_records_line_and_byte_counts() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = Store::new(dir.path());
+        s.init_master_key().unwrap();
+        s.save_meta(&serde_json::Map::new()).unwrap();
+
+        let pem = "-----BEGIN PUBLIC KEY-----\nAAAA\nBBBB\n-----END PUBLIC KEY-----";
+        s.set_secret("secret://wechatpay/pem", pem).unwrap();
+
+        let meta = s.load_meta().unwrap();
+        let e = meta["wechatpay/pem"].as_object().unwrap();
+        // BEGIN / AAAA / BBBB / END = 4 行
+        assert_eq!(e["line_count"].as_u64(), Some(4), "行数应等于 4");
+        assert_eq!(
+            e["byte_len"].as_u64(),
+            Some(pem.len() as u64),
+            "字节数应等于明文字节数"
+        );
+        // 与 length（字符数）并存：ASCII 时相等，但语义不同，别混用
+        assert!(e.contains_key("length"));
+        assert!(e.contains_key("sha256"));
+    }
+
     fn meta_json_enrichment_and_annotate() {
         let dir = tempfile::tempdir().unwrap();
         let s = Store::new(dir.path());
