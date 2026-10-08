@@ -86,7 +86,13 @@ impl VaultRepo {
 
     pub fn origin(&self) -> Option<String> {
         let out = Command::new("git")
-            .args(["-C", &self.root.to_string_lossy(), "remote", "get-url", "origin"])
+            .args([
+                "-C",
+                &self.root.to_string_lossy(),
+                "remote",
+                "get-url",
+                "origin",
+            ])
             .output()
             .ok()?;
         if out.status.success() {
@@ -162,7 +168,12 @@ impl VaultRepo {
         if staged == 0 {
             return Ok(false);
         }
-        self.git(&["commit", "-q", "-m", "chore(vault): 密钥库初始提交（仅密文）"])?;
+        self.git(&[
+            "commit",
+            "-q",
+            "-m",
+            "chore(vault): 密钥库初始提交（仅密文）",
+        ])?;
         Ok(true)
     }
 
@@ -315,10 +326,26 @@ mod tests {
     #[test]
     fn parse_remote_url_variants() {
         let cases = [
-            ("git@gitlab.com:webkubor/kyvault-store.git", "gitlab.com", "webkubor/kyvault-store"),
-            ("https://gitlab.com/webkubor/kyvault-store", "gitlab.com", "webkubor/kyvault-store"),
-            ("https://gitlab.com/webkubor/kv.git", "gitlab.com", "webkubor/kv"),
-            ("git@gitlab.ops.modelgo.com:team/vault.git", "gitlab.ops.modelgo.com", "team/vault"),
+            (
+                "git@gitlab.com:webkubor/kyvault-store.git",
+                "gitlab.com",
+                "webkubor/kyvault-store",
+            ),
+            (
+                "https://gitlab.com/webkubor/kyvault-store",
+                "gitlab.com",
+                "webkubor/kyvault-store",
+            ),
+            (
+                "https://gitlab.com/webkubor/kv.git",
+                "gitlab.com",
+                "webkubor/kv",
+            ),
+            (
+                "git@gitlab.ops.modelgo.com:team/vault.git",
+                "gitlab.ops.modelgo.com",
+                "team/vault",
+            ),
         ];
         for (url, host, path) in cases {
             let (h, p) = parse_remote_path(url).expect(url);
