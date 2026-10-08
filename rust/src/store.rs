@@ -1271,6 +1271,7 @@ mod tests {
         assert!(e.contains_key("sha256"));
     }
 
+    #[test]
     fn meta_json_enrichment_and_annotate() {
         let dir = tempfile::tempdir().unwrap();
         let s = Store::new(dir.path());

@@ -24,9 +24,9 @@ use anyhow::{anyhow, Context, Result};
 
 /// 库根目录里**永不进 Git** 的东西。
 ///
-/// 2026-10-05 补的 v2.4.0 形态：原先只写 master.key 和 *.key，而 master.key.enc
-/// + auth.json 这对组合两个都不匹配既有规则，一直处于未跟踪状态 —— 未跟踪不等于
-/// 安全，一次 `git add -A` 就把它们一起推上去了。
+/// 2026-10-05 补的 v2.4.0 形态：原先只写 master.key 和 \*.key，而
+/// master.key.enc 和 auth.json 这对组合两个都不匹配既有规则，一直处于未跟踪
+/// 状态 —— 未跟踪不等于安全，一次 `git add -A` 就把它们一起推上去了。
 pub const PROTECTED_GITIGNORE: &str = "\
 # ── 解开密文的东西，一律不入仓 ──
 #
