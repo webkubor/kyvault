@@ -51,6 +51,13 @@ enum Cmd {
     Set {
         r#ref: String,
         value: String,
+        /// 从文件读明文：`--file @/path/to/key.pem`（`@` 可省）。
+        /// 长 PEM 走这个或 stdin，别塞 argv —— ps 看得见，且多行没法写。
+        #[arg(long, value_name = "PATH")]
+        file: Option<String>,
+        /// 明文像 PEM 却缺尾行时仍然写入（默认拒收，见 read_value）
+        #[arg(long)]
+        force: bool,
         #[arg(long, default_value = "API Key")]
         kind: String,
         #[arg(long, default_value = "")]
@@ -339,20 +346,57 @@ impl Backend {
     }
 }
 
-fn read_value(v: &str) -> Result<String> {
-    if v != "-" {
-        return Ok(v.to_string());
-    }
-    // 从 stdin 读：密钥不进 argv，ps 看不到
-    let mut buf = String::new();
-    std::io::stdin()
-        .read_to_string(&mut buf)
-        .context("从 stdin 读密钥失败")?;
-    let v = buf.trim_end_matches(['\n', '\r']).to_string();
+/// 明文里出现了 PEM 的头、却没有配对的尾 —— 写进去下游一定用不了。
+///
+/// 2026-09-19 那次线上事故就是这个形状：私钥只剩一行 `-----BEGIN …-----`，
+/// `crypto.subtle.importKey` 直接报 Invalid PKCS8 input，收银台下不了单，
+/// 而密钥库当时一声不吭。**只要能廉价地识出来，就不该让它悄悄进去。**
+///
+/// 为什么不用 `--multiline` 之类的 flag 表达「这是故意的」：PEM 无论哪种写法
+/// 都至少两行，单行 PEM 一定是截断，不需要用户声明。反过来，真有那种单行的
+/// 东西（某些 CA 给的裸 base64 证书）本来就不该带 `-----BEGIN`。
+fn looks_like_truncated_pem(v: &str) -> bool {
+    let has_begin = v.contains("-----BEGIN ");
+    let has_end = v.contains("-----END ");
+    has_begin != has_end
+}
+
+fn read_value(v: &str, force: bool) -> Result<String> {
+    let v = if v == "-" {
+        // 从 stdin 读：密钥不进 argv，ps 看不到
+        let mut buf = String::new();
+        std::io::stdin()
+            .read_to_string(&mut buf)
+            .context("从 stdin 读密钥失败")?;
+        buf.trim_end_matches(['\n', '\r']).to_string()
+    } else {
+        v.to_string()
+    };
     if v.is_empty() {
-        return Err(anyhow!("stdin 没读到内容"));
+        return Err(anyhow!("没读到内容"));
+    }
+    if !force && looks_like_truncated_pem(&v) {
+        return Err(anyhow!(
+            "明文里有 PEM 的头却没有尾行 —— 看着像被截断了。\n\
+             多半是复制/管道时只带过来第一行。\n\
+             确认无误要强写：加 --force"
+        ));
     }
     Ok(v)
+}
+
+/// `--file @/path` / `--file /path` → 读文件全文。
+///
+/// `@` 是 ky 自己的历史写法（issue #1 里描述的就是 `--value @/path` 被当成
+/// 字面量存进去了），这里两种都收，省得用户再被这个坑绊一次。
+fn read_file_arg(path: &str) -> Result<String> {
+    let p = path.strip_prefix('@').unwrap_or(path);
+    let text = std::fs::read_to_string(p).with_context(|| format!("读密钥文件失败：{p}"))?;
+    let text = text.trim_end_matches(['\n', '\r']).to_string();
+    if text.is_empty() {
+        return Err(anyhow!("密钥文件是空的：{p}"));
+    }
+    Ok(text)
 }
 
 fn print_list(
@@ -467,10 +511,28 @@ fn run() -> Result<()> {
         Cmd::Set {
             r#ref,
             value,
+            file,
+            force,
             kind,
             account,
         } => {
-            let v = read_value(&value)?;
+            // --file 与 value/stdin 互斥：两个都给就说不清到底用哪个，
+            // 静默挑一个比报错更糟（可能把上次的内容又写一遍）。
+            if file.is_some() && value != "-" && !value.is_empty() {
+                return Err(anyhow!(
+                    "value 和 --file 只能给一个。value 传 - 表示从 stdin 读。"
+                ));
+            }
+            let v = match file.as_deref() {
+                Some(p) => read_file_arg(p)?,
+                None => read_value(&value, force)?,
+            };
+            if !force && looks_like_truncated_pem(&v) {
+                return Err(anyhow!(
+                    "明文里有 PEM 的头却没有尾行 —— 看着像被截断了。\n\
+                     确认无误要强写：加 --force"
+                ));
+            }
             let b = Backend::select()?;
             b.set(&r#ref, &v, &kind, &account)?;
             // 不回显明文，只确认写成功和它有多长
@@ -517,7 +579,8 @@ fn run() -> Result<()> {
         } => {
             // **刻意只写本地库**，不看 KYVAULT_BACKEND：这三件套是「怎么连 D1」，
             // 存进 D1 自己就成了鸡生蛋。本地库是它唯一能自举的地方。
-            let tok = read_value(&token)?;
+            // force=false：PEM 截断自检对 D1 那条路同样成立
+            let tok = read_value(&token, false)?;
             let st = kyvault::store::Store::default_location()?;
             st.set_secret("secret://kyvault/d1-account-id", &account_id)?;
             st.set_secret("secret://kyvault/d1-database-id", &database_id)?;
@@ -654,6 +717,7 @@ fn run() -> Result<()> {
                     let p = read_value(
                         &password
                             .ok_or_else(|| anyhow!("set 需要 password（传 - 从 stdin 读）"))?,
+                        false,
                     )?;
                     s.set_account(&platform, &u, &p)?;
                     println!("已写入账户 {platform}/{u}（{} 字节）", p.len());
@@ -697,6 +761,7 @@ fn run() -> Result<()> {
                     let n = key_name.ok_or_else(|| anyhow!("set 需要 key_name"))?;
                     let v = read_value(
                         &value.ok_or_else(|| anyhow!("set 需要 value（传 - 从 stdin 读）"))?,
+                        false,
                     )?;
                     s.set_key(&platform, &n, &v)?;
                     println!("已写入 {platform}/{n}（{} 字节）", v.len());
