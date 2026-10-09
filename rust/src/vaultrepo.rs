@@ -24,9 +24,9 @@ use anyhow::{anyhow, Context, Result};
 
 /// 库根目录里**永不进 Git** 的东西。
 ///
-/// 2026-10-05 补的 v2.4.0 形态：原先只写 master.key 和 *.key，而 master.key.enc
-/// + auth.json 这对组合两个都不匹配既有规则，一直处于未跟踪状态 —— 未跟踪不等于
-/// 安全，一次 `git add -A` 就把它们一起推上去了。
+/// 2026-10-05 补的 v2.4.0 形态：原先只写 master.key 和 \*.key，而
+/// master.key.enc 和 auth.json 这对组合两个都不匹配既有规则，一直处于未跟踪
+/// 状态 —— 未跟踪不等于安全，一次 `git add -A` 就把它们一起推上去了。
 pub const PROTECTED_GITIGNORE: &str = "\
 # ── 解开密文的东西，一律不入仓 ──
 #
@@ -86,7 +86,13 @@ impl VaultRepo {
 
     pub fn origin(&self) -> Option<String> {
         let out = Command::new("git")
-            .args(["-C", &self.root.to_string_lossy(), "remote", "get-url", "origin"])
+            .args([
+                "-C",
+                &self.root.to_string_lossy(),
+                "remote",
+                "get-url",
+                "origin",
+            ])
             .output()
             .ok()?;
         if out.status.success() {
@@ -162,7 +168,12 @@ impl VaultRepo {
         if staged == 0 {
             return Ok(false);
         }
-        self.git(&["commit", "-q", "-m", "chore(vault): 密钥库初始提交（仅密文）"])?;
+        self.git(&[
+            "commit",
+            "-q",
+            "-m",
+            "chore(vault): 密钥库初始提交（仅密文）",
+        ])?;
         Ok(true)
     }
 
@@ -315,10 +326,26 @@ mod tests {
     #[test]
     fn parse_remote_url_variants() {
         let cases = [
-            ("git@gitlab.com:webkubor/kyvault-store.git", "gitlab.com", "webkubor/kyvault-store"),
-            ("https://gitlab.com/webkubor/kyvault-store", "gitlab.com", "webkubor/kyvault-store"),
-            ("https://gitlab.com/webkubor/kv.git", "gitlab.com", "webkubor/kv"),
-            ("git@gitlab.ops.modelgo.com:team/vault.git", "gitlab.ops.modelgo.com", "team/vault"),
+            (
+                "git@gitlab.com:webkubor/kyvault-store.git",
+                "gitlab.com",
+                "webkubor/kyvault-store",
+            ),
+            (
+                "https://gitlab.com/webkubor/kyvault-store",
+                "gitlab.com",
+                "webkubor/kyvault-store",
+            ),
+            (
+                "https://gitlab.com/webkubor/kv.git",
+                "gitlab.com",
+                "webkubor/kv",
+            ),
+            (
+                "git@gitlab.ops.modelgo.com:team/vault.git",
+                "gitlab.ops.modelgo.com",
+                "team/vault",
+            ),
         ];
         for (url, host, path) in cases {
             let (h, p) = parse_remote_path(url).expect(url);
