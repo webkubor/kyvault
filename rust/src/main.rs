@@ -17,10 +17,10 @@ use kyvault::alias::Aliases;
 use kyvault::auth_guard::AuthGuard;
 use kyvault::d1::D1;
 use kyvault::doctor;
-use kyvault::vaultrepo::VaultRepo;
 use kyvault::gitlab::GitLabRepo;
 use kyvault::model::SecretMeta;
 use kyvault::store::Store;
+use kyvault::vaultrepo::VaultRepo;
 use sha2::{Digest, Sha256};
 
 #[derive(Parser)]
@@ -420,7 +420,11 @@ fn run() -> Result<()> {
             println!(
                 "master key 就绪（{}，0600）{}",
                 store.master_key_path().display(),
-                if existed { "；已有密钥库，未改动" } else { "" }
+                if existed {
+                    "；已有密钥库，未改动"
+                } else {
+                    ""
+                }
             );
             if no_git {
                 println!("已跳过 Git 仓库（--no-git）");
