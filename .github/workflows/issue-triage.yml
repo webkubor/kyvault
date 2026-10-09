@@ -48,6 +48,381 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # 下面这段是 .github/scripts/issue-triage.mjs 的副本。改逻辑时改那个文件，
+      # 然后用 scripts/sync-triage-workflow.sh 重新生成这里的 script: 块 ——
+      # 两份并存最容易漂，而漂了不会立刻报错（只有行为变了你才发现）。
+      #
+      # ⚠️ 必须内联 script: —— actions/github-script 的 action.yml 从来没有
+      # script-path 这个 input（v6/v7 都只有 script:）。写成 script-path 的
+      # 后果不是报错提示而是 "Input required and not supplied: script"，
+      # 指向 script 而不是那个不存在的 input，很容易查错方向（2026-10-09 实踩）。
       - uses: actions/github-script@v7
         with:
-          script-path: .github/scripts/issue-triage.mjs
+          script: |
+            /**
+             * issue 分诊：把 issue 里的「修复声明」和仓库里的「实际交付」对上。
+             *
+             * 跑在 actions/github-script 里，拿到的是带鉴权的 github 对象；也支持本地
+             * 干跑（KY_TRIAGE_DRY=1，只打印不写），改判据时不必先推上去试。
+             *
+             * ── 为什么不做「自动关闭」────────────────────────────────────────────
+             * 设计这条规则时踩过一个真实的坑：kyvault#1 的评论里写着「已修」，
+             * v2.4.0 也确实发布了 —— 但 `--file` 和 PEM 校验根本没进代码。
+             * 「有人声称修了 + release 存在」这种组合**不能**作为关闭依据，那会把
+             * 没修的 issue 关掉。所以这里只查、只说、只贴标；真要关由维护者发
+             * `/triage close #N`。⚠️ unverified-claim 那一档恰恰是给维护者看的。
+             *
+             * ── 三档判定 ────────────────────────────────────────────────────────
+             *   verified         存在**已合并**的 PR，其标题/正文明确 closes|fixes 本 issue
+             *   unverified-claim 有修复声明（评论或 release note 提到修好了），
+             *                    但既没有这样的 PR，也搜不到承诺的交付物进代码
+             *   no-fix-yet       没有任何修复迹象
+             *
+             * 「承诺的交付物」从 issue 正文里抽：显式写成 `交付物：xxx` 的行优先，
+             * 其次是代码块里的 flag 名（`--file` 这类）与标识符。抽到才拿去代码里搜，
+             * 抽不到就说「无法自动核验」，**不猜**。
+             */
+
+            const DRY = process.env.KY_TRIAGE_DRY === '1'
+            const STICKER_MARKER = '<!-- ky-issue-triage -->'
+            const OWNER = (context.payload?.sender?.login ?? '').toLowerCase()
+
+            // ── 判据表 ──────────────────────────────────────────────────────────
+            const LABELS = {
+              verified: { name: 'needs-close', color: '0e8a16', verdict: '✅' },
+              'unverified-claim': { name: 'unverified-claim', color: 'd93f0b', verdict: '⚠️' },
+              'no-fix-yet': { name: 'no-fix-yet', color: 'cfd3d7', verdict: '❌' },
+            }
+
+            // 「声称修了」的措辞。中英都收 —— issue 里两种都有。
+            const CLAIM_RE = /(已修|已修复|已落地|已解决|修好了|已实现|已加上|已经修|now fixed|fixed in|landed in|resolved in)/i
+            // PR 标题/正文里声明关联 issue 的写法
+            const CLOSES_RE = /\b(?:closes|fixes|resolves)\s+#(\d+)\b/gi
+
+            // ── 小工具 ──────────────────────────────────────────────────────────
+            const log = (...a) => console.log(...a)
+
+            async function listOpenIssues(github, context) {
+              const only = context.payload?.inputs?.issue
+              if (only) {
+                const n = Number(String(only).replace(/^#/, ''))
+                if (Number.isInteger(n)) {
+                  const { data } = await github.rest.issues.get({ owner: context.repo.owner, repo: context.repo.repo, issue_number: n })
+                  return [data]
+                }
+              }
+              const all = await github.paginate(github.rest.issues.listForRepo, {
+                owner: context.repo.owner, repo: context.repo.repo, state: 'open', per_page: 100,
+              })
+              return all.filter((i) => !i.pull_request)     // PR 也走这个 API，别混进来
+            }
+
+            /** 已合并的 PR，以及它声明关掉了哪些 issue。 */
+            async function mergedFixPrs(github, context) {
+              const prs = await github.paginate(github.rest.pulls.list, {
+                owner: context.repo.owner, repo: context.repo.repo, state: 'closed', per_page: 100,
+              })
+              const byIssue = new Map()
+              for (const pr of prs) {
+                if (!pr.merged_at) continue                     // closed ≠ merged
+                const text = `${pr.title}\n${pr.body ?? ''}`
+                for (const m of text.matchAll(CLOSES_RE)) {
+                  const n = Number(m[1])
+                  if (!byIssue.has(n)) byIssue.set(n, [])
+                  byIssue.get(n).push({ number: pr.number, title: pr.title, merged_at: pr.merged_at })
+                }
+              }
+              return byIssue
+            }
+
+            /**
+             * issue 下的全部评论。
+             *
+             * 只收 issue 自己的评论线（listComments），不扫全仓 PR —— 那会把无关 PR 里
+             * 恰好提到「已修」的讨论算到这条 issue 头上，误判成"有人声称修复"。
+             */
+            async function issueComments(github, context, issue) {
+              return github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number, per_page: 100,
+              })
+            }
+
+            /** 仓库里现在有什么可搜的文本。 */
+            function repoFileList() {
+              const { execSync } = require('node:child_process')
+              try {
+                return execSync('git ls-files', { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
+              } catch {
+                return ''
+              }
+            }
+
+            /** 读一个文件，失败返回空串。 */
+            function readFile(path) {
+              const { execSync } = require('node:child_process')
+              try {
+                return execSync(`git show HEAD:${JSON.stringify(path)}`, { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
+              } catch {
+                return ''
+              }
+            }
+
+            /**
+             * 从 issue 正文里抽「承诺的交付物」，拿去代码里核。
+             *
+             * 抽不到就返回空 —— 判据宁可说「无法自动核验」，也不猜一个关键词
+             * 然后拿它的命中/未命中当结论。猜错的代价比"不知道"大得多。
+             */
+            function promisedArtifacts(issue) {
+              const body = issue.body ?? ''
+              const out = new Set()
+
+              // 显式写法：`交付物：--file` / `交付物: xxx`
+              for (const m of body.matchAll(/交付物[：:]\s*`?([^`\n，。]{2,40})/g)) out.add(m[1].trim())
+
+              // 命令行 flag：`--file`、`--multiline` 这类
+              for (const m of body.matchAll(/(?<![\w-])--[a-z][a-z0-9-]{2,}/g)) out.add(m[0])
+
+              return [...out]
+            }
+
+            /**
+             * 交付物是否真的能在代码里搜到。
+             *
+             * 命中判定比「字符串出现过」严一档，理由是实测踩到的：#1 正文里的 `--value`
+             * 在 `tools/import-chrome-csv.py` 里出现过（一个无关脚本的参数），纯
+             * `includes` 会把它报成「✅ 已实现」—— 而那条恰恰是没修的。
+             *
+             * 所以：
+             *   · flag 形态（`--file`）要求出现在**命令行参数定义**的语境里
+             *     —— Rust 的 `long = ` / clap 的 `#[arg(long` 、JS 的 `option(` 等；
+             *   · 其余词要求出现在源码/配置里，脚本文件（tools/、scripts/）不算 ——
+             *     工具脚本里的同名参数不代表功能进了主程序。
+             * 命中不到就报「搜不到」。宁可少报✅，不可多报：假✅会让人以为修完了。
+             *
+             * ⚠️ 这条判据的**已知边界**（别把它当保证）：它只看「这个 flag 名在代码里
+             * 有没有被声明」，判不了「是不是同一个子命令」。实测 kyvault 里 `import --file`
+             * 早就有，而 #1 要的是 `set --file` —— 后者至今没有，机器人会报「✅ 在
+             * rust/src/main.rs」。所以这一档的 ✅ 只说明「同名 flag 存在于某处」，
+             * 结论仍要人看。宁可让人多看一眼，不要让人以为修完了。
+             */
+            // ⚠️ 每条都必须带 /g —— 下面用 matchAll 遍历，带 g 是硬要求。
+            //    写漏一个的表现是运行期 TypeError，不是判错，比判错更难发现（已踩一次）。
+            //
+            // 形态是实测出来的，别凭印象写：
+            //   Rust clap:  #[arg(long, default_value = "…")]  换行  field: String
+            //               —— flag 名在**下一行的字段名**上，不在 `#[arg(...)]` 里。
+            //               所以下面抓的是「`#[arg(...long...)]` 后面第一个标识符」。
+            //   JS:         option('file') / add_argument('--file') / "long": "file"
+            //   Go:         flag 声明同样落在结构体字段上（按字段名兜底）。
+            // ⚠️ `\]` 不能省：clap 的形态是 `#[arg(long, …)]`，`[^)]*` 会在 `)` 处停，
+            //    少写 `\]` 就永远匹配不上（实测卡过一次，报「全部 flag 都搜不到」）。
+            const RUST_ARG_BLOCK = /#\[arg\([^\n]*\blong\b[^\n]*\)\]\s*\n\s*([a-z_][a-z0-9_]*)/g
+            const FLAG_DECL = [
+              RUST_ARG_BLOCK,
+              /long\s*=\s*"([a-z0-9-]+)"/g,            // 显式 long = "file"
+              /option\(\s*['"]([a-z0-9-]+)['"]/g,       // JS 命令行解析
+              /add_argument\(\s*['"]([a-z0-9-]+)['"]/g,
+              /["']long["']\s*:\s*["']([a-z0-9-]+)["']/g, // 声明式 schema
+              /flag\.[A-Za-z]*Var\(\s*\)\s*\n\s*([a-z][a-z0-9]*)\s+string/g, // Go
+              // clap 的**位置参数**（没有 #[arg(long)]，形如 `value: String`）。
+              // 漏了这一条会把 `ky set --value` 这类「明明存在的参数」报成搜不到。
+              // 代价：任何形如 `xxx: String` 的结构体字段都会被当成 flag 名，命中偏宽松 ——
+              // 宽松只影响「已实现」那一档的假✅，不会造成假❌，方向上安全。
+              /^\s*([a-z][a-z0-9_]*)\s*:\s*(?:Option<)?String/mg,
+            ]
+
+            function artifactPresent(artifact, files) {
+              const needle = artifact.replace(/^`|`$/g, '').toLowerCase()
+              const isFlag = needle.startsWith('--')
+              const bare = needle.replace(/^--/, '')
+
+              // 文档与工具脚本都不算：需求常先写进文档，工具脚本的同名参数不代表进了主程序。
+              const code = files.filter((f) =>
+                !/^(docs\/|tools\/|scripts\/|README|CHANGELOG|SKILL\.md)/.test(f)
+                && /\.(rs|ts|js|mjs|go|py|sh|json|ya?ml)$/.test(f))
+
+              for (const f of code) {
+                const text = readFile(f)
+                if (!text) continue
+                const lower = text.toLowerCase()
+                if (isFlag) {
+                  // 必须落在参数定义里，而不是恰好作为字符串出现
+                  const declared = FLAG_DECL.some((re) => {
+                    for (const m of text.matchAll(re)) {
+                      const name = (m[1] ?? '').toLowerCase()
+                      if (name && (name === bare || name.replace(/_/g, '-') === bare)) return true
+                    }
+                    return false
+                  })
+                  if (declared) return { present: true, where: f }
+                } else if (lower.includes(needle)) {
+                  return { present: true, where: f }
+                }
+              }
+              return { present: false, where: null }
+            }
+
+            // ── 判档 ────────────────────────────────────────────────────────────
+            function judge({ issue, fixPrs, comments, files }) {
+              const claimed = comments.some((c) => CLAIM_RE.test(c.body ?? '')) || CLAIM_RE.test(issue.body ?? '')
+
+              if (fixPrs && fixPrs.length > 0) {
+                return { level: 'verified', fixPrs, claimed }
+              }
+
+              const artifacts = promisedArtifacts(issue)
+              const checked = artifacts.map((a) => ({ artifact: a, ...artifactPresent(a, files) }))
+
+              if (claimed) {
+                return { level: 'unverified-claim', artifacts: checked, claimed: true }
+              }
+              return { level: 'no-fix-yet', artifacts: checked, claimed: false }
+            }
+
+            function render({ issue, level, fixPrs, artifacts }) {
+              const L = LABELS[level]
+              const lines = [STICKER_MARKER, '', `## ${L.verdict} Issue 分诊`, '']
+
+              if (level === 'verified') {
+                lines.push('找到**已合并**、且明确声明关闭本 issue 的 PR：', '')
+                for (const p of fixPrs) lines.push(`- #${p.number} ${p.title} — 合并于 ${p.merged_at.slice(0, 10)}`)
+                lines.push('', '> 这一档只是「PR 声称修了」。若你还想确认代码里真的落地了，',
+                  '> 在 PR 的 diff 里核对，或回一句 `/triage recheck` 让它重跑。')
+              } else if (level === 'unverified-claim') {
+                lines.push('**有人声称修好了，但机器人没能核验到对应的代码改动。**', '')
+                if (artifacts.length === 0) {
+                  lines.push('- 没能从正文里抽出可核验的交付物（没找到「交付物：…」或 `--flag` 形式的承诺），',
+                    '  所以**无法自动核验** —— 这是机器人的能力边界，不是「没修」的结论。',
+                    '- 请把要交付的东西写成 `交付物：<具体 flag / 函数 / 文件>`，下次就能自动搜。')
+                } else {
+                  lines.push('承诺过的交付物，逐个在当前代码里搜：', '')
+                  lines.push('| 交付物 | 结果 |')
+                  lines.push('|---|---|')
+                  for (const a of artifacts) {
+                    lines.push(`| \`${a.artifact}\` | ${a.present ? `✅ 找到（${a.where}）` : '❌ 代码里搜不到'} |`)
+                  }
+                  lines.push('', '> 「搜不到」是字面意思：全仓源码（不含文档）里没有这个词。',
+                    '> 如果实现换了名字或换了做法，在下面回一句说明，判定就以你的说明为准。')
+                }
+              } else {
+                lines.push('没有发现修复迹象（既无声明关闭的合并 PR，也无「已修」类表述）。', '')
+                if (artifacts.length > 0) {
+                  lines.push('顺带核了一下正文里承诺的交付物：', '')
+                  for (const a of artifacts) {
+                    lines.push(`- \`${a.artifact}\` — ${a.present ? `✅ 已在 ${a.where} 找到` : '❌ 代码里搜不到'}`)
+                  }
+                }
+              }
+
+              lines.push('', '---', '',
+                `<sub>机器人每 24h 扫一次，也会在 issue/PR 变动时触发。`,
+                `这条评论会被覆盖更新，不会刷屏。`,
+                `要关掉这条 issue：维护者回一句 <code>/triage close #${issue.number}</code>；`,
+                `要重跑判定：<code>/triage recheck</code>。机器人**不会**自行关闭任何 issue。</sub>`)
+
+              return lines.join('\n')
+            }
+
+            // ── 写回 ────────────────────────────────────────────────────────────
+            async function upsertSticky(github, context, issue, body) {
+              const existing = (await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number, per_page: 100,
+              })).find((c) => (c.body ?? '').includes(STICKER_MARKER))
+
+              if (DRY) { log(`  [dry] 会 ${existing ? '更新' : '新建'} 置顶评论`); return }
+              if (existing) {
+                if (existing.body === body) { log('  置顶评论已是最新，跳过'); return }
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body,
+                })
+                log(`  已更新置顶评论 #${existing.id}`)
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number, body,
+                })
+                log('  已新建置顶评论')
+              }
+            }
+
+            async function applyLabel(github, context, issue, level) {
+              const want = LABELS[level].name
+              const managed = Object.values(LABELS).map((l) => l.name)
+              const have = (issue.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name))
+              const next = have.filter((l) => !managed.includes(l)).concat(want)
+              if (next.length === have.length && have.includes(want)) { log(`  标签已是 ${want}`); return }
+              if (DRY) { log(`  [dry] 标签 → ${want}`); return }
+              try {
+                await github.rest.issues.setLabels({
+                  owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number, labels: next,
+                })
+                log(`  标签 → ${want}`)
+              } catch (e) {
+                log(`  标签写入失败（可能缺权限或标签不存在）: ${e.message}`)
+              }
+            }
+
+            // ── 维护者指令 ──────────────────────────────────────────────────────
+            const CMD_RE = /^\s*\/triage\s+(close|recheck|ignore)\b\s*(#?(\d+))?\s*$/i
+
+            async function handleCommand(github, context) {
+              const c = context.payload.comment
+              if (!c) return false
+              if ((c.user?.login ?? '').toLowerCase() !== OWNER) return false   // 只认维护者
+              const m = c.body.match(CMD_RE)
+              if (!m) return false
+
+              const [, action, , numRaw] = m
+              const num = Number(numRaw || c.issue_number)
+              if (!Number.isInteger(num)) { log(`指令里没看出 issue 号：${c.body}`); return true }
+
+              if (action.toLowerCase() === 'close') {
+                if (DRY) { log(`[dry] 将关闭 #${num}`); return true }
+                await github.rest.issues.update({
+                  owner: context.repo.owner, repo: context.repo.repo, issue_number: num, state: 'closed',
+                })
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner, repo: context.repo.repo, issue_number: num,
+                  body: `由 ${c.user.login} 用 \`/triage close\` 关闭。`,
+                })
+                log(`已按维护者指令关闭 #${num}`)
+                return true
+              }
+              if (action.toLowerCase() === 'ignore') {
+                if (!DRY) {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner, repo: context.repo.repo, issue_number: num,
+                    body: `由 ${c.user.login} 标记为「机器人不用再管这条」，下次扫描会跳过。`,
+                  })
+                }
+                log(`已忽略 #${num}`)
+                return true
+              }
+              log(`收到 recheck #${num}，本轮照常判定`)
+              return true
+            }
+
+            // ── 主流程 ──────────────────────────────────────────────────────────
+            async function main() {
+              if (await handleCommand(github, context)) return
+
+              const issues = await listOpenIssues(github, context)
+              log(`open issue ${issues.length} 条`)
+
+              const fixPrs = await mergedFixPrs(github, context)
+              const files = repoFileList().split('\n').filter(Boolean)
+              log(`已合并并声明关闭的 PR 覆盖 ${fixPrs.size} 个 issue 号；可搜文件 ${files.length} 个`)
+
+              for (const issue of issues) {
+                log(`\n── #${issue.number} ${issue.title}`)
+                const comments = await issueComments(github, context, issue)
+                const verdict = judge({ issue, fixPrs: fixPrs.get(issue.number), comments, files })
+                log(`  判定：${verdict.level}  声称过修复：${verdict.claimed ? '是' : '否'}`)
+
+                await upsertSticky(github, context, issue, render({ issue, ...verdict }))
+                await applyLabel(github, context, issue, verdict.level)
+              }
+              log('\n完成。')
+            }
+
+            await main()
