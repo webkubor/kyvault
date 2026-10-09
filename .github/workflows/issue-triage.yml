@@ -1,0 +1,53 @@
+name: Issue triage
+
+# 盯本仓的 open issue：把「谁说了什么修好了」和「代码里到底有没有」对上，
+# 结论写成一条可更新的置顶评论 + 一个标签。
+#
+# ## 为什么它不自动关 issue
+#
+# 设计这条规则时踩过一个真实的坑：kyvault#1 的评论里写着「已修」，
+# v2.4.0 也确实发布了 —— 但 `--file` 和 PEM 校验根本没进代码。
+# 所以「有人声称修了 + release 存在」这种组合**不能**作为关闭依据，
+# 那会把没修的 issue 关掉。于是这里只做三件事：查、说、贴标；
+# 真要关，维护者回一句 `/triage close #N`。
+#
+# 三档判定：
+#   ✅ verified        有**已合并**的 PR 明确声明 closes/fixes 本 issue
+#   ⚠️ unverified-claim 有人声称修了，但找不到对应 PR，也找不到交付物落进代码
+#   ❌ no-fix-yet      没有任何修复迹象
+
+on:
+  schedule:
+    # 每天 10:17 UTC（约本地 18:17，避开整点）
+    - cron: '17 10 * * *'
+  issues:
+    types: [opened, edited, reopened]
+  issue_comment:
+    types: [created]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: '只查这一条（留空 = 全部 open issue）'
+        required: false
+
+permissions:
+  issues: write
+  pull-requests: read
+  contents: read
+
+concurrency:
+  group: issue-triage
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/github-script@v7
+        with:
+          script-path: .github/scripts/issue-triage.mjs
