@@ -101,7 +101,14 @@ impl Store {
     /// 2026-09-22 起这是推荐形态。原因见 docs/proposals 那份 GitLab 后端方案，
     /// 以及 D1 后端那次事故：解密本该是纯本地计算，不该被任何远端服务的可用性绑架。
     pub fn default_location() -> Result<Self> {
-        Ok(Self::new(default_store_dir()?))
+        let s = Self::new(default_store_dir()?);
+        // 每次打开库先顺手把密文文件权限收紧（git pull / clone 会把 600 打回 664）。
+        // 放在这里而不是各个命令里：所有 CLI 路径都经过这个函数，改一处即全覆盖；
+        // 也让 doctor 自己先修再报 —— 否则它会对着一个刚被 pull 打宽的权限报 FAIL，
+        // 而用户按提示 chmod 完，下次 sync 又复发。
+        // 失败不阻断：权限是卫生问题，取不到密钥才是事故。
+        let _ = s.repair_perms();
+        Ok(s)
     }
 
     fn secrets_file(&self) -> PathBuf {
@@ -259,6 +266,35 @@ impl Store {
             .with_context(|| format!("写 {} 失败", tmp.display()))?;
         harden(&tmp)?;
         fs::rename(&tmp, &path)?;
+        Ok(())
+    }
+
+    /// 把数据目录里所有密文文件的权限重新收紧到 0600。
+    ///
+    /// ## 为什么需要它（2026-10-12 实测）
+    ///
+    /// `save()` 和 `save_meta()` **自己写出来的文件一定是 600** —— 它们都走
+    /// 「写 tmp → harden → rename」。所以「忘了 chmod」不是根因。
+    ///
+    /// 真正的来源是**数据目录本身是个 git 仓库**（GitLab 团队密钥库，见本文件
+    /// 上方注释）。git **不保存文件权限**：`git checkout` / `git pull` 落盘时
+    /// 按当前 umask 建文件（默认 002 → 664），哪怕仓里的 blob 记录的是 600。
+    /// 于是每同步一次密钥库，`secrets.json` / `meta.json` 就被打回 664，
+    /// `kyvault doctor` 随之报两条 FAIL，而手动 chmod 下次 sync 又复发。
+    ///
+    /// 修法不放在「记得 chmod」这种要人记得的地方，而是放在**每次接触库之前**：
+    /// 读一次就顺手收紧。这样 clone、pull、手工复制进来的库都是同一个结果，
+    /// 不依赖谁记得执行过。
+    ///
+    /// 刻意做成「尽力而为」：文件不存在就跳过，绝不因为权限问题挡住取密钥 ——
+    /// 权限是卫生问题，取不到密钥才是事故。
+    pub fn repair_perms(&self) -> Result<()> {
+        for p in [self.secrets_file(), self.meta_file()] {
+            if p.exists() {
+                // 收紧失败不该中断调用方：它只影响卫生，不影响解密
+                let _ = harden(&p);
+            }
+        }
         Ok(())
     }
 
