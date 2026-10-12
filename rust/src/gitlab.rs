@@ -154,7 +154,12 @@ impl<'a> GitLabRepo<'a> {
             .args(["pull", "--rebase", "--autostash", "origin", &branch])
             .current_dir(self.root())
             .output()
-            .context("执行 git pull 失败")?;
+            .context("执行 git pull 失败");
+
+        // Git 可能重写文件，甚至在 rebase 冲突退出前也会落盘。
+        // 必须在命令结束后、检查退出码/JSON 之前收紧；保留原始 Git 错误。
+        let _ = self.store.repair_perms();
+        let output = output?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -236,7 +241,9 @@ impl<'a> GitLabRepo<'a> {
             }
         };
 
+        let store = Store::new(&target);
         if target.join(".git").exists() {
+            let _ = store.repair_perms();
             println!(
                 "ℹ️  目录 {} 已是 Git 仓库，无需重复 setup。",
                 target.display()
@@ -252,7 +259,11 @@ impl<'a> GitLabRepo<'a> {
         let output = Command::new("git")
             .args(["clone", repo_url, target.to_str().unwrap()])
             .output()
-            .context("执行 git clone 失败")?;
+            .context("执行 git clone 失败");
+
+        // clone 不经过 default_location；失败的 checkout 也可能已写入部分文件。
+        let _ = store.repair_perms();
+        let output = output?;
 
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
