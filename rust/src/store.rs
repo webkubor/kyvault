@@ -103,9 +103,9 @@ impl Store {
     pub fn default_location() -> Result<Self> {
         let s = Self::new(default_store_dir()?);
         // 每次打开库先顺手把密文文件权限收紧（git pull / clone 会把 600 打回 664）。
-        // 放在这里而不是各个命令里：所有 CLI 路径都经过这个函数，改一处即全覆盖；
-        // 也让 doctor 自己先修再报 —— 否则它会对着一个刚被 pull 打宽的权限报 FAIL，
-        // 而用户按提示 chmod 完，下次 sync 又复发。
+        // 默认库在访问前收紧，也让 doctor 先修再报。
+        // GitLabRepo 还须在 pull/clone 之后收紧：Git 会重新创建这些文件，
+        // 而 setup 的显式目标目录并不经过 default_location。
         // 失败不阻断：权限是卫生问题，取不到密钥才是事故。
         let _ = s.repair_perms();
         Ok(s)
@@ -282,9 +282,8 @@ impl Store {
     /// 于是每同步一次密钥库，`secrets.json` / `meta.json` 就被打回 664，
     /// `kyvault doctor` 随之报两条 FAIL，而手动 chmod 下次 sync 又复发。
     ///
-    /// 修法不放在「记得 chmod」这种要人记得的地方，而是放在**每次接触库之前**：
-    /// 读一次就顺手收紧。这样 clone、pull、手工复制进来的库都是同一个结果，
-    /// 不依赖谁记得执行过。
+    /// 默认库在访问前收紧；GitLabRepo 在 pull/clone 完成后再次收紧，
+    /// 包括 Git 非零退出但已经落盘的情况。不依赖用户手动 chmod。
     ///
     /// 刻意做成「尽力而为」：文件不存在就跳过，绝不因为权限问题挡住取密钥 ——
     /// 权限是卫生问题，取不到密钥才是事故。
