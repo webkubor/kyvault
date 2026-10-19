@@ -1,6 +1,6 @@
 ---
 name: kyvault-ops
-version: 2.4.1
+version: 2.6.0
 description: 使用 kyvault (或快捷短命令 ky) 在本地与 GitLab 团队环境中端对端管理加密 API Key、服务器资产台账与多 Profile 凭证。支持 Claude、Codex、Gemini 与 Hermes 全自动读写与子进程安全注入。
 license: MIT
 author: webkubor
@@ -29,6 +29,10 @@ kyvault get secret://platform/key_name
 # 4. 写入/更新一个密钥（支持从 stdin 读避免暴露在 ps 进程列表）
 kyvault set secret://platform/key_name "<value>" --kind "API Key"
 echo "<value>" | kyvault set secret://platform/key_name -
+
+# 4b. 长密钥 / 多行 PEM 走文件，别塞 argv（明文会进 ps 与 shell history）
+kyvault set secret://platform/key_name - --file /path/to/key.pem --kind "Private Key"
+# 有 BEGIN 没配对的 END 会被拒收（看着像被截断）；确认无误再加 --force
 
 # 5. 校验密钥有效性与余额（验证通过自动同步审计元信息至 meta.json）
 kyvault check <platform> <key_name>
