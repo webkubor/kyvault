@@ -3,8 +3,15 @@ name = "kyvault"
 version = "2.6.0"
 edition = "2021"
 rust-version = "1.80"
-description = "本地加密密钥管理 CLI — AES-256-GCM 纯本地存储，AI 只拿别名"
+description = "Local-first encrypted secret and API key manager CLI (AES-256-GCM); 本地加密密钥管理工具，AI 只拿别名"
 license = "MIT"
+repository = "https://github.com/webkubor/kyvault"
+homepage = "https://github.com/webkubor/kyvault"
+documentation = "https://docs.rs/kyvault"
+readme = "../README.md"
+keywords = ["secret", "secrets", "key-management", "api-key", "encryption"]
+categories = ["command-line-utilities", "cryptography", "security", "authentication"]
+exclude = ["/target/**", "/tests/**", "/.agents/**", "/.clauderules", "/.copilotinstructions", "/.cursorrules"]
 
 [lib]
 name = "kyvault"

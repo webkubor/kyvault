@@ -5,43 +5,45 @@
 <h1 align="center">🔐 Kyvault</h1>
 
 <p align="center">
-  <strong>A secrets & asset ledger for developers in the AI era — store once, AI never sees plaintext.</strong>
+  <strong>A secrets & asset ledger for developers in the AI era — inject by alias to reduce plaintext exposure in model context.</strong>
 </p>
 
 <p align="center">
   <a href="https://github.com/webkubor/kyvault/releases"><img src="https://img.shields.io/github/v/release/webkubor/kyvault?style=for-the-badge&color=coral" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/webkubor/kyvault?style=for-the-badge&color=gold" alt="License"></a>
   <a href="https://github.com/webkubor/kyvault/releases/latest"><img src="https://img.shields.io/github/downloads/webkubor/kyvault/total?style=for-the-badge&color=orange" alt="Downloads"></a>
-  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-static%20binary-orange?style=for-the-badge" alt="Rust"></a>
-  <a href="#-install"><img src="https://img.shields.io/badge/deps-zero%20runtime-4c9a6b?style=for-the-badge" alt="zero runtime deps"></a>
-  <a href="https://github.com/astral-sh/uv"><img src="https://img.shields.io/badge/Built%20with-uv-000000?style=for-the-badge" alt="uv"></a>
-  <a href="https://github.com/psf/black"><img src="https://img.shields.io/badge/code%20style-black-000000?style=for-the-badge" alt="Black"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-prebuilt%20binary-orange?style=for-the-badge" alt="Rust"></a>
+  <a href="#-install"><img src="https://img.shields.io/badge/deps-no%20language%20runtime-4c9a6b?style=for-the-badge" alt="no additional language runtime"></a>
+</p>
+
+<p align="center">
+  <strong>A local-first secret manager — API key manager, token manager and password manager in one binary.</strong><br>
+  It keeps every credential you own: API keys, tokens, passwords, server root logins and CLI profiles.<br>
+  AES-256-GCM encryption provides local secret management and a .env alternative; `ky run` injects credentials into subprocesses so you can keep plaintext out of model context.
 </p>
 
 [中文](./README.md)
 
 ---
 
-## 🎯 Why Kyvault? (core comparison)
+## 🎯 Kyvault behavior and boundaries
 
-| Feature | Kyvault | .env | 1Password | Vault |
-|------|---------|------|-----------|-------|
-| **AI safety (alias injection)** | **✅ absolutely safe** | ❌ leaks plaintext | ✅ safe but slow | ✅ complex |
-| **Auto-overwrite on expiry** | **✅ expired keys must rotate** | ❌ no validation | ❌ manual | ❌ manual |
-| **Multi-platform CLI auto-connect** | **✅ one command** | ❌ not supported | ❌ not supported | ❌ not supported |
-| **Pure local (zero network)** | **✅ instant** | ✅ local | ❌ cloud-dependent | ❌ cloud-dependent |
-| **Multi-account multi-key** | ✅ | ❌ | ✅ | ✅ |
-| **API key validation (incl. balance)** | ✅ auto | ❌ | ❌ | ❌ |
-| **Lightweight** | ✅ minimal | ✅ minimal | ❌ heavy | ❌ heavy |
+| Capability | Actual behavior and boundary |
+|------|----------------|
+| Local storage by default | The file backend uses AES-256-GCM encryption; reading and decryption need no network access. |
+| Alias injection with `ky run` | Commands reference aliases or `secret://` URIs; values enter the child process environment at runtime without first passing through model context. |
+| Plaintext reads with `ky get` | Prints the decrypted value to the terminal; an AI assistant running it may receive that output in its context. |
+| Optional network features | API validation and balance checks, updates, GitLab sync, and the optional D1 backend access the network. |
+| Child process output | A child process can read and print injected values; Kyvault does not sandbox it or automatically filter its logs. |
 
 ---
 
 ## 🔥 Highlights
 
-* 🔒 **AI-safe alias injection**: AI only ever sees harmless names (e.g. `github_token`); runtime injects plaintext one-way into the subprocess. Keys never appear in AI chat logs or training data.
-* 🤖 **Multi-platform CLI smart connect (`kyvault connect`)**: One command auto-injects rules and skills into Gemini/agy/Claude/Codex/Hermes/OpenCode rule libraries.
+* 🔒 **Alias injection**: Reference credentials by name (e.g. `github_token`); `ky run` injects values into the child environment at runtime without putting them in prompts. The child can still read or print those values.
+* 🤖 **Multi-platform CLI smart connect (`kyvault connect`)**: One command auto-injects rules and skills into Gemini/agy/Claude/Codex/Hermes and project-local rule files.
 * 🖥️ **Encrypted developer ledger**: Server account passwords, cloud service rent, CLI multi-profile tokens — all first-class encrypted records, URI-addressable.
-* 🛡️ **Anti-rot overwrite policy**: Intercepts API 401 errors; rigidly requires agents to immediately overwrite the expired key, refuses to keep stale ones around.
+* 🛡️ **Credential maintenance guidance**: Agent rules instruct assistants to replace invalid credentials after a validation failure; Kyvault does not automatically intercept every child process API error.
 
 ---
 
@@ -51,14 +53,14 @@
 # Install and init
 curl -fsSL https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh | bash
 
-# One-key connect to all local AI agents (Claude/Codex/Hermes/OpenCode/Cursor)
+# Add rules for supported local AI assistants (Claude/Codex/Hermes/Cursor)
 kyvault connect
 
-# AI runs with zero plaintext
+# Construct commands with references; avoid printing secrets from the child
 kyvault run --env GITHUB_TOKEN=secret://github/personal-pat -- git push
 ```
 
-> **On the "short aliases":** The Python implementation did expose `ky` / `kyi` / `kya` / `kyk` / `kyp` / `kyr` / `kyconnect` short names (via Click decorators). The Rust implementation dropped them — subcommands start from `kyvault`, and **`kyvault init` / `kyvault run` / `kyvault connect` are already the shortest shell-completion-friendly paths**. This is a deliberate trade-off: one fewer name to maintain; re-introducing the short names in Rust would only widen the drift between the two command surfaces. Add your own shell aliases in `~/.zshrc` / `~/.bashrc` if you want them.
+> **Short command `ky`:** The installer creates a `ky` symlink to `kyvault`. Both commands use the same binary and subcommands: `ky init`, `ky run`, and `ky connect` are equivalent to their `kyvault` forms.
 
 ---
 
@@ -66,8 +68,8 @@ kyvault run --env GITHUB_TOKEN=secret://github/personal-pat -- git push
 
 ### 🔒 1. AI-coding-native safety (AI-Safe Alias Injection)
 
-* **Problem**: Traditional `.env` files or in-memory env vars get read by Cursor, Claude Code, GitHub Copilot etc. into their context — keys leak directly into the AI provider's chat logs or training data.
-* **Solution**: Kyvault uses **alias-mapped injection**. AI only sees harmless "aliases" (e.g. `github_token`) in code and prompts; at runtime, `kyvault run` dynamically and one-way injects the plaintext into the subprocess. AI never touches the plaintext — leakage is blocked at the source.
+* **Problem**: When an AI assistant reads a credential-bearing `.env` file or command output containing environment variables, plaintext may enter model context and session records. Training use depends on the service's policies and settings.
+* **Solution**: With **alias-mapped injection**, an assistant constructs a command using an alias or `secret://` URI, then `ky run` passes the value to the child environment. This reduces the need to hand plaintext to the model; it is not a sandbox, and `ky get` or child output can still expose credentials.
 
 ### 🤖 2. Smart connect, AI zero-config aware (Zero-Config AI Connect)
 
@@ -79,10 +81,10 @@ kyvault run --env GITHUB_TOKEN=secret://github/personal-pat -- git push
 * **Server ledger**: Server IPs, root login passwords, cloud providers and monthly rent — first-class encrypted records, URI-addressable as `secret://server/<host>/[ip|root-password]`.
 * **CLI multi-account**: One CLI tool (e.g. `studio-cli`, `git`) can have multiple Profiles (main, test, deploy) — multi-account environments read one key, no identity confusion.
 
-### 🔑 4. Pure local military-grade encryption (Local Military-Grade Encryption)
+### 🔑 4. Local encryption
 
-* **High-strength encryption**: Industry-standard **AES-256-GCM** (authenticated encryption); all data encrypted before disk write.
-* **Zero network**: 100% pure local; no external connections; zero SaaS cloud leak or scraping risk. Keys stay in your hands.
+* **Authenticated encryption**: The file backend uses **AES-256-GCM** for credential values; addressing names and some audit metadata are not encrypted.
+* **Offline reads**: Reading and decryption with the default file backend need no network access. API validation, updates, GitLab sync, and the optional D1 backend access the network.
 
 > **⚠️ `name` is an alias — don't put the key itself there.**
 > The `name` in `secret://<platform>/<name>` is **not encrypted** — it's the addressing handle, `list` prints it as-is.
@@ -155,20 +157,20 @@ kyvault platform github
 
 ```bash
 # Push code
-kyvault run --env GITHUB_TOKEN=ghp_xxxxxxxxxxxx -- git push
+kyvault run --env GITHUB_TOKEN=secret://github/pat -- git push
 
 # Call API
-kyvault run --env OPENAI_API_KEY=sk-xxxxxxxxxxxx -- python app.py
+kyvault run --env OPENAI_API_KEY=secret://openai/api-key -- python app.py
 
 # Multiple keys
-kyvault run --env TOKEN1=secret1 --env TOKEN2=secret2 -- python script.py
+kyvault run --env TOKEN1=secret://example/first --env TOKEN2=secret://example/second -- python script.py
 ```
 
 ### Alias system
 
 ```bash
 # Create alias (this is what AI sees)
-kyvault alias set github_token secret://github/ghp_xxxxxxxxxxxx
+kyvault alias set github_token secret://github/pat
 
 # Inject via alias
 kyvault run --env GITHUB_TOKEN=github_token -- git push
@@ -189,7 +191,7 @@ kyvault import --file .env --prefix GITHUB_
 
 ### 🤖 AI agent one-key connect
 
-Global and project-local smart rules so your local AI coding assistants (Cursor, VSCode Copilot, Claude Code, etc.) can immediately understand the vault and alias names — no plaintext leak:
+Global and project-local rules explain the vault and alias workflow to AI coding assistants (Cursor, VSCode Copilot, Claude Code, etc.) and guide them to prefer injection commands:
 
 ```bash
 # Auto-connect global Gemini rules and the project's .agents/, .cursorrules, .copilotinstructions
@@ -255,7 +257,7 @@ kyvault get secret://cli/studio-cli/test-user   # output: jwt_token_test
 
 - **Encryption algorithm**: AES-256-GCM (authenticated encryption)
 - **Key derivation**: SHA-256
-- **Storage**: Pure local, zero network
+- **Storage**: Local file backend by default; optional GitLab ciphertext sync or D1 backend
 - **Permissions**: master.key readable only by owner
 
 ---
@@ -362,9 +364,23 @@ MIT — see [LICENSE](LICENSE).
 
 **A: No.**
 
-Kyvault is a Rust static binary; encryption uses `aes-gcm` (AES-256-GCM), TLS uses `rustls`. **No Python, no Node, no Rust toolchain required** — download and use.
+Kyvault provides prebuilt Rust binaries; encryption uses `aes-gcm` (AES-256-GCM), TLS uses `rustls`. **Prebuilt versions need no Python, Node, or Rust toolchain**. Linux release targets use the GNU ABI and still require compatible system libraries.
 
 This is deliberate: the vault is the foundation that every credential-needing job depends on, so it can't rely on any single runtime that might break. The previous Python version paid for this lesson — on some machines, the interpreter's TLS validation fails entirely (same cert chain, `openssl verify` says OK, `curl` connects, but Python reports `CERTIFICATE_VERIFY_FAILED`); the key write channel went read-only on the spot.
+
+---
+
+## 🔎 Find us by
+
+Looking for a dotenv / `.env` replacement, or a CLI tool that keeps API keys, tokens, passwords and
+server credentials in one encrypted store? That is what Kyvault is. Existing `.env` files import with
+`kyvault import --file .env`, and from then on `ky run` hands values to a subprocess without putting
+them in your prompt or your model's context.
+
+It is local-first: the default file backend runs locally and decrypts without network access.
+Remote storage is optional, through GitLab ciphertext sync or the Cloudflare D1 ciphertext backend
+selected with `KYVAULT_BACKEND=d1`. Compared with a self-hosted secret manager, Kyvault's local mode
+requires no server deployment; remote features require the corresponding GitLab repository or D1 configuration.
 
 ---
 

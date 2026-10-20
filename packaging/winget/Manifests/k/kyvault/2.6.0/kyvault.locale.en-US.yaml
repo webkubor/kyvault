@@ -1,0 +1,19 @@
+PackageIdentifier: kyvault.kyvault
+PackageVersion: 2.6.0
+PackageLocale: en-US
+Publisher: kyvault
+PublisherUrl: https://github.com/webkubor/kyvault
+PackageName: kyvault
+PackageUrl: https://github.com/webkubor/kyvault
+License: MIT
+LicenseUrl: https://github.com/webkubor/kyvault/blob/main/LICENSE
+ShortDescription: Local-first encrypted secret and API key manager
+Description: Local-first encrypted secret and API key manager with AES-256-GCM encryption and local storage. AI tools access secrets by alias, never by plaintext.
+Tags:
+  - secrets
+  - secret-manager
+  - api-key
+  - encryption
+  - cli
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

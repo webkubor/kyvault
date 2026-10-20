@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Kyvault — Local-First Secret Manager · 密钥管理器</title>
+  <meta name="description" content="Kyvault 是本地优先的 secret manager（密钥管理器）：管理 API Key、Token、密码与凭证，用 AES-256-GCM 加密，通过 ky run 将凭证引用解析为子进程环境变量，减少向模型上下文传递明文。">
+  <meta name="keywords" content="密钥管理, 秘钥管理, Token 管理, 令牌管理, API Key 管理, 凭证管理, secret manager, API key manager, token manager, password manager, .env alternative, local-first secret manager">
+  <meta name="author" content="Kyvault contributors">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Kyvault — Local-First Secret Manager · 密钥管理器">
+  <meta property="og:description" content="Keep plaintext out of AI context. Store secrets locally, then inject them into subprocesses through harmless aliases. 默认本地加密，别名注入，减少向模型传递明文。">
+  <meta property="og:image" content="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/keyring-banner/cs-token4ai-1784197546810397000.png">
+  <meta property="og:image:alt" content="Kyvault banner">
+  <meta property="og:url" content="https://webkubor.github.io/kyvault/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Kyvault — Local-First Secret Manager · 密钥管理器">
+  <meta name="twitter:description" content="本地加密密钥管理与 AI 安全别名注入。A local-first secret manager for API keys, tokens, passwords, and credentials.">
+  <meta name="twitter:image" content="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/keyring-banner/cs-token4ai-1784197546810397000.png">
+  <link rel="canonical" href="https://webkubor.github.io/kyvault/">
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Kyvault",
+    "description": "A local-first secret manager for API keys, tokens, passwords, and credentials. Encrypts data with AES-256-GCM and injects secret values into subprocesses through aliases.",
+    "applicationCategory": "SecurityApplication",
+    "operatingSystem": "macOS, Linux, Windows",
+    "license": "https://opensource.org/license/mit/",
+    "codeRepository": "https://github.com/webkubor/kyvault",
+    "keywords": ["密钥管理", "秘钥管理", "Token 管理", "令牌管理", "API Key 管理", "凭证管理", "secret manager", "API key manager", "token manager", "password manager", ".env alternative", "local-first secret manager"]
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {"@type":"Question","name":"Where are secrets stored? 密钥存在哪里？","acceptedAnswer":{"@type":"Answer","text":"The default file store is ~/.keyring/ unless KYVAULT_STORE_DIR is set. File-backend decryption is offline. GitLab ciphertext sync and the D1 backend are optional network features."}},
+      {"@type":"Question","name":"Is plaintext ever sent anywhere? 明文会被发送出去吗？","acceptedAnswer":{"@type":"Answer","text":"The file backend encrypts and decrypts offline. ky run injects values into the child environment without first handing them to the model. ky get prints plaintext, and child output can expose values. Checks, updates, sync and D1 use the network."}},
+      {"@type":"Question","name":"How does alias injection work? 别名注入如何工作？","acceptedAnswer":{"@type":"Answer","text":"Map a harmless alias or secret:// URI to a stored secret, then run a command with ky run --env NAME=secret://platform/name -- command. Kyvault resolves the value locally and passes it to the subprocess environment."}},
+      {"@type":"Question","name":"What is Auth Guard? Auth Guard 是什么？","acceptedAnswer":{"@type":"Answer","text":"Auth Guard protects the root master key by encrypting it as master.key.enc. It supports unlocking with a bound local SSH public key and optional Google Authenticator TOTP for sensitive operations."}},
+      {"@type":"Question","name":"How do I migrate from .env? 如何从 .env 迁移？","acceptedAnswer":{"@type":"Answer","text":"Use ky import --dry-run to review an import before applying it. The dry run prints the planned mapping without writing to the vault."}}
+    ]
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到正文 / Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Kyvault home"><span class="brand-mark" aria-hidden="true">K</span><span>KYVAULT</span></a>
+    <nav aria-label="主导航 / Main navigation">
+      <a href="#how">工作原理</a><a href="#features">功能</a><a href="#compare">行为与边界</a><a href="#faq">FAQ</a>
+      <a class="nav-cta" href="https://github.com/webkubor/kyvault/releases/latest">获取 ky <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+  <main id="main">
+    <section class="hero" id="top" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="pulse" aria-hidden="true"></span> LOCAL-FIRST · AES-256-GCM · ZERO NETWORK FOR LOCAL DECRYPTION</p>
+        <h1 id="hero-title">本地优先的密钥管理器<span>Local-first secret manager</span></h1>
+        <p class="hero-lede">让 AI 用凭证引用构造命令，无需先把明文交给模型。Kyvault 默认本地加密存储，在运行时将值注入子进程环境。</p>
+        <p class="hero-lede en">Use secret references in AI-generated commands, then inject values at runtime. Child output and plaintext reads still need care.</p>
+        <div class="hero-actions"><a class="button primary" href="https://github.com/webkubor/kyvault/releases/latest">安装 Kyvault <span aria-hidden="true">→</span></a><a class="button secondary" href="https://github.com/webkubor/kyvault">查看源码</a></div>
+        <p class="hero-meta">开源 MIT · macOS / Linux / Windows · 预编译二进制，无需额外语言运行时</p>
+      </div>
+      <div class="terminal" aria-label="别名注入命令示例">
+        <div class="terminal-bar"><span></span><span></span><span></span><span class="terminal-label">SAFE EXECUTION</span></div>
+        <div class="terminal-body"><p class="terminal-comment"># AI sees an alias. The process gets the secret.</p><p><span class="prompt">$</span> ky run --env</p><p class="indent">GITHUB_TOKEN=<span class="alias">secret://github/main</span> \</p><p class="indent">-- git push</p><div class="terminal-rule"></div><p class="terminal-comment"># Plaintext stays out of the prompt.</p><p class="terminal-ok"><span aria-hidden="true">✓</span> injected into subprocess</p><p class="terminal-ok"><span aria-hidden="true">✓</span> decrypted locally, offline</p><p class="terminal-ok"><span aria-hidden="true">✓</span> command contains only the reference</p></div>
+      </div>
+      <div class="hero-orbit orbit-a" aria-hidden="true"></div><div class="hero-orbit orbit-b" aria-hidden="true"></div>
+    </section>
+    <section class="trust-strip" aria-label="Kyvault properties"><span><b>01</b> 本地优先 / Local-first</span><span><b>02</b> AES-256-GCM</span><span><b>03</b> 别名注入 / Alias injection</span><span><b>04</b> MIT License</span></section>
+    <section class="problem section" aria-labelledby="problem-title"><div class="section-kicker">THE PROBLEM</div><div class="problem-grid"><h2 id="problem-title">你的 <code>.env</code><br>不该进入 AI 上下文。</h2><div><p>把密钥放进项目环境变量或提示词，AI 编码工具就可能在读取配置、调试输出或生成代码时接触到它。这可能使明文进入模型上下文与会话记录；是否用于训练取决于所用服务的政策与设置。</p><p>Kyvault 把密文留在本机。AI 只写变量名和稳定的 <code>secret://</code> 地址；<code>ky run</code> 在本地解密并将值传给子进程。</p></div></div></section>
+    <section class="section how-section" id="how" aria-labelledby="how-title"><div class="section-kicker">HOW IT WORKS</div><h2 id="how-title">三步，用引用构造命令、运行时注入凭证</h2><div class="steps"><article class="step"><span class="step-no">01</span><h3>本地加密存储</h3><p>写入 API Key、Token、密码等凭证。Kyvault 使用 AES-256-GCM 加密，密文保存在本地用户配置目录。</p><code>ky set secret://github/main -</code></article><article class="step"><span class="step-no">02</span><h3>用别名描述所需凭证</h3><p>命令、规则和 AI 上下文只出现变量名与 <code>secret://</code> URI，不需要复制密钥明文。</p><code>GITHUB_TOKEN=secret://github/main</code></article><article class="step"><span class="step-no">03</span><h3>运行时单向注入</h3><p><code>ky run</code> 在本地解密，将值注入目标子进程的环境变量并执行命令。</p><code>ky run --env … -- git push</code></article></div></section>
+    <section class="install-section section" id="install" aria-labelledby="install-title"><div class="install-copy"><div class="section-kicker">GET STARTED</div><h2 id="install-title">一个命令，开始保护密钥。</h2><p>下载预编译二进制，无需额外安装 Python、Node 或 Rust 工具链。Linux GNU 目标仍需兼容的系统库。安装器创建 <code>ky</code> 符号链接，与 <code>kyvault</code> 使用同一二进制。</p></div><div class="install-code"><span class="code-label">TERMINAL</span><code>curl -fsSL https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh | bash</code><p><span aria-hidden="true">→</span> then run <b>ky</b> or <b>kyvault</b></p></div><div class="install-links"><a href="https://github.com/webkubor/kyvault/releases">所有版本与平台二进制 ↗</a><a href="https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh">查看 install.sh ↗</a></div></section>
+    <section class="section comparison" id="compare" aria-labelledby="compare-title"><div class="section-kicker">BEHAVIOR &amp; BOUNDARIES</div><h2 id="compare-title">Kyvault 的行为与边界</h2><p class="section-intro">本地加密与运行时注入减少了主动向模型提供明文的需要，同时保留以下边界。</p><div class="table-wrap"><table><thead><tr><th scope="col">能力 / Capability</th><th scope="col">实际行为与边界 / Behavior and boundary</th></tr></thead><tbody><tr><th scope="row">默认本地存储 / Local default</th><td>文件后端使用 AES-256-GCM 加密，读取与解密无需联网。File reads and decryption work offline.</td></tr><tr><th scope="row"><code>ky run</code></th><td>命令引用别名或 URI，值在运行时注入子进程环境，无需先交给模型。References become child environment values at runtime.</td></tr><tr><th scope="row"><code>ky get</code></th><td>输出解密后的明文；AI 执行时，输出可能进入模型上下文。Prints plaintext, which an assistant may receive.</td></tr><tr><th scope="row">可选网络 / Optional network</th><td>API 验证与余额查询、更新、GitLab 同步及可选 D1 后端会联网。Validation, updates, sync and D1 use the network.</td></tr><tr><th scope="row">子进程输出 / Child output</th><td>子进程可读取或输出注入值；Kyvault 不隔离子进程或自动过滤日志。No child sandbox or automatic log filtering.</td></tr></tbody></table></div></section>
+    <section class="section capabilities" id="features" aria-labelledby="features-title"><div class="section-kicker">CAPABILITIES</div><h2 id="features-title">一座本地加密凭证台账</h2><div class="cap-grid"><article><span class="cap-icon" aria-hidden="true">⌘</span><h3>给 AI 安全用密钥</h3><p>用 <code>ky run</code> 将密钥注入子进程。<code>ky connect</code> 可为 Gemini、agy、Claude、Codex、Hermes 和项目本地助手 接入规则与技能。</p></article><article><span class="cap-icon" aria-hidden="true">▤</span><h3>不止 API Key</h3><p>用 URI 管理平台密钥、账号密码、服务器 IP / 端口 / 密码、云服务租金与 CLI 多 Profile Token。</p><p class="uri-list"><code>secret://github/main</code><code>secret://account/github/user</code><code>secret://server/host/field</code><code>secret://cli/gh/main</code></p></article><article><span class="cap-icon" aria-hidden="true">◉</span><h3>保护根密钥</h3><p>Auth Guard 将根 master key 加密为 <code>master.key.enc</code>，支持本地 SSH 公钥解锁与 Google Authenticator TOTP。</p></article><article><span class="cap-icon" aria-hidden="true">↗</span><h3>验证、迁移、整理</h3><p>运行 <code>ky check</code> 验证支持的平台密钥与余额；用预览模式导入现有 <code>.env</code>；通过 <code>ky wizard</code> 规范分类和命名。</p></article><article><span class="cap-icon" aria-hidden="true">▣</span><h3>本地 Web GUI</h3><p>运行 <code>ky ui</code> 启动本地面板并自动打开浏览器。运行 <code>ky wizard</code> 使用终端分类向导。</p></article><article><span class="cap-icon" aria-hidden="true">⇄</span><h3>可选团队密文同步</h3><p>团队可通过 GitLab 同步加密后的密文和脱敏元信息；解密仍在本地完成，根密钥不入仓。</p></article></div></section>
+    <section class="search-surface" aria-labelledby="search-title"><div class="section-kicker">COMMON SEARCHES · 常见搜索</div><h2 id="search-title">按你正在找的问题发现 Kyvault</h2><p>密钥管理 · 秘钥管理 · Token 管理 · 令牌管理 · API Key 管理 · 凭证管理 · 密码管理 · <span lang="en">secret manager · API key manager · token manager · password manager · .env alternative · local-first secret manager</span></p></section>
+    <section class="section faq-section" id="faq" aria-labelledby="faq-title"><div class="section-kicker">FAQ</div><h2 id="faq-title">常见问题</h2><div class="faq-list"><details><summary>密钥存在哪里？Where are secrets stored?</summary><p>文件后端默认使用 <code>~/.keyring/</code>，可通过 <code>KYVAULT_STORE_DIR</code> 指定目录；读取与解密无需联网。GitLab 密文同步和 D1 后端是可选网络功能。</p></details><details><summary>明文会被发送到哪里吗？Is plaintext sent anywhere?</summary><p>文件后端的加解密无需联网。<code>ky run</code> 把值注入子进程，无需先交给模型；但 <code>ky get</code> 会输出明文，子进程也可能输出凭证。验证、更新、同步与 D1 会访问网络。</p></details><details><summary>别名注入如何工作？How does alias injection work?</summary><p>把别名或 <code>secret://</code> URI 映射到已存凭证，然后运行 <code>ky run --env NAME=secret://platform/name -- command</code>。Kyvault 本地解析凭证，再通过子进程环境变量传入。</p></details><details><summary>什么是 Auth Guard？</summary><p>Auth Guard 将根 master key 加密为 <code>master.key.enc</code>，可用绑定的本地 SSH 公钥解锁，也可为敏感操作配置 Google Authenticator TOTP。</p></details><details><summary>如何从 .env 迁移？</summary><p>运行 <code>ky import --dry-run</code> 先预览导入计划；它只输出映射，不写入密钥库。</p></details></div></section>
+    <section class="final-cta"><div><div class="section-kicker">KEEP YOUR SECRETS YOURS</div><h2>从今天起，把明文留在本机。</h2><p>Kyvault v2.6.0 · MIT · Built for developers and AI agents.</p></div><a class="button primary" href="https://github.com/webkubor/kyvault/releases/latest">下载最新版本 <span aria-hidden="true">↗</span></a></section>
+  </main>
+  <footer><a class="brand" href="#top"><span class="brand-mark" aria-hidden="true">K</span><span>KYVAULT</span></a><p>Local-first secrets for developers and AI agents.</p><div><a href="https://github.com/webkubor/kyvault">GitHub repo</a><a href="https://github.com/webkubor/kyvault/releases">Releases</a><a href="https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh">install.sh</a><a href="https://github.com/webkubor/kyvault/blob/main/LICENSE">MIT License</a></div><small>© Kyvault contributors · MIT License</small></footer>
+</body>
+</html>

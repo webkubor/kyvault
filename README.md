@@ -5,39 +5,43 @@
 <h1 align="center">🔐 Kyvault</h1>
 
 <p align="center">
-  <strong>AI 时代开发者密钥与资产台账管理器 — 你存一次，AI 永远看不到明文。</strong>
+  <strong>AI 时代开发者密钥与资产台账管理器 — 用别名注入，减少向模型上下文传递明文。</strong>
 </p>
 
 <p align="center">
   <a href="https://github.com/webkubor/kyvault/releases"><img src="https://img.shields.io/github/v/release/webkubor/kyvault?style=for-the-badge&color=coral" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/webkubor/kyvault?style=for-the-badge&color=gold" alt="License"></a>
   <a href="https://github.com/webkubor/kyvault/releases/latest"><img src="https://img.shields.io/github/downloads/webkubor/kyvault/total?style=for-the-badge&color=orange" alt="Downloads"></a>
-  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-静态二进制-orange?style=for-the-badge" alt="Rust"></a>
-  <a href="#-安装"><img src="https://img.shields.io/badge/依赖-零运行时-4c9a6b?style=for-the-badge" alt="零运行时依赖"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-预编译二进制-orange?style=for-the-badge" alt="Rust"></a>
+  <a href="#-安装"><img src="https://img.shields.io/badge/依赖-无需额外语言运行时-4c9a6b?style=for-the-badge" alt="无需额外语言运行时"></a>
+</p>
+
+<p align="center">
+  <strong>本地优先（local-first）的 secret manager（密钥管理 / 秘钥管理）</strong><br>
+  一个二进制同时是 API key manager（API Key 管理）、token manager（Token 管理 / 令牌管理）、password manager（密码管理）与 credentials（凭证管理）台账；<br>
+  AES-256-GCM 加密落盘，提供本地 secret management 与 dotenv / .env 替代方案；用 `ky run` 将凭证注入子进程，避免在模型上下文中传递明文。
 </p>
 
 ---
 
-## 🎯 为什么需要 Kyvault？ (核心对比)
+## 🎯 Kyvault 的行为与边界
 
-| 功能 | Kyvault | .env | 1Password | Vault |
-|------|---------|------|-----------|-------|
-| **AI 安全 (别名注入)** | **✅ 绝对安全** | ❌ 泄漏明文 | ✅ 安全但慢 | ✅ 复杂难用 |
-| **时效覆写 (自动防腐)** | **✅ 失效必改** | ❌ 无校验 | ❌ 手动更新 | ❌ 手动更新 |
-| **多平台 CLI 智能连接** | **✅ 一键连接** | ❌ 不支持 | ❌ 不支持 | ❌ 不支持 |
-| **纯本地存储 (零网络)** | **✅ 极速响应** | ✅ 本地 | ❌ 依赖云端 | ❌ 依赖云端 |
-| **多账户多密钥** | **✅ 支持** | ❌ 不支持 | ✅ 支持 | ✅ 支持 |
-| **API Key 验证 (含余额)**| **✅ 自动验证** | ❌ 不支持 | ❌ 不支持 | ❌ 不支持 |
-| **轻量依赖** | **✅ 极简** | ✅ 极简 | ❌ 庞大 | ❌ 庞大 |
+| 能力 | 实际行为与边界 |
+|------|----------------|
+| 默认本地存储 | 文件后端使用 AES-256-GCM 加密，读取与解密无需联网。 |
+| `ky run` 别名注入 | 命令只需引用别名或 `secret://` URI，值在运行时传入子进程环境，无需先交给模型上下文。 |
+| `ky get` 明文读取 | 会将解密后的值输出到终端；交给 AI 执行时，输出可能进入模型上下文。 |
+| 可选网络功能 | API 验证与余额查询、更新、GitLab 同步和可选 D1 后端会访问网络。 |
+| 子进程输出 | 子进程能读取并输出注入的值；Kyvault 不隔离子进程，也不自动过滤其日志。 |
 
 ---
 
 ## 🔥 一屏特性亮点
 
-* 🔒 **AI 安全别名注入 (AI-Safe)**: AI 只能看到无害别名（如 `github_token`），运行时单向注入，彻底防止密钥在 AI 聊天日志或训练数据中泄露。
+* 🔒 **别名注入 (Alias Injection)**: 用别名（如 `github_token`）引用凭证，`ky run` 在运行时将值注入子进程，无需把明文写进提示词。子进程仍可读取或输出该值。
 * 🌐 **本地极客 Web GUI 与向导 (Web GUI & Wizard)**: 一键 `ky ui` 唤起本地极客暗黑风面板；`ky wizard` 提供终端四步分类引导，彻底告别命名不统一。
 * 🛡️ **Auth Guard 多因素授权守卫 (Multi-Factor Guard)**: 根密钥加密为 `master.key.enc`，支持本地 SSH 公钥无感解锁 + Google Authenticator 动态门禁。
-* 🤖 **多平台 CLI 智能对接 (AI Connect)**: 一键 `ky connect`，自动将规则和技能注入 `Gemini/agy/Claude/Codex/Hermes/DSH` 记忆与规则库。
+* 🤖 **多平台 CLI 智能对接 (AI Connect)**: 一键 `ky connect`，自动将规则和技能注入 `Gemini/agy/Claude/Codex/Hermes` 及项目本地助手 记忆与规则库。
 * 🖥️ **开发者加密台账中心 (Developer Ledger)**: 加密管理服务器账号密码、云服务租金、CLI 客户端多 Profile 凭证令牌，支持 URI 寻址。
 * ⚡ **极简短命令 (First-Class `ky`)**: `ky` 作为官方第一公民，敲 `ky list`、`ky run`、`ky ui` 享受最极客的开发者心流。
 
@@ -58,7 +62,7 @@ ky ui
 # 4. 或命令行引导式规范录入
 ky wizard
 
-# 5. AI 零明文注入运行（代码与日志中绝对安全）
+# 5. 以凭证引用构造命令，运行时注入（避免子进程输出密钥）
 ky run --env GITHUB_TOKEN=secret://github/pat -- git push
 ```
 
@@ -69,8 +73,8 @@ ky run --env GITHUB_TOKEN=secret://github/pat -- git push
 ## 🔥 核心亮点
 
 ### 🔒 1. AI 编码原生安全 (AI-Safe Alias Injection)
-* **痛点**：传统的 `.env` 文件或内存环境变量会被 Cursor、Claude Code、GitHub Copilot 等 AI 助手读取其上下文，导致密钥直接暴露在 AI 提供商的聊天日志或训练数据中。
-* **解法**：`kyvault` 采用**别名映射注入机制**。AI 在代码和提示词中只能看到无害的“别名”（如 `github_token`），而在运行时（Runtime）通过 `kyvault run` 动态且单向地将明文注入子进程。AI 永远接触不到明文，从源头上杜绝了数据泄露。
+* **痛点**：当 AI 助手读取含有凭证的 `.env` 文件，或命令输出了环境变量时，明文可能进入模型上下文与会话记录。是否用于训练取决于所用服务的政策与设置。
+* **解法**：通过**别名映射注入**，AI 可用别名或 `secret://` URI 构造命令，`ky run` 再把值传给子进程环境。这减少了主动向模型提供明文的需要；它不是沙箱，`ky get` 或子进程输出仍可能暴露凭证。
 
 ### 🤖 2. 智能连接，AI 零配置感知 (Zero-Config AI Connect)
 * **一键连接**：内置 `kyvault connect` 命令，能自动发现并注入当前机器的全局 Gemini/Claude 规则与当前项目的 `.agents/` 技能文件。
@@ -80,9 +84,9 @@ ky run --env GITHUB_TOKEN=secret://github/pat -- git push
 * **服务器台账**：将服务器 IP、root 登录密码、云服务商及月度租用成本以第一公民的数据结构集中加密记录，统一支持 `secret://server/<host>/[ip|root-password]` 的 URI 寻址解密。
 * **CLI 多账户管理**：支持针对同一个 CLI 工具（如 `studio-cli`、`git`）管理多套 Profile（如主账户、测试账户、部署账户）的 Token，多账户环境一键读取，杜绝身份混淆。
 
-### 🔑 4. 纯本地军事级加密 (Local Military-Grade Encryption)
-* **高强度加密**：采用业界公认安全的 **AES-256-GCM**（认证加密），所有数据在写入磁盘前均完成高强度加密。
-* **零网络依赖**：100% 纯本地运行，不发起任何外网连接，绝无任何 SaaS 云端数据泄漏或被拖库的潜在风险。密钥完全掌握在您自己手中。
+### 🔑 4. 本地加密 (Local Encryption)
+* **认证加密**：文件后端使用 **AES-256-GCM** 加密凭证值；寻址名称和部分审计元信息不加密。
+* **离线读取**：默认文件后端的读取与解密无需联网。API 验证、更新、GitLab 同步及可选 D1 后端会访问网络。
 
 > **⚠️ name 是别名，不要填密钥本身。**
 > `secret://<platform>/<name>` 里的 `name` **不加密** —— 它是寻址用的，`list` 会原样打印。
@@ -157,20 +161,20 @@ kyvault platform github
 
 ```bash
 # 推代码
-kyvault run --env GITHUB_TOKEN=ghp_xxxxxxxxxxxx -- git push
+kyvault run --env GITHUB_TOKEN=secret://github/pat -- git push
 
 # 调 API
-kyvault run --env OPENAI_API_KEY=sk-xxxxxxxxxxxx -- python app.py
+kyvault run --env OPENAI_API_KEY=secret://openai/api-key -- python app.py
 
 # 多个密钥
-kyvault run --env TOKEN1=secret1 --env TOKEN2=secret2 -- python script.py
+kyvault run --env TOKEN1=secret://example/first --env TOKEN2=secret://example/second -- python script.py
 ```
 
 ### 别名系统
 
 ```bash
 # 创建别名（AI 只认识这个）
-kyvault alias set github_token secret://github/ghp_xxxxxxxxxxxx
+kyvault alias set github_token secret://github/pat
 
 # 用别名注入
 kyvault run --env GITHUB_TOKEN=github_token -- git push
@@ -191,7 +195,7 @@ kyvault import --file .env --prefix GITHUB_
 
 ### 🤖 AI 智能体一键连接 (AI Connect)
 
-通过全局和项目本地的智能规则，使您本地的 AI 编码助手（如 Cursor、VSCode Copilot、Claude Code 等）能够立即读懂密钥库及别名别称，彻底避免明文泄漏：
+通过全局和项目本地规则，向 AI 编码助手（如 Cursor、VSCode Copilot、Claude Code 等）说明密钥库与别名用法，引导其优先使用注入命令：
 ```bash
 # 一键自动对接全局 Gemini 规则和当前项目下的 .agents/、.cursorrules 和 .copilotinstructions
 kyvault connect
@@ -413,9 +417,21 @@ cargo clippy --all-targets -- -D warnings
 
 #### Q: 本地只有 Node 环境，需要安装 Python 吗？
 **A: 不需要。**  
-Kyvault 是一个 Rust 静态二进制，加密走 `aes-gcm`（AES-256-GCM）、TLS 走 `rustls`。**不需要 Python、不需要 Node、不需要 Rust 工具链**，下载即用。
+Kyvault 提供 Rust 预编译二进制，加密走 `aes-gcm`（AES-256-GCM）、TLS 走 `rustls`。**使用预编译版本不需要 Python、Node 或 Rust 工具链**。Linux 发布目标使用 GNU ABI，仍需兼容的系统库环境。
 
 这一点是刻意的：密钥库是所有需要凭据的工作的底座，它不该依赖任何一个可能坏掉的运行时。此前的 Python 版就吃过这个亏——某些机器上解释器的 TLS 验证会整体失效（同一条证书链 `openssl verify` 判 OK、`curl` 连得通，唯独 Python 报 `CERTIFICATE_VERIFY_FAILED`），密钥写入通道当场只读。
+
+---
+
+## 🔎 常见搜索 / Find us by
+
+在找 dotenv / `.env` 的替代方案，或者想把散落各处的 API Key、Token、密码与服务器凭证收进同一个
+加密仓库？Kyvault 就是干这个的。已有的 `.env` 用 `kyvault import --file .env` 导入，之后交给
+`ky run` 把值注入子进程，不必把它写进提示词或模型上下文。
+
+它是 local-first 的：默认文件后端本地运行、解密不出网；需要远端存储时，可选 GitLab 密文同步，
+或用 `KYVAULT_BACKEND=d1` 接 Cloudflare D1 远端密文后端。与需要自行部署的 self-hosted
+密钥管理服务相比，Kyvault 的本地用法无需部署服务端；远端功能则需要相应的 GitLab 仓库或 D1 配置。
 
 ---
 

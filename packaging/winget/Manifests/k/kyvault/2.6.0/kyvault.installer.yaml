@@ -1,0 +1,13 @@
+PackageIdentifier: kyvault.kyvault
+PackageVersion: 2.6.0
+Platform:
+  - Windows.Desktop
+MinimumOSVersion: 10.0.17763.0
+InstallerType: portable
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/webkubor/kyvault/releases/download/v2.6.0/kyvault-x86_64-pc-windows-msvc.zip
+    InstallerSha256: 114d622eb2a7204a7d12f3ccefac7dac64fd0a3c1165936cbda9713cfeb3fe8e
+    PortableCommandAlias: kyvault.exe
+ManifestType: installer
+ManifestVersion: 1.6.0
