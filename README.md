@@ -10,10 +10,12 @@
 
 <p align="center">
   <a href="https://github.com/webkubor/kyvault/releases"><img src="https://img.shields.io/github/v/release/webkubor/kyvault?style=for-the-badge&color=coral" alt="Version"></a>
+  <a href="https://crates.io/crates/kyvault"><img src="https://img.shields.io/crates/v/kyvault?style=for-the-badge&color=orange" alt="crates.io"></a>
+  <a href="https://github.com/webkubor/kyvault/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/webkubor/kyvault/test.yml?style=for-the-badge&color=4c9a6b" alt="Test"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/webkubor/kyvault?style=for-the-badge&color=gold" alt="License"></a>
   <a href="https://github.com/webkubor/kyvault/releases/latest"><img src="https://img.shields.io/github/downloads/webkubor/kyvault/total?style=for-the-badge&color=orange" alt="Downloads"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-预编译二进制-orange?style=for-the-badge" alt="Rust"></a>
-  <a href="#-安装"><img src="https://img.shields.io/badge/依赖-无需额外语言运行时-4c9a6b?style=for-the-badge" alt="无需额外语言运行时"></a>
+  <a href="#-30-秒上手"><img src="https://img.shields.io/badge/依赖-无需额外语言运行时-4c9a6b?style=for-the-badge" alt="无需额外语言运行时"></a>
 </p>
 
 <p align="center">
