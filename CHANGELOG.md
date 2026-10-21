@@ -2,6 +2,48 @@
 
 所有对 `kyvault` 项目的重大变更都将记录在本文档中。
 
+## [Unreleased]
+
+**这一版没有改一行 Rust 代码 —— 全是「让项目能被找到」的工程。**
+
+起因是一次真实的困惑：在 GitHub 搜「token管理」「秘钥管理」，搜不到这个工具。
+查下来发现项目一直被收录着，是**描述和 topics 里根本没有这些词** ——
+GitHub 默认搜索索引的是 name + description + topics，README 不参与。
+实测：同一句话放在 README 里，`in:readme` 有 710 条结果，默认查询只有 1 条。
+
+### 可发现性 (Added)
+
+- **发布到 crates.io**：`cargo install kyvault` 现在可用（crate 名 `kyvault`，
+  `ky` 仍是 install.sh 建的符号链接 —— crates.io 上 `ky` 这个名字已被别的包占用）。
+- **公开站点**：`https://<owner>.github.io/kyvault/`，带 SEO meta、FAQ 结构化数据
+  （SoftwareApplication + FAQPage）、明暗双主题与对比度达标的配色。
+  `homepage` 字段已从「指向自己」改为指向它。
+- **仓库描述改为中英双语**，覆盖实际检索词：密钥管理 / 秘钥管理 / 令牌管理 /
+  Secret Manager / Secret Management / API Key Manager / Token Manager /
+  Credentials / dotenv alternative。
+- **topics 重排为 20 个**：去掉已停用的 `d1`（v2.3.0 起 GitLab 后端替代 D1），
+  补齐 `secret-manager` / `secrets-management` / `token-management` /
+  `token-manager` / `api-key-manager` / `local-first` 等类目词。
+  竞品 Infisical / dotenvx / sops 的共同做法是四种形态全收。
+- **徽章**：新增 crates.io 版本徽章与 CI 状态徽章；修正了原本指向
+  `#-安装` / `#-install` 的失效锚点（实际标题是「30 秒上手 / 30-second start」）。
+- **Homebrew 公式与 winget 清单**已备好并校验（winget 三份清单通过微软官方
+  JSON schema 校验；Homebrew 的 sha256 从真实 release 产物算出，未留占位）。
+
+### 表述收紧 (Changed)
+
+README 与站点此前把「AI 永远看不到明文」「全程零网络」当作承诺，这两条都不成立：
+`ky get` 会输出明文，GitLab 密文同步与 D1 后端会联网。
+现改为按实际行为描述 —— `ky run` 注入时明文不进模型上下文，但 `ky get` 与子进程输出仍会暴露。
+同时删掉与实现不符的「静态二进制」（Linux GNU 目标依赖系统库），
+以及误挂的 Python 生态徽章（Built with uv / code style Black）。
+
+### 实测效果
+
+搜索排名（同查询、按仓库 id 匹配，改前 → 改后）：
+秘钥管理 不存在 → #1 · dotenv alternative 不存在 → #1 · 令牌管理 不存在 → #4 ·
+API密钥管理 不存在 → #5 · 密钥管理 #10 → #6 · token管理 不存在 → #12。
+
 ## [2.6.0] - 2026-10-19
 
 **长密钥终于能安全写进去了；密文权限不再被 Git 打回 664。**
