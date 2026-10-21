@@ -1,0 +1,62 @@
+name: Bug 报告
+description: 报告一个可复现的缺陷
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先搜一下有没有重复的 issue。
+        **涉及密钥时不要贴明文** —— 仓库的 README 里说明了为什么 `ky get` 的输出可能进入模型上下文。
+
+  - type: input
+    id: version
+    attributes:
+      label: ky --version
+      placeholder: "kyvault 2.6.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 实际发生了什么
+      description: 期望的行为 vs 实际行为
+      placeholder: |
+        执行 `ky list` 时……，我期望……，但实际……
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      description: 尽量给到能直接复制的命令（密钥请用 secret:// 引用代替）
+      render: shell
+      placeholder: |
+        ky set secret://example/test -
+        ky get secret://example/test
+    validations:
+      required: true
+
+  - type: textarea
+    id: env
+    attributes:
+      label: 环境
+      value: |
+        - 系统：
+        - kyvault 版本：
+        - 后端（file / GitLab / D1）：
+        - 是否启用 Auth Guard：
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checked
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我没有在报告里贴任何密钥明文
+          required: true
+        - label: 我搜过现有 issue，确认不是重复
+          required: false

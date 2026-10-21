@@ -32,10 +32,15 @@ cd rust && cargo fmt
 ## Development Setup
 
 ```bash
-git clone https://github.com/webkubor/agent-secret-skills.git
-cd agent-secret-skills
+git clone https://github.com/webkubor/kyvault.git
+cd kyvault
 # Follow the Quick Start in README
 ```
+
+## Reporting Security Issues
+
+发现安全问题**不要开 public issue**。
+请看 [SECURITY.md](./SECURITY.md) —— 里面有私密报告渠道和这个项目的威胁模型。
 
 ## Commit Convention
 
@@ -49,4 +54,4 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## Questions?
 
-Open an issue or discussion — we respond within 24 hours.
+Open an issue — we respond within 24 hours.
