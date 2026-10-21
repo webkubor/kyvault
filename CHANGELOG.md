@@ -15,6 +15,7 @@ GitHub 默认搜索索引的是 name + description + topics，README 不参与�
 
 - **发布到 crates.io**：`cargo install kyvault` 现在可用（crate 名 `kyvault`，
   `ky` 仍是 install.sh 建的符号链接 —— crates.io 上 `ky` 这个名字已被别的包占用）。
+  已实测从 crates.io 真实安装并运行成功。
 - **公开站点**：`https://<owner>.github.io/kyvault/`，带 SEO meta、FAQ 结构化数据
   （SoftwareApplication + FAQPage）、明暗双主题与对比度达标的配色。
   `homepage` 字段已从「指向自己」改为指向它。
