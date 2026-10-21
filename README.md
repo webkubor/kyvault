@@ -53,6 +53,9 @@
 # 1. 一键安装（自动就绪 kyvault 与短命令 ky）
 curl -fsSL https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh | bash
 
+# 或者用 Cargo（需要 Rust 工具链）
+cargo install kyvault
+
 # 2. 一键连接本地所有 AI 智能体 (Claude / Codex / agy / Hermes / Cursor)
 ky connect
 

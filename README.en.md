@@ -53,6 +53,9 @@
 # Install and init
 curl -fsSL https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh | bash
 
+# or, with a Rust toolchain
+cargo install kyvault
+
 # Add rules for supported local AI assistants (Claude/Codex/Hermes/Cursor)
 kyvault connect
 
