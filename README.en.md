@@ -28,6 +28,19 @@
 
 ---
 
+## 🎬 30-second demo
+
+<p align="center">
+  <img src="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/kyvault-video/kyvault-demo.gif" alt="kyvault 30-second demo: how a plaintext key flows into AI context, and how an alias replaces it" width="680">
+</p>
+
+<p align="center">
+  <sub>One command turns a plaintext key in context into an alias reference.<br/>
+  <a href="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/kyvault-video/kyvault-demo.mp4">Download MP4 (1920×1080)</a></sub>
+</p>
+
+---
+
 ## 🎯 Kyvault behavior and boundaries
 
 | Capability | Actual behavior and boundary |

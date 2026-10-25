@@ -26,6 +26,19 @@
 
 ---
 
+## 🎬 30 秒演示
+
+<p align="center">
+  <img src="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/kyvault-video/kyvault-demo.gif" alt="kyvault 30 秒演示：明文密钥如何流进 AI 上下文，又如何被别名替代" width="680">
+</p>
+
+<p align="center">
+  <sub>一条命令把密钥从「明文躺在上下文里」变成「只有别名的引用」。<br/>
+  <a href="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/kyvault-video/kyvault-demo.mp4">下载 MP4（1920×1080）</a></sub>
+</p>
+
+---
+
 ## 🎯 Kyvault 的行为与边界
 
 | 能力 | 实际行为与边界 |
