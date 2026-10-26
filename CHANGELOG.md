@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-10-26
+
 ### `ky ui` 跨站读取明文漏洞修复（Security）
 
 旧版 `ky ui` 对所有响应返回 `Access-Control-Allow-Origin: *`，读明文的 `/api/reveal` 没有任何鉴权，端口又固定为 8765。
