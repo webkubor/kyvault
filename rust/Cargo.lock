@@ -500,12 +500,14 @@ dependencies = [
  "fs2",
  "hmac",
  "rand",
+ "rustls",
  "serde",
  "serde_json",
  "sha-1",
  "sha2",
  "tempfile",
  "ureq",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]

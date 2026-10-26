@@ -192,6 +192,23 @@ enum Cmd {
         #[arg(long)]
         no_open: bool,
     },
+    /// 浏览器录入邮箱授权码/应用密码或 API Key：自动去空格 → 找旧条目 → 先验证，通过才写库
+    Add {
+        /// 预填邮箱（进入邮箱模式）
+        #[arg(long)]
+        email: Option<String>,
+        /// 预填 API Key 平台（进入 API Key 模式，ky providers 看清单）
+        #[arg(long)]
+        provider: Option<String>,
+        /// 存邮箱的网页登录密码（不是授权码）：两次输入核对，不做在线验证
+        #[arg(long)]
+        login: bool,
+        #[arg(long, default_value = "8766")]
+        port: u16,
+        /// 不自动打开浏览器（只打印地址）
+        #[arg(long)]
+        no_open: bool,
+    },
     /// 把密钥使用规则/技能包写进本地各家 AI 助手
     Connect,
     /// 检查并升级到最新版（走 GitHub Release + install.sh）
@@ -542,6 +559,32 @@ impl Backend {
             Backend::File(_) => "file",
             Backend::D1(_) => "d1",
         }
+    }
+}
+
+struct AuditedBackend {
+    backend: Backend,
+    who: String,
+}
+
+impl kyvault::credui::Vault for AuditedBackend {
+    fn list(&self) -> Result<Vec<SecretMeta>> {
+        self.backend.list()
+    }
+    fn get(&self, r: &str) -> Result<Option<String>> {
+        self.backend.get(r)
+    }
+    fn set(&self, r: &str, v: &str, kind: &str, account: &str) -> Result<()> {
+        self.backend.set(r, v, kind, account)
+    }
+    fn delete(&self, r: &str) -> Result<bool> {
+        self.backend.delete(r)
+    }
+    fn backend_name(&self) -> &'static str {
+        self.backend.name()
+    }
+    fn audit(&self, action: &str, target: &str, result: &str) {
+        audit_log(&self.who, action, target, result, self.backend.name());
     }
 }
 
@@ -1238,6 +1281,28 @@ fn run() -> Result<()> {
         Cmd::Ui { port, no_open } => {
             kyvault::ui::start_server(port, !no_open)?;
         }
+        Cmd::Add {
+            email,
+            provider,
+            login,
+            port,
+            no_open,
+        } => {
+            let vault = AuditedBackend {
+                backend: Backend::select()?,
+                who: who.clone(),
+            };
+            kyvault::credui::run(
+                &vault,
+                port,
+                !no_open,
+                kyvault::credui::Prefill {
+                    email,
+                    provider,
+                    login,
+                },
+            )?;
+        }
         Cmd::Connect => kyvault::connect::run()?,
         Cmd::Update { assume_yes } => kyvault::update::run(assume_yes)?,
         Cmd::Doctor => kyvault::doctor::run()?,
@@ -1325,7 +1390,28 @@ fn run() -> Result<()> {
                 }
             };
             let started = std::time::Instant::now();
-            let r = kyvault::providers::validate_key(&provider, &key);
+            // email 不是 HTTP API：用 IMAP 登录验证，邮箱地址取条目的账号备注
+            let r = if provider == "email" {
+                let reference = checked_ref
+                    .as_deref()
+                    .ok_or_else(|| anyhow!("邮箱验证要用库里的条目：kyvault check email <名字>"))?;
+                let b = Backend::select()?;
+                let meta = b.list()?.into_iter().find(|m| m.r#ref() == reference);
+                let address = meta
+                    .as_ref()
+                    .and_then(|m| {
+                        m.account
+                            .split(|c: char| !(c.is_ascii_alphanumeric() || "._%+-@".contains(c)))
+                            .find(|t| t.contains('@'))
+                            .map(str::to_string)
+                    })
+                    .ok_or_else(|| {
+                        anyhow!("{reference} 的账号备注里没有邮箱地址，无法确定登录哪个邮箱")
+                    })?;
+                kyvault::mailcred::verify(&address, &key)
+            } else {
+                kyvault::providers::validate_key(&provider, &key)
+            };
             if let Some(reference) = checked_ref.as_deref() {
                 kyvault::health::record(
                     &Store::default_location()?,
