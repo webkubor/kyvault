@@ -10,7 +10,7 @@ platforms: [linux, macos]
 
 # 🛡️ Kyvault 密钥与资产台账端对端运维指南 (kyvault-ops)
 
-`kyvault` 是专为开发者与 AI Agent 设计的本地军工级加密密钥与资产台账管理器。采用 AES-256-GCM 纯本地加密与 GitLab 远程密文同步，解密计算完全脱机，零网络依赖。同时支持 **Auth Guard 多因素授权守卫**（SSH Key 绑定与 TOTP 二次确认）。
+`kyvault` 是本地加密凭证台账与 Git 密文同步工具，面向开发者和本地 AI Agent。文件后端使用 AES-256-GCM；GitLab 同步、API 检查与升级会联网。早期 Auth Guard 读取公开 SSH `.pub` 文件派生 AES key，不验证私钥持有，不能作为有效的密库保护或远程 Agent 身份认证。逐条 Agent 授权由实验性的 `ky broker`（OpenSSH forced-command）承担，主设备签名审批与自动轮换尚未实现。
 
 ## 1. 核心操作命令
 
@@ -33,14 +33,13 @@ echo "<value>" | kyvault set secret://platform/key_name -
 # 5. 校验密钥有效性与余额（验证通过自动同步审计元信息至 meta.json）
 kyvault check <platform> <key_name>
 
-# 6. 本地主密钥状态与指纹查看（严禁外传，换机迁移导出备份）
-kyvault master-key          # 显示路径、0600权限、SHA-256指纹与遮挡值
-kyvault master-key --reveal # 显示完整明文（需验证 TOTP / SSH Key）
+# 6. 本地主密钥状态
+kyvault master-key          # 显示路径、权限与脱敏指纹
+# master.key 是整库根凭据；不要复制到远程 Agent。旧 Auth Guard 的 SSH 公钥派生实现不提供私钥保护。
 
-# 7. Auth Guard 多因素授权守卫
-kyvault auth status         # 查看当前守卫启用状态与绑定方法清单
-kyvault auth setup          # 交互式引导绑定本地 SSH 公钥并加密 master.key
-kyvault auth add totp       # 绑定 Google Authenticator 动态验证码
+# 7. 旧版 Auth Guard 状态（默认禁止新建旧格式）
+kyvault auth status         # 查看旧格式配置；不代表已认证 SSH 私钥持有人
+# 兼容迁移才设置 KYVAULT_ALLOW_INSECURE_LEGACY_AUTH=1
 
 # 8. 团队 GitLab 密钥库同步与状态
 kyvault gitlab status       # 查看本地与远端密文同步状态及 master.key 安全检查

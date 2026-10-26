@@ -35,12 +35,16 @@ master.key
 master.key.enc
 auth.json
 *.key
+broker-devices.json
+broker-audit.jsonl
 
 # ── 运行时与本地产物 ──
 .lock
 *.tmp
 *.bak
 secrets.json.bak
+# 审计日志有读事件，默认不入仓（团队共享时设 KY_AUDIT_SYNC=1 并手工删掉这行）
+audit.log
 ";
 
 /// 本地仓库用的固定身份。
@@ -51,6 +55,16 @@ secrets.json.bak
 /// （`git config` 不带 --global），不会污染用户的全局配置。
 const LOCAL_USER_NAME: &str = "kyvault";
 const LOCAL_USER_EMAIL: &str = "kyvault@localhost";
+
+/// 提交用的署名：优先真实操作者，退回到固定名（保证 commit 不会因为没身份失败）。
+fn whoami_name() -> String {
+    let who = crate::audit::actor(None);
+    if who.is_empty() || who == "unknown" {
+        LOCAL_USER_NAME.to_string()
+    } else {
+        who
+    }
+}
 
 pub struct VaultRepo {
     root: PathBuf,
@@ -115,10 +129,12 @@ impl VaultRepo {
             self.git(&["init", "-q"])?;
         }
         self.write_gitignore()?;
-        // 身份只落在这个库里；先 check-config 避免覆盖用户已有的设置
+        // 身份只落在这个库里；先 check-config 避免覆盖用户已有的设置。
+        // 名字取真实操作者（KY_ACTOR → $USER），而不是固定写死 "kyvault"：
+        // 团队仓的 git log 是「谁改的」唯一可信来源，作者恒为 kyvault 等于自废武功。
         for (k, v) in [
-            ("user.name", LOCAL_USER_NAME),
-            ("user.email", LOCAL_USER_EMAIL),
+            ("user.name", whoami_name()),
+            ("user.email", LOCAL_USER_EMAIL.to_string()),
         ] {
             let has = Command::new("git")
                 .args(["-C", &self.root.to_string_lossy(), "config", "--get", k])
@@ -126,7 +142,7 @@ impl VaultRepo {
                 .map(|o| o.status.success())
                 .unwrap_or(false);
             if !has {
-                self.git(&["config", k, v])?;
+                self.git(&["config", k, v.as_str()])?;
             }
         }
         Ok(created)
@@ -138,7 +154,23 @@ impl VaultRepo {
         // 已有 .gitignore 不覆盖 —— 用户可能自己加过东西。但要确保受保护项在里面。
         let mut merged = existing.clone();
         let mut missing = Vec::new();
-        for pat in ["master.key", "master.key.enc", "auth.json", "*.key"] {
+        let mut patterns = vec![
+            "master.key",
+            "master.key.enc",
+            "auth.json",
+            "*.key",
+            "broker-devices.json",
+            "broker-audit.jsonl",
+        ];
+        // 审计日志默认只留本地：里面有读事件，推到团队仓就变成监视。
+        // 需要团队共享审计时设 KY_AUDIT_SYNC=1，这里就不再排除它。
+        if !matches!(
+            std::env::var("KY_AUDIT_SYNC").unwrap_or_default().trim(),
+            "1" | "on" | "true" | "yes"
+        ) {
+            patterns.push("audit.log");
+        }
+        for pat in patterns {
             if !merged.lines().any(|l| l.trim() == pat) {
                 missing.push(pat);
             }
@@ -172,7 +204,10 @@ impl VaultRepo {
             "commit",
             "-q",
             "-m",
-            "chore(vault): 密钥库初始提交（仅密文）",
+            &format!(
+                "chore(vault): 密钥库初始提交（仅密文）· by {}",
+                whoami_name()
+            ),
         ])?;
         Ok(true)
     }
@@ -184,81 +219,117 @@ impl VaultRepo {
         Ok(())
     }
 
-    /// 建远端仓库并推首推。没有 token 就明确返回「没建」，不假装成功。
+    /// 建远端仓库并推首推。没有凭证就明确返回「没建」，不假装成功。
     ///
     /// 远端已存在时按「已存在」处理（clone 来的库就是这种）。
+    ///
+    /// 凭证来源由 `glab::resolve` 决定：`KY_GITLAB_TOKEN` → glab 配置文件 →
+    /// `glab auth status`。用户本机已经 `glab auth login` 过就不该再抄一遍 PAT。
     pub fn push_initial(&self, token: Option<&str>) -> Result<PushOutcome> {
         let url = self
             .origin()
             .ok_or_else(|| anyhow!("没有远端地址，先 set_remote 或用 --remote 指定"))?;
-        if let Some(t) = token {
-            if !t.is_empty() {
-                match ensure_gitlab_project(&url, t)? {
-                    ProjectState::Exists => {}
-                    ProjectState::Created => {}
-                }
-            }
+
+        // 本地裸仓库 / 文件路径：不查凭证、不建项目，直接 push
+        if is_local_remote(&url) {
+            self.push_with_credential(None)?;
+            return Ok(PushOutcome::Pushed);
         }
-        self.git(&["push", "-u", "origin", "HEAD"])?;
+
+        let (host, path) = parse_remote_path(&url)?;
+
+        // token 为 None 时让 glab 自己找；找到就用，找不到就只 push（可能是 ssh 远端）
+        let cred = match token.filter(|t| !t.is_empty()) {
+            Some(t) => Some(crate::glab::Credential {
+                host: host.clone(),
+                token: t.to_string(),
+                source: "explicit",
+            }),
+            None => crate::glab::resolve(Some(&host)),
+        };
+
+        if let Some(c) = cred.as_ref() {
+            let created = crate::glab::ensure_project(&host, &path, Some(&c.token))?;
+            if created {
+                println!(
+                    "  🦊 已在 {host} 上创建私有仓库 {path}（凭证来源：{}）",
+                    c.source
+                );
+            }
+        } else {
+            println!("  ℹ️  没找到 {host} 的凭证（KY_GITLAB_TOKEN / glab auth），不代你建仓库。");
+        }
+
+        self.push_with_credential(cred.as_ref())?;
         Ok(PushOutcome::Pushed)
     }
+
+    /// HTTPS 远端 + 有 token 时，用一次性 credential helper 把 token 交给 git。
+    ///
+    /// token 走环境变量而不是 `-c credential.helper='...password=xxx'`：后者会
+    /// 出现在 `ps aux` 里，等于把 PAT 贴在进程列表上。glab 配置过 credential
+    /// helper 的话本来就不需要这段，这里只是兜住「只有 token、没有 helper」的人。
+    fn push_with_credential(&self, cred: Option<&crate::glab::Credential>) -> Result<()> {
+        let url = self.origin().unwrap_or_default();
+        let is_http = url.starts_with("http://") || url.starts_with("https://");
+        match (is_http, cred) {
+            (true, Some(c)) if c.source != "glab-config" || !self.git_helper_configured() => {
+                let helper =
+                    "!f() { echo \"username=oauth2\"; echo \"password=$KYVAULT_GIT_TOKEN\"; }; f";
+                let out = Command::new("git")
+                    .args([
+                        "-c",
+                        "credential.helper=",
+                        "-c",
+                        &format!("credential.helper={helper}"),
+                        "push",
+                        "-u",
+                        "origin",
+                        "HEAD",
+                    ])
+                    .env("KYVAULT_GIT_TOKEN", &c.token)
+                    .current_dir(&self.root)
+                    .output()
+                    .context("执行 git push 失败")?;
+                if !out.status.success() {
+                    return Err(anyhow!(
+                        "git push 失败：{}",
+                        String::from_utf8_lossy(&out.stderr).trim()
+                    ));
+                }
+                Ok(())
+            }
+            _ => {
+                self.git(&["push", "-u", "origin", "HEAD"])?;
+                Ok(())
+            }
+        }
+    }
+
+    /// glab 是否已经给 git 装好了 credential helper（装了就别再插手）。
+    fn git_helper_configured(&self) -> bool {
+        Command::new("git")
+            .args(["config", "--get", "credential.helper"])
+            .current_dir(&self.root)
+            .output()
+            .map(|o| o.status.success() && !String::from_utf8_lossy(&o.stdout).trim().is_empty())
+            .unwrap_or(false)
+    }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum ProjectState {
-    Exists,
-    Created,
-}
-
-/// GitLab 上没有这个项目就建一个。只在明确给了 token 时调用。
-fn ensure_gitlab_project(url: &str, token: &str) -> Result<ProjectState> {
-    // 从 remote URL 推出 <host>/<group>/<project>
-    let (host, path) = parse_remote_path(url)?;
-    let api = if host.starts_with("gitlab.com") || host.starts_with("www.gitlab.com") {
-        "https://gitlab.com/api/v4".to_string()
-    } else {
-        format!("https://{host}/api/v4")
-    };
-    let encoded = path.replace('/', "%2F");
-    let exists = Command::new("curl")
-        .args([
-            "-sS",
-            "-o",
-            "/dev/null",
-            "-w",
-            "%{http_code}",
-            "--header",
-            &format!("PRIVATE-TOKEN: {token}"),
-            &format!("{api}/projects/{encoded}"),
-        ])
-        .output()
-        .context("探测 GitLab 项目失败（需要 curl）")?;
-    let code = String::from_utf8_lossy(&exists.stdout).trim().to_string();
-    if code == "200" {
-        return Ok(ProjectState::Exists);
-    }
-    let out = Command::new("curl")
-        .args([
-            "-sS",
-            "--request",
-            "POST",
-            "--header",
-            &format!("PRIVATE-TOKEN: {token}"),
-            "--form",
-            &format!("name={}", project_name(&path)),
-            "--form",
-            &format!("path={}", project_name(&path)),
-            &format!("{api}/projects"),
-        ])
-        .output()
-        .context("在 GitLab 上创建项目失败（需要 curl）")?;
-    if !out.status.success() {
-        return Err(anyhow!(
-            "创建 GitLab 项目失败：{}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
-    }
-    Ok(ProjectState::Created)
+/// 远端地址是不是本地路径/本地裸仓库。
+///
+/// 存在的理由不只是「支持离线测试」：如果 URL 是 `/tmp/bare.git`，
+/// `parse_remote_path` 会切出一个空 host，而空 host 一旦被拿去问凭证，
+/// `glab::resolve(None)` 会回落到**用户真实的 GitLab token** 并尝试建仓库 ——
+/// 在本地路径上触发远端写操作，这是最不该发生的意外。
+pub fn is_local_remote(url: &str) -> bool {
+    let u = url.trim();
+    u.starts_with("file://")
+        || u.starts_with('/')
+        || u.starts_with("./")
+        || u.starts_with("../")
+        || u.starts_with('~')
 }
 
 /// 去掉 URL 里的 userinfo 与 .git 后缀，取 <host>/<group>/<project>。
@@ -282,10 +353,6 @@ pub fn parse_remote_path(url: &str) -> Result<(String, String)> {
         return Err(anyhow!("远端地址里没有项目路径：{url}"));
     }
     Ok((host.to_string(), path))
-}
-
-fn project_name(path: &str) -> &str {
-    path.rsplit('/').next().unwrap_or(path)
 }
 
 #[derive(Debug, PartialEq)]

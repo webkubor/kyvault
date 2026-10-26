@@ -109,7 +109,11 @@ pub fn run() -> Result<()> {
     let guard_enabled = mk_enc.exists() && auth_json.exists();
 
     if guard_enabled {
-        status_line("master.key", true, "Auth Guard 加密保护中");
+        status_line(
+            "master.key",
+            true,
+            "旧版 Auth Guard 格式存在；SSH key 未验证私钥",
+        );
         let (ok, desc) = perm_check(&mk_enc);
         status_line("master.key.enc", ok, &format!("权限 {desc}"));
         let (ok2, desc2) = perm_check(&auth_json);
@@ -163,11 +167,16 @@ pub fn run() -> Result<()> {
                     .filter(|m| m.method_type == "ssh_key")
                     .count();
                 let has_totp = guard.methods().iter().any(|m| m.method_type == "totp");
-                status_line("守卫", true, "已启用");
+                status_line(
+                    "旧 Auth Guard",
+                    false,
+                    "格式可读；SSH 私钥未验证，不能视为安全保护",
+                );
                 kv("策略", &cyan(guard.policy()));
-                let mut methods_str = format!("SSH Key × {ssh_count}");
+                let mut methods_str = format!("SSH 公钥 × {ssh_count}（仅公钥元数据）");
                 if has_totp {
-                    methods_str.push_str(&format!("  {}  TOTP", dim("+")));
+                    methods_str
+                        .push_str(&format!("  {}  TOTP 已存配置（不参与命令校验）", dim("+")));
                 }
                 kv("绑定", &methods_str);
                 if mk.exists() {
@@ -180,7 +189,10 @@ pub fn run() -> Result<()> {
         }
     } else {
         status_line("守卫", false, "未启用");
-        info_line("  ", &dim("kyvault auth setup 启用"));
+        info_line(
+            "  ",
+            &dim("旧 auth.json 格式；不代表私钥认证。参考 SECURITY.md"),
+        );
     }
 
     // ⑤ AI 助手对接

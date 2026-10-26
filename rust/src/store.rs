@@ -173,7 +173,7 @@ impl Store {
         Ok(())
     }
 
-    /// master key：环境变量优先，其次 Auth Guard 解锁，最后明文文件。
+    /// master key：环境变量优先，其次旧版 Auth Guard 兼容解锁，最后明文文件。
     /// 与 Python 版同序，否则 CI/容器里注入的 key 会被本地文件悄悄盖掉。
     pub fn master_key(&self) -> Result<String> {
         // 1. 环境变量注入（CI / 容器 / Agent 场景，完全绕过 guard）
@@ -182,7 +182,7 @@ impl Store {
                 return Ok(k.trim().to_string());
             }
         }
-        // 2. Auth Guard 启用时，走 SSH Key 自动解锁
+        // 2. 旧版 Auth Guard 兼容路径；其公开 SSH 公钥派生并不验证私钥。
         if crate::auth_guard::AuthGuard::is_enabled(&self.root) {
             let guard = crate::auth_guard::AuthGuard::load(&self.root)?;
             return guard.unlock();
@@ -288,7 +288,18 @@ impl Store {
     /// 刻意做成「尽力而为」：文件不存在就跳过，绝不因为权限问题挡住取密钥 ——
     /// 权限是卫生问题，取不到密钥才是事故。
     pub fn repair_perms(&self) -> Result<()> {
-        for p in [self.secrets_file(), self.meta_file()] {
+        // accounts.json 也在列：它只有账号名/登录名，但仍是「别人的身份信息」，
+        // 而它随库入仓，git pull 同样会把它打回 664。
+        // audit.log 是追加写的，git 不碰它，但用户可能手改过权限。
+        for p in [
+            self.secrets_file(),
+            self.meta_file(),
+            self.root.join(crate::registry::FILE),
+            self.root.join(crate::audit::FILE),
+            self.root.join(crate::broker::POLICY_FILE),
+            self.root.join(crate::broker::AUDIT_FILE),
+            self.root.join(crate::health::FILE),
+        ] {
             if p.exists() {
                 // 收紧失败不该中断调用方：它只影响卫生，不影响解密
                 let _ = harden(&p);

@@ -1,18 +1,19 @@
-//! `kyvault auth` —— 多因素授权守卫。
+//! `kyvault auth` —— 旧版 master.key 包装流程（安全状态：不构成私钥保护）。
 //!
-//! 在现有 master.key 加密链上方新增一层 Auth Guard，不改动 AES-256-GCM 密文
-//! 的 wire format（180 条密钥原样兼容），只保护 master.key 本身：
+//! 重要：当前兼容实现会从公开 `.pub` 文件派生 AES key；它只核对公钥指纹，
+//! **没有证明调用者持有 SSH 私钥**。拿到 `auth.json`、`master.key.enc` 和公钥
+//! 就能重新计算 key 并解密。不得把它描述成 MFA、私钥认证、抗密文库读取者的
+//! 密钥保护，也不能据此授权远程 Agent。新的设备与 Agent 授权须由 broker
+//! 校验真实签名挑战 / mTLS，并由受信服务保管 vault root key。
 //!
-//! 1. **SSH Key 绑定**：用 SSH 公钥材料派生 AES 密钥加密 master.key → master.key.enc。
-//!    解锁时零交互——只要 SSH 公钥文件还在且指纹匹配，Agent 毫无感知。
-//! 2. **TOTP（Google 验证器）**：生成 RFC 6238 标准 secret，绑入 Google Authenticator。
-//!    定位是对敏感操作（master-key --reveal）的二次确认，不是每次解密都要过的门。
+//! 这个旧格式仍被读写是为了兼容已启用该功能的用户；不要再扩展其安全承诺。
+//! 下一步应提供安全迁移路径后替换其 key wrapping，而不是静默改变 wire format。
 //!
-//! 文件布局：
+//! 它在结构上只包裹 master.key，不改动 AES-256-GCM 凭据密文格式。
 //! ```text
 //! ~/.config/kyvault/store/
 //! ├── auth.json          ← 授权方法配置
-//! ├── master.key.enc     ← 加密态 master.key（SSH key 派生密钥加密）
+//! ├── master.key.enc     ← 旧格式包装文件；不验证 SSH 私钥，不构成安全保护
 //! ├── master.key         ← 启用 guard 后删除；未启用时保留
 //! └── ...
 //! ```
@@ -36,6 +37,26 @@ use crate::store::shellexpand_tilde;
 // ───────────────────────── 数据结构 ─────────────────────────
 
 const NONCE_LEN: usize = 12;
+
+/// 旧 Auth Guard 使用公开 SSH 公钥作为 AES key，只能为迁移兼容显式开启。
+/// 默认拒绝新建/扩展，避免用户把旧格式误当安全措施。
+fn legacy_auth_opt_in() -> bool {
+    matches!(
+        std::env::var("KYVAULT_ALLOW_INSECURE_LEGACY_AUTH")
+            .unwrap_or_default()
+            .trim(),
+        "1" | "true" | "yes" | "on"
+    )
+}
+
+fn require_legacy_auth_opt_in() -> Result<()> {
+    if legacy_auth_opt_in() {
+        return Ok(());
+    }
+    Err(anyhow!(
+        "旧 Auth Guard 格式不验证 SSH 私钥，默认禁止新建或扩展。已有配置仍可读取/关闭。若为兼容迁移确需继续写旧格式，显式设置 KYVAULT_ALLOW_INSECURE_LEGACY_AUTH=1；服务器 Agent 授权需等待 broker。"
+    ))
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthConfig {
@@ -96,7 +117,10 @@ pub fn ssh_fingerprint(pubkey_path: &Path) -> Result<String> {
     Ok(format!("SHA256:{b64}"))
 }
 
-/// 用 SSH 公钥原始字节派生 AES-256 密钥
+/// 用公开 SSH 公钥原始字节派生 AES-256 密钥（仅旧格式兼容，不安全）。
+///
+/// 这不是 SSH 私钥持有证明：公钥本身公开可得。新授权路径不能调用此函数；
+/// 只有在安全迁移方案发布前，旧 `master.key.enc` 格式读取/写入还依赖它。
 fn derive_key_from_ssh(pubkey_path: &Path) -> Result<[u8; 32]> {
     let (_ty, raw) = parse_ssh_pubkey(pubkey_path)?;
     Ok(Sha256::digest(&raw).into())
@@ -293,7 +317,10 @@ impl AuthGuard {
 
     // ─── 解锁（核心路径）───
 
-    /// 尝试用已绑定的方法解锁 master.key，返回明文。
+    /// 尝试用旧 Auth Guard 格式解锁 master.key。
+    ///
+    /// 安全限制：此路径只读取公开 SSH 公钥并用其派生 key，不检查私钥，也不是
+    /// 远程认证。不能用于防御能读取 store 的攻击者或授权远程 Agent。
     ///
     /// 策略 `any_one`：任意一种 SSH key 匹配即解锁。
     /// TOTP 在 `any_one` 策略下**不参与日常解锁**（它是给 `--reveal` 等敏感操作的），
@@ -358,7 +385,7 @@ impl AuthGuard {
         ))
     }
 
-    /// 验证 TOTP 码（用于敏感操作的二次确认）。
+    /// 验证 TOTP 的内部工具；当前没有敏感命令调用此方法，不能宣传成已生效的二次确认。
     /// 需要先用 unlock() 拿到 master.key 才能解密 TOTP secret。
     pub fn verify_totp(&self, master_key: &str) -> Result<bool> {
         let totp_method = self.config.methods.iter().find(|m| m.method_type == "totp");
@@ -398,6 +425,7 @@ impl AuthGuard {
 
     /// 交互式首次配置：扫描 SSH 公钥 + 可选 TOTP
     pub fn setup(root: &Path) -> Result<()> {
+        require_legacy_auth_opt_in()?;
         if Self::is_enabled(root) {
             return Err(anyhow!(
                 "Auth Guard 已启用。\n\
@@ -417,7 +445,9 @@ impl AuthGuard {
             .trim()
             .to_string();
 
-        println!("🛡️  kyvault Auth Guard 首次配置");
+        println!("⚠️  兼容性说明：当前 SSH 绑定使用公开公钥派生解密 key，不验证私钥持有；");
+        println!("   该旧机制不构成安全授权，也不能保护被复制的 store。此设置仅为兼容。\n");
+        println!("🛡️  kyvault Auth Guard 兼容配置");
         println!("{}", "-".repeat(52));
 
         // 1. 扫描 SSH 公钥
@@ -491,8 +521,7 @@ impl AuthGuard {
 
         if ssh_methods.is_empty() {
             return Err(anyhow!(
-                "至少需要绑定一把 SSH 公钥才能启用 Auth Guard。\n\
-                 请先生成 SSH Key：ssh-keygen -t ed25519"
+                "旧 Auth Guard 格式已停用新建：它从公开 SSH 公钥派生 AES key，不验证私钥持有，不能保护密钥库。已有 auth.json 可继续以兼容模式读取；Agent 逐条授权方案尚未实现。"
             ));
         }
 
@@ -500,8 +529,8 @@ impl AuthGuard {
         let mut all_methods = ssh_methods;
 
         println!("\n🔐 是否同时绑定 TOTP（Google 验证器）？");
-        println!("  TOTP 用于 `master-key --reveal` 等敏感操作的二次确认。");
-        println!("  日常 get/set/run 只走 SSH Key 自动解锁，不受影响。");
+        println!("  兼容提醒：这个旧格式只读取公开 SSH key，不验证私钥持有。");
+        println!("  TOTP 配置不会改变日常 get/set/run 的解锁路径。");
         eprint!("  绑定 TOTP？[y/N] ");
         io::stderr().flush()?;
         let mut ans = String::new();
@@ -586,6 +615,7 @@ impl AuthGuard {
 
     /// 添加一种授权方法
     pub fn add_method(root: &Path, method_type: &str, path: Option<&str>) -> Result<()> {
+        require_legacy_auth_opt_in()?;
         if !Self::is_enabled(root) {
             return Err(anyhow!(
                 "Auth Guard 尚未启用，请先运行 `kyvault auth setup`"
@@ -782,7 +812,10 @@ impl AuthGuard {
             box_top("🛡️ Auth Guard");
             println!();
             status_line("守卫", false, "未启用");
-            info_line("  ", &dim("kyvault auth setup 启用"));
+            info_line(
+                "  ",
+                &dim("旧 auth.json 格式；setup/add 默认停用，见 SECURITY.md"),
+            );
             println!();
             box_bottom();
             return Ok(());
@@ -845,7 +878,10 @@ impl AuthGuard {
         if !Self::is_enabled(root) {
             status_line("守卫", false, "未启用 (仅 master.key 明文)");
             println!();
-            info_line("  ", &dim("kyvault auth setup 启用"));
+            info_line(
+                "  ",
+                &dim("旧 auth.json 格式；setup/add 默认停用，见 SECURITY.md"),
+            );
             println!();
             box_bottom();
             return Ok(());

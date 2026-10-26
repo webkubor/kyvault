@@ -10,7 +10,7 @@ platforms: [linux, macos]
 
 # 🛡️ Kyvault 密钥与资产台账端对端运维指南 (kyvault-ops)
 
-`kyvault` 是专为开发者与 AI Agent 设计的本地军工级加密密钥与资产台账管理器。采用 AES-256-GCM 纯本地加密与 GitLab 远程密文同步，解密计算完全脱机，零网络依赖。同时支持 **Auth Guard 多因素授权守卫**（SSH Key 绑定与 TOTP 二次确认）。
+`kyvault` 是本地加密凭证台账与 Git 密文同步工具，面向开发者和本地 AI Agent。文件后端使用 AES-256-GCM；GitLab 同步、API 检查和升级会联网。早期 Auth Guard 读取公开 SSH `.pub` 派生 AES key，不验证私钥持有；远程 Agent 的逐条授权由实验性的 `ky broker`（OpenSSH forced-command）承担，主设备签名审批与自动轮换尚未实现。
 
 ## 1. 核心操作命令
 
@@ -37,22 +37,38 @@ kyvault set secret://platform/key_name - --file /path/to/key.pem --kind "Private
 # 5. 校验密钥有效性与余额（验证通过自动同步审计元信息至 meta.json）
 kyvault check <platform> <key_name>
 
-# 6. 本地主密钥状态与指纹查看（严禁外传，换机迁移导出备份）
-kyvault master-key          # 显示路径、0600权限、SHA-256指纹与遮挡值
-kyvault master-key --reveal # 显示完整明文（需验证 TOTP / SSH Key）
+kyvault master-key          # 显示路径、0600 权限与脱敏指纹
+# 注意：Auth Guard 目前仅为旧版兼容包装；公开 SSH .pub 会被用作派生材料，未验证私钥持有。
+# 它不是有效的密库保护或 Agent 身份认证。不要向远程 Agent 传播 master.key。
 
-# 7. Auth Guard 多因素授权守卫
-kyvault auth status         # 查看当前守卫启用状态与绑定方法清单
-kyvault auth setup          # 交互式引导绑定本地 SSH 公钥并加密 master.key
-kyvault auth add totp       # 绑定 Google Authenticator 动态验证码
+# 7. Auth Guard 旧版兼容管理（不构成 SSH 私钥保护）
+kyvault auth status         # 查看旧版守卫配置；不证明持有 SSH 私钥
+# auth setup / auth add 旧格式默认停用；仅兼容迁移时设置 KYVAULT_ALLOW_INSECURE_LEGACY_AUTH=1
 
 # 8. 团队 GitLab 密钥库同步与状态
 kyvault gitlab status       # 查看本地与远端密文同步状态及 master.key 安全检查
 kyvault gitlab sync         # 自动 pull rebase 后 push 推送最新密文
+kyvault gitlab auth         # 当前会用哪把凭证（KY_GITLAB_TOKEN / glab 配置 / glab CLI）
+# 本机 glab 已登录时无需再抄 PAT：init --remote 会直接复用 glab 登录态建私有库
 
 # 9. 本地极客 Web GUI 与引导向导
 kyvault ui                  # 启动本地暗黑风极客 Web GUI（自动唤起浏览器）
 kyvault wizard              # 终端交互式分类引导向导（规整化命名）
+
+# 10. 操作审计（谁、什么时候、读过/改过哪条 —— 只记元信息）
+kyvault audit                       # 最近 30 条
+kyvault audit --action get --limit 50   # 只看读取行为
+kyvault audit --actor alice --json  # 按操作人过滤，机器可读
+# 操作人默认取 KY_ACTOR → 库内 git user.name → $USER；也可每次 --as <名字>
+
+# 11. 多账户（profile）体系：一个账号 = 一组凭据
+kyvault profile add work --platform github --username alice --org acme --link secret://github/pat
+kyvault profile list                # 列出账号，标出当前账号
+kyvault profile use work            # 切换当前账号
+kyvault run --profile work -- npm run deploy   # 整组注入，变量名 = ref 名大写
+
+# 12. 只读托管面板（仅元信息，可放静态托管）
+kyvault panel --out panel.html      # 账号 / 条目 / 计数 / 最近审计；无明文、无密文、无 last4
 ```
 
 ---

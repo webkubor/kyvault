@@ -4,11 +4,14 @@
 //! 旧值」——要做到这点，前提是能廉价地问出「这把 key 现在还活着吗」。逐个平台去翻文档
 //! 找验证端点是最耗人的一步，所以把它固化下来。
 //!
-//! 与 Python 版（kyvault/validator.py）保持同一份表和同一套判据，逐条对齐：
-//! 401 → 认证失败、403 → 权限不足、429 → 频繁但 key 有效（**这条是 valid=true**，
-//! 把限流报成失效会让人误删一把好 key）。
+//! 401 表示认证失败，403 表示权限受限；429 只表示限流，不能据此推断认证成功。
+//! `status` 表达检查结论，兼容字段 `valid` 表示「不应报失效」，避免误删密钥。
+
+use std::time::Duration;
 
 use serde_json::Value;
+
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// key 放在哪：多数平台走 header，Gemini 拼在 URL 上。
 #[derive(Clone, Copy, PartialEq)]
@@ -271,24 +274,54 @@ pub fn get_provider(name: &str) -> Option<&'static Provider> {
 }
 
 pub struct CheckResult {
+    /// 兼容字段：仅 valid/rate_limited 为 true，429 为 true 只表示「不应报失效」，
+    /// 不证明认证成功；false 也不证明密钥失效，调用方应根据 status 区分未知与失败。
     pub valid: bool,
+    pub status: &'static str,
+    pub http_status: Option<u16>,
     pub message: String,
     pub models: Vec<String>,
     pub balance: Option<String>,
 }
 
-/// 校验一把 key 是否还活着。
-///
-/// 判据与 Python 版逐条对齐，其中 **429 判 valid=true** 是刻意的：限流说明 key 被服务端
-/// 认了，只是这一刻打得太密。把它报成失效，人就会去覆写一把本来好的 key。
-pub fn validate_key(provider_name: &str, api_key: &str) -> CheckResult {
-    let Some(p) = get_provider(provider_name) else {
-        return CheckResult {
-            valid: false,
-            message: format!("不支持的平台：{provider_name}（kyvault providers 看清单）"),
+impl CheckResult {
+    fn from_status(status: &'static str, http_status: Option<u16>) -> Self {
+        let message = match status {
+            "valid" => "验证通过",
+            "invalid" => "认证失败：API Key 无效或已过期",
+            "permission_limited" => "权限受限：无法访问验证接口，不能据此判定密钥失效",
+            "rate_limited" => "请求被限流，暂时无法判断密钥是否认证成功",
+            "unknown" => "网络或上游服务异常，暂时无法判断密钥状态",
+            "unsupported" => "不支持的平台（kyvault providers 查看清单）",
+            _ => "验证接口返回异常，暂时无法判断密钥状态",
+        };
+        Self {
+            valid: matches!(status, "valid" | "rate_limited"),
+            status,
+            http_status,
+            message: message.to_string(),
             models: vec![],
             balance: None,
-        };
+        }
+    }
+}
+
+/// 纯 HTTP 状态分类；None 表示传输失败，不接收或回显任何上游错误内容。
+pub fn classify_status(http_status: Option<u16>) -> &'static str {
+    match http_status {
+        Some(200..=299) => "valid",
+        Some(401) => "invalid",
+        Some(403) => "permission_limited",
+        Some(429) => "rate_limited",
+        None | Some(500..=599) => "unknown",
+        _ => "api_error",
+    }
+}
+
+/// 校验密钥并返回明确的状态分类。限流、权限不足和网络异常不证明密钥失效。
+pub fn validate_key(provider_name: &str, api_key: &str) -> CheckResult {
+    let Some(p) = get_provider(provider_name) else {
+        return CheckResult::from_status("unsupported", None);
     };
 
     let url = if p.key_pos == KeyPos::Url {
@@ -301,7 +334,8 @@ pub fn validate_key(provider_name: &str, api_key: &str) -> CheckResult {
         ureq::post(&url)
     } else {
         ureq::get(&url)
-    };
+    }
+    .timeout(REQUEST_TIMEOUT);
     if !p.header.is_empty() {
         req = req.set(p.header, &format!("{}{}", p.prefix, api_key));
     }
@@ -316,21 +350,32 @@ pub fn validate_key(provider_name: &str, api_key: &str) -> CheckResult {
 
     match resp {
         Ok(r) => {
-            let body: Value = r.into_json().unwrap_or(Value::Null);
-            // 飞书即使 token 失效也返 HTTP 200，得看 body 里的 code
-            if p.id == "feishu" && body.get("code").and_then(Value::as_i64) != Some(0) {
-                let msg = body
-                    .get("msg")
-                    .and_then(Value::as_str)
-                    .unwrap_or("Token 无效或已过期");
-                return CheckResult {
-                    valid: false,
-                    message: format!("{} {} 验证失败：{}", p.logo, p.name, msg),
-                    models: vec![],
-                    balance: None,
-                };
+            let code = r.status();
+            let status = classify_status(Some(code));
+            if status != "valid" {
+                return CheckResult::from_status(status, Some(code));
             }
-            let models = body
+            let body: Value = match serde_json::from_reader(r.into_reader()) {
+                Ok(body) => body,
+                Err(error) => {
+                    let status = if error.is_io() {
+                        "unknown"
+                    } else {
+                        "api_error"
+                    };
+                    return CheckResult::from_status(status, Some(code));
+                }
+            };
+            // 飞书业务错误与 Cloudflare 的 success=false 不能当作验证通过。
+            // 不回显 msg/body：上游可能把请求 URL 或密钥写进错误描述。
+            if (p.id == "feishu" && body.get("code").and_then(Value::as_i64) != Some(0))
+                || (p.id == "cloudflare"
+                    && body.get("success").and_then(Value::as_bool) != Some(true))
+            {
+                return CheckResult::from_status("api_error", Some(code));
+            }
+            let mut result = CheckResult::from_status("valid", Some(code));
+            result.models = body
                 .get("data")
                 .and_then(Value::as_array)
                 .map(|a| {
@@ -340,34 +385,14 @@ pub fn validate_key(provider_name: &str, api_key: &str) -> CheckResult {
                         .collect()
                 })
                 .unwrap_or_default();
-            CheckResult {
-                valid: true,
-                message: format!("{} {} 验证通过", p.logo, p.name),
-                models,
-                balance: check_balance(p, api_key),
-            }
+            result.balance = check_balance(p, api_key);
+            result
         }
         Err(ureq::Error::Status(code, _)) => {
-            let msg = match code {
-                401 => "认证失败：API Key 无效或已过期".to_string(),
-                403 => "权限不足：API Key 无访问权限".to_string(),
-                // 限流不等于失效 —— 报错也要说清 key 是好的
-                429 => "请求过于频繁（但 Key 有效）".to_string(),
-                c => format!("HTTP {c}"),
-            };
-            CheckResult {
-                valid: code == 429,
-                message: format!("{} {} {}", p.logo, p.name, msg),
-                models: vec![],
-                balance: None,
-            }
+            CheckResult::from_status(classify_status(Some(code)), Some(code))
         }
-        Err(e) => CheckResult {
-            valid: false,
-            message: format!("网络错误：{e}"),
-            models: vec![],
-            balance: None,
-        },
+        // 原始 transport error 可能含 Gemini 的 ?key= URL，不能参与输出。
+        Err(ureq::Error::Transport(_)) => CheckResult::from_status("unknown", None),
     }
 }
 
@@ -376,6 +401,7 @@ fn check_balance(p: &Provider, api_key: &str) -> Option<String> {
     let url = p.balance_url?;
     let shape = p.balance_shape?;
     let body: Value = ureq::get(url)
+        .timeout(REQUEST_TIMEOUT)
         .set("Authorization", &format!("Bearer {api_key}"))
         .call()
         .ok()?
@@ -462,9 +488,45 @@ mod tests {
     }
 
     #[test]
-    fn unknown_provider_does_not_panic() {
-        let r = validate_key("nope", "x");
-        assert!(!r.valid);
+    fn http_status_classification_is_explicit() {
+        for (http_status, expected) in [
+            (Some(200), "valid"),
+            (Some(204), "valid"),
+            (Some(401), "invalid"),
+            (Some(403), "permission_limited"),
+            (Some(429), "rate_limited"),
+            (Some(500), "unknown"),
+            (Some(503), "unknown"),
+            (None, "unknown"),
+            (Some(302), "api_error"),
+            (Some(400), "api_error"),
+            (Some(404), "api_error"),
+        ] {
+            let status = classify_status(http_status);
+            assert_eq!(status, expected);
+            let result = CheckResult::from_status(status, http_status);
+            assert_eq!(result.http_status, http_status);
+            assert_eq!(result.valid, matches!(status, "valid" | "rate_limited"));
+        }
+    }
+
+    #[test]
+    fn rate_limit_does_not_claim_authentication_succeeded() {
+        let result = CheckResult::from_status(classify_status(Some(429)), Some(429));
+        assert!(result.valid, "限流不能触发密钥失效处理");
+        assert_eq!(result.status, "rate_limited");
+        assert!(result.message.contains("无法判断"));
+        assert!(!result.message.contains("Key 有效"));
+    }
+
+    #[test]
+    fn unknown_provider_does_not_echo_untrusted_input() {
+        let r = validate_key("不支持的平台测试私密值", "测试密钥");
+        assert!(!r.valid, "平台不受支持时保留兼容布尔值 false");
+        assert_eq!(r.status, "unsupported");
+        assert_eq!(r.http_status, None);
         assert!(r.message.contains("不支持的平台"));
+        assert!(!r.message.contains("测试私密值"));
+        assert!(!r.message.contains("测试密钥"));
     }
 }

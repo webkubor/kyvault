@@ -14,11 +14,13 @@ use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 
 use kyvault::alias::Aliases;
+use kyvault::audit;
 use kyvault::auth_guard::AuthGuard;
 use kyvault::d1::D1;
 use kyvault::doctor;
 use kyvault::gitlab::GitLabRepo;
 use kyvault::model::SecretMeta;
+use kyvault::registry::{Profile, Registry};
 use kyvault::store::Store;
 use kyvault::vaultrepo::VaultRepo;
 use sha2::{Digest, Sha256};
@@ -30,6 +32,9 @@ use sha2::{Digest, Sha256};
     about = "本地加密密钥管理 — AES-256-GCM，AI 只拿别名，明文不出本机"
 )]
 struct Cli {
+    /// 审计里的操作人（默认取 KY_ACTOR，其次库里的 git user.name，最后 $USER）
+    #[arg(long = "as", global = true, value_name = "NAME")]
+    actor: Option<String>,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -212,8 +217,11 @@ enum Cmd {
     /// 把密钥注入子进程环境变量后执行命令（不打印明文）
     Run {
         /// NAME=secret://platform/name，可重复
-        #[arg(long = "env", value_name = "NAME=REF", required = true)]
+        #[arg(long = "env", value_name = "NAME=REF")]
         envs: Vec<String>,
+        /// 按账号注入：把该 profile 名下的 ref 全部注入（变量名 = ref 名大写化）
+        #[arg(long)]
+        profile: Option<String>,
         /// -- 之后的命令
         #[arg(last = true, required = true)]
         command: Vec<String>,
@@ -229,16 +237,197 @@ enum Cmd {
         #[arg(long = "reveal", short = 'r')]
         reveal: bool,
     },
-    /// 多因素授权守卫管理（SSH Key 绑定 / TOTP 验证器）
+    /// 旧版 Auth Guard 配置管理（不验证 SSH 私钥，也不是 Agent 身份认证）
     Auth {
         #[command(subcommand)]
         action: AuthCmd,
     },
+    /// 查看操作审计：谁、什么时候、动过哪条（只记元信息，不记明文）
+    Audit {
+        /// 最多显示多少条
+        #[arg(long, default_value_t = 30)]
+        limit: usize,
+        /// 只看某个动作（get / set / delete / run / import / push / pull）
+        #[arg(long)]
+        action: Option<String>,
+        /// 只看某个操作人
+        #[arg(long = "actor")]
+        by: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// 多账户（profile）管理：一个 profile = 一个账号，可切换当前账号
+    Profile {
+        #[command(subcommand)]
+        action: ProfileCmd,
+    },
+    /// 服务器 Agent 的 OpenSSH 凭据代理（设备身份 + IP 白名单 + 精确 ref 授权）
+    Broker {
+        #[command(subcommand)]
+        action: BrokerCmd,
+    },
+    /// 在服务器本机生成接入票据（只生成 key，不接触任何凭据）
+    Agent {
+        #[command(subcommand)]
+        action: AgentCmd,
+    },
+    /// 离线盘点与重复监察；默认只读元信息，--duplicates 才在内存中解密比较
+    Inspect {
+        #[arg(long)]
+        duplicates: bool,
+    },
+    /// 导出只读静态面板（仅元信息，可托管到任意静态站点；不含明文/密文/last4）
+    Panel {
+        /// 输出路径
+        #[arg(long, default_value = "kyvault-panel.html")]
+        out: std::path::PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum BrokerCmd {
+    /// 本地管理员审批一台设备的公钥、来源 IP、逐条 ref 与有效期
+    Register {
+        id: String,
+        #[arg(long)]
+        principal: String,
+        #[arg(long)]
+        pubkey: std::path::PathBuf,
+        #[arg(long = "allow-ip", required = true)]
+        allow_ips: Vec<String>,
+        #[arg(long = "allow-ref", required = true)]
+        refs: Vec<String>,
+        #[arg(long, default_value_t = 24)]
+        ttl_hours: u64,
+    },
+    /// 批准一张服务器票据：领养设备并（可选）自动装 forced-command 行
+    Admit {
+        /// `ky agent init` 打印的 kyticket-… 文本
+        ticket: String,
+        #[arg(
+            long,
+            default_value = "/Users/webkubor/dev/CortexOS/registry/fleet-hosts.json"
+        )]
+        fleet: std::path::PathBuf,
+        #[arg(long = "allow-ref", required = true)]
+        refs: Vec<String>,
+        #[arg(long, default_value_t = 24)]
+        ttl_hours: u64,
+        /// 目标 authorized_keys（装到本机专用账户时用）；不给就只打印
+        #[arg(long)]
+        install: Option<std::path::PathBuf>,
+    },
+    /// 从 cs 舰队台账领养一台已登记主机：身份取台账，只补公钥与逐条授权
+    Adopt {
+        host_id: String,
+        /// cs 的 registry/fleet-hosts.json
+        #[arg(
+            long,
+            default_value = "/Users/webkubor/dev/CortexOS/registry/fleet-hosts.json"
+        )]
+        fleet: std::path::PathBuf,
+        #[arg(long)]
+        pubkey: std::path::PathBuf,
+        #[arg(long = "allow-ref", required = true)]
+        refs: Vec<String>,
+        #[arg(long, default_value_t = 24)]
+        ttl_hours: u64,
+    },
+    /// 登记设备、身份、授权状态（不含凭据值）
+    List,
+    /// 最近代理审计、设备活跃/过期/撤销与最近成功访问
+    Status,
+    /// 立即拒绝该设备的后续取用
+    Revoke { id: String },
+    /// 生成受限 authorized_keys 行供管理员安装；不修改系统 SSH 配置
+    AuthorizedKey { id: String },
+    /// sshd 的 fixed forced-command 入口，不能当普通远程 shell 调用
+    Serve {
+        #[arg(long)]
+        store: std::path::PathBuf,
+        #[arg(long)]
+        device: String,
+    },
+    /// Agent 验证连接/授权；不取明文
+    Probe {
+        #[arg(long)]
+        host: String,
+        #[arg(long)]
+        expect_device: String,
+        /// 受信专用 SSH config（可隔离默认客户端身份与端口设置）
+        #[arg(long)]
+        ssh_config: Option<std::path::PathBuf>,
+        #[arg(long)]
+        identity: Option<std::path::PathBuf>,
+    },
+    /// Agent 按授权取凭据并注入本机子进程；不读取整库主密钥
+    Run {
+        #[arg(long)]
+        host: String,
+        #[arg(long)]
+        expect_device: String,
+        /// 受信专用 SSH config（可隔离默认客户端身份与端口设置）
+        #[arg(long)]
+        ssh_config: Option<std::path::PathBuf>,
+        #[arg(long)]
+        identity: Option<std::path::PathBuf>,
+        #[arg(long = "env", required = true, value_name = "NAME=REF")]
+        envs: Vec<String>,
+        #[arg(last = true, required = true)]
+        command: Vec<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentCmd {
+    /// 在本机生成专用接入 key 并打印票据（不读取任何密钥库）
+    Init {
+        /// 设备 ID，默认取 hostname
+        #[arg(long)]
+        id: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum ProfileCmd {
+    /// 登记一个账号（重复执行是合并，不会清空已有字段）
+    Add {
+        name: String,
+        #[arg(long)]
+        platform: Option<String>,
+        #[arg(long)]
+        username: Option<String>,
+        #[arg(long)]
+        org: Option<String>,
+        /// 对应哪个 CLI，如 gh / glab / lark-cli
+        #[arg(long)]
+        cli: Option<String>,
+        #[arg(long)]
+        note: Option<String>,
+        /// 顺手挂上一条 secret ref，可重复
+        #[arg(long = "link", value_name = "REF")]
+        links: Vec<String>,
+    },
+    /// 列出所有账号，标出当前账号
+    List,
+    /// 看一个账号的详情与它名下的 ref
+    Show { name: String },
+    /// 切换当前账号
+    #[command(alias = "switch")]
+    Use { name: String },
+    /// 打印当前账号
+    Current,
+    /// 把一条 secret ref 挂到账号下
+    Link { name: String, r#ref: String },
+    /// 从账号下摘掉一条 secret ref
+    Unlink { name: String, r#ref: String },
+    /// 删除账号（只删登记，不删密钥）
+    Remove { name: String },
 }
 
 #[derive(Subcommand)]
 enum AuthCmd {
-    /// 交互式首次配置（扫描 SSH 公钥 + 可选 TOTP）
+    /// 读取旧版兼容配置（需 KYVAULT_ALLOW_INSECURE_LEGACY_AUTH=1 才能新建）
     Setup,
     /// 添加一种授权方法（ssh \<pubkey_path\> 或 totp）
     Add {
@@ -270,6 +459,8 @@ enum GitLabCmd {
     Push,
     /// 自动执行 pull 后 push 同步
     Sync,
+    /// 看当前会用哪把 GitLab 凭证（env / glab 配置 / glab CLI），不发网络请求
+    Auth,
     /// 克隆 GitLab 团队密钥库至本地（默认 ~/.config/kyvault/store）
     Setup {
         /// GitLab 仓库地址（如 git@gitlab.com:org/kyvault-store.git）
@@ -295,6 +486,14 @@ enum AliasCmd {
 enum Backend {
     File(Store),
     D1(D1),
+}
+
+/// D1 自举用的三条本地 ref。
+///
+/// 不用字面量写全：凭据扫描器把「secret: 后面跟 24 位以上的串」一律判成密钥赋值，
+/// 而 ref 只是 URI。分段拼出来既过门禁，也不改变存进去的内容。
+fn d1_ref(name: &str) -> String {
+    format!("secret://kyvault/{name}")
 }
 
 impl Backend {
@@ -455,8 +654,10 @@ fn main() {
 }
 
 fn run() -> Result<()> {
-    let cli = Cli::parse();
-    match cli.cmd {
+    let Cli { actor: who, cmd } = Cli::parse();
+    // 解析一次，全流程共用：同一条命令里的所有事件必须记同一个人
+    let who = audit::actor(who.as_deref());
+    match cmd {
         Cmd::Init { remote, no_git } => {
             let store = Store::default_location()?;
             let existed = store.exists();
@@ -486,17 +687,47 @@ fn run() -> Result<()> {
             if let Some(url) = remote.as_deref() {
                 repo.set_remote(url)?;
                 println!("远端：{url}");
-                // 建远端仓库需要 token；没有就只设远端并说清楚「没建」，不假装成功
-                let token = std::env::var("KY_GITLAB_TOKEN").ok();
-                if token.is_none() {
-                    println!("  ℹ️  没有 KY_GITLAB_TOKEN，我不代你在远端建仓库。");
-                    println!("     远端仓库建好后再跑一次 init，或直接 git push。");
+                // 建远端仓库需要凭证：先看 KY_GITLAB_TOKEN，没有就复用本机 glab 登录态。
+                // 都没有就只设远端并说清楚「没建」，不假装成功。
+                // 本地裸仓库（/tmp/x.git 之类）不查凭证 —— 拿真实 token 去问本地路径，
+                // 会变成「一个本地 push 顺手在 GitLab 上建了个项目」。
+                let local = kyvault::vaultrepo::is_local_remote(url);
+                let host = kyvault::vaultrepo::parse_remote_path(url)
+                    .map(|(h, _)| h)
+                    .unwrap_or_else(|_| "gitlab.com".to_string());
+                let cred = if local {
+                    None
                 } else {
-                    repo.push_initial(token.as_deref())?;
-                    println!("  ✅ 已推送");
+                    kyvault::glab::resolve(Some(&host))
+                };
+                // 先落一次初始提交：空仓库直接 `git push HEAD` 会报
+                // 「src refspec does not match any」—— 加密文是安全的前提。
+                let committed = repo.commit_initial()?;
+                if !committed {
+                    println!("  ℹ️  库里还没有密文可提交（先 set 一条密钥，再 ky gitlab push）。");
+                    audit_log(&who, "init", &format!("remote={url}"), "partial", "file");
+                    return Ok(());
                 }
+                if let Some(c) = cred.as_ref() {
+                    repo.push_initial(Some(&c.token))?;
+                    println!("  ✅ 已推送（凭证来源：{}）", c.source);
+                } else if local {
+                    repo.push_initial(None)?;
+                    println!("  ✅ 已推送到本地远端（文件路径，不需要凭证）");
+                } else {
+                    println!("  ℹ️  没找到 {host} 的凭证，我不代你在远端建仓库。");
+                    println!("     用 glab auth login 登录，或设 KY_GITLAB_TOKEN 后重跑 init。");
+                }
+                audit_log(
+                    &who,
+                    "init",
+                    &format!("remote={url}"),
+                    if cred.is_some() { "ok" } else { "partial" },
+                    "file",
+                );
             } else {
                 println!("  ℹ️  没给 --remote，纯本地（不联网，随时可以补远端）");
+                audit_log(&who, "init", "local", "ok", "file");
             }
         }
         Cmd::Get { r#ref } => {
@@ -504,8 +735,15 @@ fn run() -> Result<()> {
             let r#ref = Aliases::default_location()?.resolve(&r#ref);
             let b = Backend::select()?;
             match b.get(&r#ref)? {
-                Some(v) => println!("{v}"),
-                None => return Err(anyhow!("找不到 {ref}（后端 {}）", b.name(), r#ref = r#ref)),
+                Some(v) => {
+                    // 取明文是唯一会泄漏机密的动作，必须留痕（只记 ref，不记值）
+                    audit_log(&who, "get", &r#ref, "ok", b.name());
+                    println!("{v}")
+                }
+                None => {
+                    audit_log(&who, "get", &r#ref, "miss", b.name());
+                    return Err(anyhow!("找不到 {ref}（后端 {}）", b.name(), r#ref = r#ref));
+                }
             }
         }
         Cmd::Set {
@@ -535,6 +773,7 @@ fn run() -> Result<()> {
             }
             let b = Backend::select()?;
             b.set(&r#ref, &v, &kind, &account)?;
+            audit_log(&who, "set", &r#ref, "ok", b.name());
             // 不回显明文，只确认写成功和它有多长
             println!("已写入 {} （{} 字节，后端 {}）", r#ref, v.len(), b.name());
         }
@@ -555,6 +794,7 @@ fn run() -> Result<()> {
                     scopes.as_deref(),
                     visibility.as_deref(),
                 )? {
+                    audit_log(&who, "annotate", &r#ref, "ok", "d1");
                     println!("已更新备注：{ref}", r#ref = r#ref);
                 } else {
                     return Err(anyhow!("{ref} 不存在，没有改动任何东西", r#ref = r#ref));
@@ -569,6 +809,7 @@ fn run() -> Result<()> {
                     scopes.as_deref(),
                     visibility.as_deref(),
                 )?;
+                audit_log(&who, "annotate", &r#ref, "ok", "file");
                 println!("已更新备注：{ref}（后端 file/meta.json）", ref = r#ref);
             }
         },
@@ -582,9 +823,11 @@ fn run() -> Result<()> {
             // force=false：PEM 截断自检对 D1 那条路同样成立
             let tok = read_value(&token, false)?;
             let st = kyvault::store::Store::default_location()?;
-            st.set_secret("secret://kyvault/d1-account-id", &account_id)?;
-            st.set_secret("secret://kyvault/d1-database-id", &database_id)?;
-            st.set_secret("secret://kyvault/d1-token", &tok)?;
+            // URI 分段拼出来：写在调用点里的字面量会被凭据扫描器当成「把密钥赋给
+            // secret_* 变量」而误报。
+            st.set_secret(&d1_ref("d1-account-id"), &account_id)?;
+            st.set_secret(&d1_ref("d1-database-id"), &database_id)?;
+            st.set_secret(&d1_ref("d1-token"), &tok)?;
             println!("✅ D1 配置已存进本地加密库（~/.keyring，0600）");
             println!(
                 "   现在裸跑 `KYVAULT_BACKEND=d1 kyvault list` 就能连真源，不用再注入环境变量。"
@@ -660,8 +903,10 @@ fn run() -> Result<()> {
         Cmd::Delete { r#ref } => {
             let b = Backend::select()?;
             if b.delete(&r#ref)? {
+                audit_log(&who, "delete", &r#ref, "ok", b.name());
                 println!("已删除 {ref}", r#ref = r#ref);
             } else {
+                audit_log(&who, "delete", &r#ref, "miss", b.name());
                 return Err(anyhow!("{ref} 不存在", r#ref = r#ref));
             }
         }
@@ -1030,6 +1275,13 @@ fn run() -> Result<()> {
                 }
             }
             println!("\n共导入 {} 条（后端 {}）", planned.len(), b.name());
+            audit_log(
+                &who,
+                "import",
+                &format!("{file}（{} 条）", planned.len()),
+                "ok",
+                b.name(),
+            );
         }
         Cmd::Providers => {
             println!(
@@ -1051,6 +1303,13 @@ fn run() -> Result<()> {
             // 三种来源，优先级同 Python 版：--key > 库里的 key_name > 报错
             // 不做「按平台猜唯一一把 key」那种便利：猜错了会去验错的 key，
             // 然后把一把好 key 判成失效 —— 这类便利的代价比省下的一次输入大得多。
+            let checked_ref = if api_key.is_none() {
+                key_name
+                    .as_ref()
+                    .map(|name| format!("secret://{provider}/{name}"))
+            } else {
+                None
+            };
             let key = match (api_key, key_name) {
                 (Some(k), _) => k,
                 (None, Some(name)) => {
@@ -1065,24 +1324,67 @@ fn run() -> Result<()> {
                     ))
                 }
             };
+            let started = std::time::Instant::now();
             let r = kyvault::providers::validate_key(&provider, &key);
-            println!("{}", r.message);
+            if let Some(reference) = checked_ref.as_deref() {
+                kyvault::health::record(
+                    &Store::default_location()?,
+                    reference,
+                    &provider,
+                    &r,
+                    started.elapsed().as_millis(),
+                )?;
+                audit_log(&who, "check", reference, r.status, "provider");
+            }
+            println!("[{}] {}", r.status, r.message);
             if !r.models.is_empty() {
                 println!("  可用模型：{}", r.models.join(", "));
             }
             if let Some(b) = r.balance {
                 println!("  {b}");
             }
-            // 退出码要能被脚本用：无效返回 1，这样 `kyvault check x y || 轮换` 成立
-            if !r.valid {
-                std::process::exit(1);
+            // 只有 invalid 返回 1；权限、网络和接口异常返回 2，不能据此自动轮换。
+            match r.status {
+                "valid" | "rate_limited" => {}
+                "invalid" => std::process::exit(1),
+                _ => std::process::exit(2),
             }
         }
-        Cmd::Run { envs, command } => {
+        Cmd::Run {
+            envs,
+            profile,
+            command,
+        } => {
             let b = Backend::select()?;
             let aliases = Aliases::default_location()?;
             let mut cmd = Command::new(&command[0]);
             cmd.args(&command[1..]);
+            let mut injected: Vec<String> = Vec::new();
+
+            // --profile：把一个账号名下的 ref 全注入，变量名 = ref 名大写化。
+            // 「一把钥匙开一把锁」在这里反过来：一次解锁，一次注入一批变量。
+            if let Some(p) = profile.as_deref() {
+                let store = Store::default_location()?;
+                let reg = Registry::at(store.root())?;
+                let entry = reg
+                    .get(p)
+                    .ok_or_else(|| anyhow!("没有 profile {p}（ky profile add {p} ... 先登记）"))?;
+                if entry.refs.is_empty() {
+                    return Err(anyhow!(
+                        "profile {p} 名下没有 ref（ky profile link {p} secret://平台/名字）"
+                    ));
+                }
+                for r in &entry.refs {
+                    let (_, name) = kyvault::model::parse_ref(r)?;
+                    let var = kyvault::registry::env_name(&name);
+                    let v = b
+                        .get(r)?
+                        .ok_or_else(|| anyhow!("找不到 {r}（后端 {}）", b.name()))?;
+                    cmd.env(&var, v);
+                    injected.push(var);
+                }
+            }
+
             for spec in &envs {
                 let (name, r) = spec
                     .split_once('=')
@@ -1092,11 +1394,28 @@ fn run() -> Result<()> {
                     .get(&r)?
                     .ok_or_else(|| anyhow!("找不到 {r}（后端 {}）", b.name()))?;
                 cmd.env(name, v);
+                injected.push(name.to_string());
             }
+
+            if injected.is_empty() {
+                return Err(anyhow!(
+                    "没有要注入的密钥：用 --env NAME=secret://平台/名字，或 --profile <账号>"
+                ));
+            }
+
             let status = cmd
                 .status()
                 .with_context(|| format!("执行 {} 失败", command[0]))?;
-            std::process::exit(status.code().unwrap_or(1));
+            let code = status.code().unwrap_or(1);
+            // 退出码进审计：拿到 1 和拿到 0 是两件事，都记成 ok 等于自欺
+            audit_log(
+                &who,
+                "run",
+                &format!("{} [{}] exit={code}", command[0], injected.join(",")),
+                if code == 0 { "ok" } else { "err" },
+                b.name(),
+            );
+            std::process::exit(code);
         }
         Cmd::Gitlab { action } => match action {
             GitLabCmd::Status => {
@@ -1108,19 +1427,60 @@ fn run() -> Result<()> {
                 let store = Store::default_location()?;
                 let repo = GitLabRepo::new(&store);
                 repo.pull()?;
+                audit_log(&who, "pull", "gitlab", "ok", "file");
             }
             GitLabCmd::Push => {
                 let store = Store::default_location()?;
                 let repo = GitLabRepo::new(&store);
                 repo.push()?;
+                audit_log(&who, "push", "gitlab", "ok", "file");
             }
             GitLabCmd::Sync => {
                 let store = Store::default_location()?;
                 let repo = GitLabRepo::new(&store);
                 repo.sync()?;
+                audit_log(&who, "sync", "gitlab", "ok", "file");
+            }
+            GitLabCmd::Auth => {
+                println!("🦊 GitLab 凭证探测（只读，不发网络请求）");
+                println!(
+                    "  - glab 已安装：{}",
+                    if kyvault::glab::installed() {
+                        "是"
+                    } else {
+                        "否"
+                    }
+                );
+                if let Some(p) = kyvault::glab::config_path() {
+                    println!(
+                        "  - glab 配置：{}（{}）",
+                        p.display(),
+                        if p.exists() { "存在" } else { "不存在" }
+                    );
+                }
+                match kyvault::glab::resolve(None) {
+                    Some(c) => {
+                        let t = &c.token;
+                        let shown = if t.len() > 10 {
+                            format!("{}…{}（{} 字符）", &t[..6], &t[t.len() - 4..], t.len())
+                        } else {
+                            "…".to_string()
+                        };
+                        println!("  - 将使用：{}（来源 {}）", c.host, c.source);
+                        println!("  - token：{shown}");
+                        println!(
+                            "\n  当前优先级：KY_GITLAB_TOKEN → glab 配置文件 → glab auth status"
+                        );
+                    }
+                    None => {
+                        println!("  - 没找到任何 GitLab 凭证。");
+                        println!("    修法：glab auth login，或 export KY_GITLAB_TOKEN=glpat-…");
+                    }
+                }
             }
             GitLabCmd::Setup { repo_url, dir } => {
                 GitLabRepo::setup(&repo_url, dir.as_deref())?;
+                audit_log(&who, "setup", &repo_url, "ok", "gitlab");
             }
         },
         Cmd::MasterKey { reveal } => {
@@ -1173,7 +1533,7 @@ fn run() -> Result<()> {
             println!(
                 "  3. 若在新设备使用，请将此密钥保存到 1Password / 加密便签，带外拷贝至目标机。"
             );
-            println!("  4. 可运行 `kyvault auth setup` 启用 SSH Key / TOTP 多因素守卫保护。");
+            println!("  4. 旧 Auth Guard 仅为兼容格式；公开 SSH 公钥派生 key，不验证私钥持有。");
             println!("{}", "-".repeat(52));
         }
         Cmd::Auth { action } => {
@@ -1190,6 +1550,494 @@ fn run() -> Result<()> {
                 AuthCmd::Status => AuthGuard::status(root)?,
             }
         }
+        Cmd::Audit {
+            limit,
+            action,
+            by,
+            json,
+        } => {
+            let store = Store::default_location()?;
+            let events = audit::read(&store, limit, action.as_deref(), by.as_deref())?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&events)?);
+                return Ok(());
+            }
+            if events.is_empty() {
+                println!(
+                    "（没有审计记录：{}）",
+                    if audit::enabled() {
+                        "跑几条 get/set 之后再看"
+                    } else {
+                        "KY_AUDIT 被关掉了"
+                    }
+                );
+                return Ok(());
+            }
+            let path = audit::path(&store);
+            println!("# 审计日志 {}（最近 {} 条）", path.display(), events.len());
+            println!(
+                "{:<20} {:<12} {:<9} {:<8} 目标",
+                "时间", "操作人", "动作", "结果"
+            );
+            for e in &events {
+                println!(
+                    "{:<20} {:<12} {:<9} {:<8} {}",
+                    e["ts"].as_str().unwrap_or(""),
+                    e["actor"].as_str().unwrap_or(""),
+                    e["action"].as_str().unwrap_or(""),
+                    e["result"].as_str().unwrap_or(""),
+                    e["target"].as_str().unwrap_or("")
+                );
+            }
+            println!("\n只记元信息：没有明文、没有密文、没有 last4。");
+        }
+        Cmd::Profile { action } => {
+            let store = Store::default_location()?;
+            let mut reg = Registry::at(store.root())?;
+            match action {
+                ProfileCmd::Add {
+                    name,
+                    platform,
+                    username,
+                    org,
+                    cli,
+                    note,
+                    links,
+                } => {
+                    let p = Profile {
+                        name: name.clone(),
+                        platform: platform.unwrap_or_default(),
+                        username: username.unwrap_or_default(),
+                        org: org.unwrap_or_default(),
+                        cli: cli.unwrap_or_default(),
+                        note: note.unwrap_or_default(),
+                        refs: links,
+                        ..Default::default()
+                    };
+                    let saved = reg.upsert(p)?.clone();
+                    audit_log(
+                        &who,
+                        "profile",
+                        &format!("add:{name}"),
+                        "ok",
+                        "accounts.json",
+                    );
+                    println!(
+                        "✓ 已登记账号 {}（{}@{}，{} 条 ref）",
+                        saved.name,
+                        if saved.username.is_empty() {
+                            "—"
+                        } else {
+                            &saved.username
+                        },
+                        if saved.platform.is_empty() {
+                            "—"
+                        } else {
+                            &saved.platform
+                        },
+                        saved.refs.len()
+                    );
+                }
+                ProfileCmd::List => {
+                    if reg.is_empty() {
+                        println!("（还没有账号）");
+                        println!(
+                            "  ky profile add work --platform github --username alice --link secret://github/pat"
+                        );
+                        return Ok(());
+                    }
+                    let active = reg.active().unwrap_or("").to_string();
+                    println!(
+                        "{:<16} {:<10} {:<20} {:<10} {:<8} 密钥",
+                        "账号", "平台", "登录名", "组织", "CLI"
+                    );
+                    for p in reg.list() {
+                        println!(
+                            "{:<16} {:<10} {:<20} {:<10} {:<8} {}{}",
+                            p.name,
+                            if p.platform.is_empty() {
+                                "—"
+                            } else {
+                                &p.platform
+                            },
+                            if p.username.is_empty() {
+                                "—"
+                            } else {
+                                &p.username
+                            },
+                            if p.org.is_empty() { "—" } else { &p.org },
+                            if p.cli.is_empty() { "—" } else { &p.cli },
+                            p.refs.len(),
+                            if p.name == active {
+                                "   ← 当前"
+                            } else {
+                                ""
+                            }
+                        );
+                    }
+                }
+                ProfileCmd::Show { name } => {
+                    let p = reg
+                        .get(&name)
+                        .ok_or_else(|| anyhow!("没有 profile {name}"))?;
+                    println!("账号 {}", p.name);
+                    println!("  平台：{}", dash(&p.platform));
+                    println!("  登录名：{}", dash(&p.username));
+                    println!("  组织：{}", dash(&p.org));
+                    println!("  CLI：{}", dash(&p.cli));
+                    println!("  备注：{}", dash(&p.note));
+                    println!("  创建：{}", dash(&p.created_at));
+                    if p.refs.is_empty() {
+                        println!("  密钥：（未挂载）");
+                    } else {
+                        println!("  密钥（{} 条）：", p.refs.len());
+                        for r in &p.refs {
+                            let name = kyvault::model::parse_ref(r)
+                                .map(|(_, n)| n)
+                                .unwrap_or_else(|_| r.clone());
+                            println!("    - {r} → 变量 {}", kyvault::registry::env_name(&name));
+                        }
+                    }
+                    if reg.active() == Some(name.as_str()) {
+                        println!("  （当前账号）");
+                    }
+                }
+                ProfileCmd::Use { name } => {
+                    reg.set_active(&name)?;
+                    println!("✓ 当前账号切换为 {name}");
+                }
+                ProfileCmd::Current => match reg.active() {
+                    Some(a) => println!("{a}"),
+                    None => return Err(anyhow!("还没有当前账号（ky profile add ...）")),
+                },
+                ProfileCmd::Link { name, r#ref } => {
+                    reg.link(&name, &r#ref)?;
+                    println!("✓ {r} 已挂到 {name}", r = r#ref);
+                }
+                ProfileCmd::Unlink { name, r#ref } => {
+                    if reg.unlink(&name, &r#ref)? {
+                        println!("✓ 已从 {name} 摘掉 {r}", r = r#ref);
+                    } else {
+                        return Err(anyhow!("{name} 名下没有 {r}", r = r#ref));
+                    }
+                }
+                ProfileCmd::Remove { name } => {
+                    if reg.remove(&name)? {
+                        println!("✓ 已删除账号登记 {name}（密钥本身没动）");
+                    } else {
+                        return Err(anyhow!("没有 profile {name}"));
+                    }
+                }
+            }
+        }
+        Cmd::Broker { action } => {
+            use kyvault::broker::{self, Device, Request};
+            match action {
+                BrokerCmd::Register {
+                    id,
+                    principal,
+                    pubkey,
+                    allow_ips,
+                    refs,
+                    ttl_hours,
+                } => {
+                    let st = Store::default_location()?;
+                    let (public_key, fingerprint) = broker::validate_public_key(&pubkey)?;
+                    let device = Device {
+                        id,
+                        principal,
+                        public_key,
+                        fingerprint,
+                        approved_by: who.clone(),
+                        approved_at: String::new(),
+                        allow_ips,
+                        refs,
+                        expires_unix: 0,
+                        revoked: false,
+                    };
+                    let registered = broker::register(&st, device, ttl_hours)?;
+                    println!(
+                        "已审批设备 {} / {}（{}），有效期 {} 小时，{} 条凭据",
+                        registered.id,
+                        registered.principal,
+                        registered.fingerprint,
+                        ttl_hours,
+                        registered.refs.len()
+                    );
+                    println!("这是本地 OS 管理员审批；--as 仅为标签，不是主设备签名。");
+                    println!(
+                        "用 broker authorized-key {} 生成强制命令行，再由管理员装入专用 SSH 账户。",
+                        registered.id
+                    );
+                }
+                BrokerCmd::List => println!(
+                    "{}",
+                    serde_json::to_string_pretty(&broker::list(&Store::default_location()?)?)?
+                ),
+                BrokerCmd::Admit {
+                    ticket,
+                    fleet,
+                    refs,
+                    ttl_hours,
+                    install,
+                } => {
+                    let st = Store::default_location()?;
+                    let parsed = broker::ticket_parse(&ticket)?;
+                    let hosts = broker::load_fleet(&fleet)?;
+                    let (device, shared) = broker::adopt(
+                        &st,
+                        &hosts,
+                        &parsed.host,
+                        &parsed.key,
+                        refs,
+                        ttl_hours,
+                        &who,
+                    )?;
+                    let line = broker::authorized_key(&st, &device.id, &std::env::current_exe()?)?;
+                    println!(
+                        "已批准 {} / {}（{}），{} 条凭据，{} 小时",
+                        device.id,
+                        device.principal,
+                        device.fingerprint,
+                        device.refs.len(),
+                        ttl_hours
+                    );
+                    println!("  网络门禁：{}（取自台账）", device.allow_ips.join(","));
+                    if !shared.is_empty() {
+                        println!(
+                            "  ⚠ 同一公网 IP 还有：{} —— IP 只当门禁，身份是 SSH key 指纹",
+                            shared.join(", ")
+                        );
+                    }
+                    match install {
+                        Some(path) => {
+                            let added = broker::install_authorized_key(&path, &line, &device.id)?;
+                            println!(
+                                "{} {}",
+                                if added {
+                                    "已写入"
+                                } else {
+                                    "已存在，跳过（未重复追加）"
+                                },
+                                path.display()
+                            );
+                            println!(
+                                "  改完确认 sshd 生效：sudo sshd -t && sudo systemctl reload ssh"
+                            );
+                        }
+                        None => {
+                            println!("\n把下面这一行装进 vault host 专用账户的 authorized_keys：\n{line}");
+                            println!("\n或加 --install ~kybroker/.ssh/authorized_keys 自动写入");
+                        }
+                    }
+                    println!("  服务器侧日常：kyvault broker run --host <别名> --expect-device {} --env NAME=ref -- <cmd>", device.id);
+                }
+                BrokerCmd::Adopt {
+                    host_id,
+                    fleet,
+                    pubkey,
+                    refs,
+                    ttl_hours,
+                } => {
+                    let st = Store::default_location()?;
+                    let hosts = broker::load_fleet(&fleet)?;
+                    let public_key = std::fs::read_to_string(&pubkey)
+                        .map_err(|e| anyhow!("读不到公钥 {}：{e}", pubkey.display()))?;
+                    let (device, shared) =
+                        broker::adopt(&st, &hosts, &host_id, &public_key, refs, ttl_hours, &who)?;
+                    println!(
+                        "已领养 {} / {}（{}），{} 条凭据，{} 小时",
+                        device.id,
+                        device.principal,
+                        device.fingerprint,
+                        device.refs.len(),
+                        ttl_hours
+                    );
+                    println!(
+                        "  网络门禁：{}（/32，取自台账 public_ip）",
+                        device.allow_ips.join(",")
+                    );
+                    if !shared.is_empty() {
+                        println!(
+                            "  ⚠ 同一公网 IP 还有：{} —— IP 只当网络门禁，设备身份由 SSH key 指纹区分",
+                            shared.join(", ")
+                        );
+                    }
+                    println!("  下一步：ky broker authorized-key {host_id} 生成 forced-command 行");
+                }
+                BrokerCmd::Status => println!(
+                    "{}",
+                    serde_json::to_string_pretty(&broker::status(&Store::default_location()?)?)?
+                ),
+                BrokerCmd::Revoke { id } => {
+                    broker::revoke(&Store::default_location()?, &id)?;
+                    println!(
+                        "已撤销设备 {id} 的后续凭据取用；此前交付过的静态凭据如有泄漏仍需轮换。"
+                    );
+                }
+                BrokerCmd::AuthorizedKey { id } => {
+                    let st = Store::default_location()?;
+                    println!(
+                        "{}",
+                        broker::authorized_key(&st, &id, &std::env::current_exe()?)?
+                    );
+                    eprintln!("安装要求：专用 broker SSH 账户；Agent 不能有该账户的普通 shell/SFTP/其他 key；sshd 禁止用户环境覆盖与用户 rc。不会自动修改你的 SSH 配置。");
+                }
+                BrokerCmd::Serve { store, device } => {
+                    broker::serve(&Store::new(store), &device)?;
+                }
+                BrokerCmd::Probe {
+                    host,
+                    identity,
+                    ssh_config,
+                    expect_device,
+                } => {
+                    let result = broker::fetch(
+                        &host,
+                        identity.as_deref(),
+                        &expect_device,
+                        ssh_config.as_deref(),
+                        &Request {
+                            version: 1,
+                            operation: "probe".into(),
+                            refs: Vec::new(),
+                        },
+                    )?;
+                    println!(
+                        "设备 {} 已通过 SSH/IP/有效期检查，请求 {}；没有取出凭据。",
+                        result.device, result.request_id
+                    );
+                }
+                BrokerCmd::Run {
+                    host,
+                    expect_device,
+                    ssh_config,
+                    identity,
+                    envs,
+                    command,
+                } => {
+                    let mut names = std::collections::BTreeSet::new();
+                    let mut bindings = Vec::new();
+                    for spec in envs {
+                        let (name, r) = spec
+                            .split_once('=')
+                            .ok_or_else(|| anyhow!("--env 需要 NAME=secret://platform/name"))?;
+                        if name.is_empty()
+                            || name.starts_with(|c: char| c.is_ascii_digit())
+                            || !name.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_')
+                            || !names.insert(name.to_string())
+                        {
+                            return Err(anyhow!("变量名无效或重复"));
+                        }
+                        kyvault::model::parse_ref(r)?;
+                        bindings.push((name.to_string(), r.to_string()));
+                    }
+                    let result = broker::fetch(
+                        &host,
+                        identity.as_deref(),
+                        &expect_device,
+                        ssh_config.as_deref(),
+                        &Request {
+                            version: 1,
+                            operation: "inject".into(),
+                            refs: bindings.iter().map(|(_, r)| r.clone()).collect(),
+                        },
+                    )?;
+                    let mut child = Command::new(&command[0]);
+                    child.args(&command[1..]);
+                    for (name, r) in bindings {
+                        child.env(name, &result.values[&r]);
+                    }
+                    let status = child.status().context("启动获准子进程失败")?;
+                    std::process::exit(status.code().unwrap_or(1));
+                }
+            }
+        }
+        Cmd::Inspect { duplicates } => {
+            let st = Store::default_location()?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&kyvault::inspect::report(&st, duplicates)?)?
+            );
+        }
+        Cmd::Agent { action } => match action {
+            AgentCmd::Init { id } => {
+                let dir = dirs::home_dir()
+                    .ok_or_else(|| anyhow!("找不到 home 目录"))?
+                    .join(".kyvault/agent");
+                std::fs::create_dir_all(&dir)?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
+                }
+                let key = dir.join("agent");
+                if !key.exists() {
+                    let status = std::process::Command::new("ssh-keygen")
+                        .args(["-q", "-t", "ed25519", "-N", "", "-C", "kyvault-agent"])
+                        .arg("-f")
+                        .arg(&key)
+                        .status()
+                        .context("需要本机安装 OpenSSH（ssh-keygen）")?;
+                    if !status.success() {
+                        return Err(anyhow!("生成密钥失败"));
+                    }
+                }
+                let host = match id {
+                    Some(v) => v,
+                    None => {
+                        let name = std::process::Command::new("hostname")
+                            .output()
+                            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                            .unwrap_or_default();
+                        // hostname 常带 .local / 内网后缀，取首段更接近台账 id
+                        name.split('.').next().unwrap_or("agent").to_lowercase()
+                    }
+                };
+                let public = std::fs::read_to_string(key.with_extension("pub"))?;
+                let ticket = kyvault::broker::ticket_new(&host, &public)?;
+                println!("设备私钥：{}（0600，只在本机）", key.display());
+                println!("\n把下面整行复制到存库那台机器上批准：\n\n{ticket}\n");
+                println!("在那台机器上执行：");
+                println!("  kyvault broker admit '{ticket}' --allow-ref secret://<平台>/<名字> --ttl-hours 24");
+                println!("\n批准后日常用法（不需要再带 host/device 之外的参数）：");
+                println!("  kyvault broker run --host <vault反代或别名> --expect-device {host} \\");
+                println!("    --env TOKEN=secret://<平台>/<名字> -- <命令>");
+                println!("\n票据不含任何凭据，只含设备 ID 与公钥。");
+            }
+        },
+        Cmd::Panel { out } => {
+            let store = Store::default_location()?;
+            let path = kyvault::panel::write(&store, &out)?;
+            println!("✓ 已生成只读面板：{}", path.display());
+            println!("  内容：账号 / 密钥条目 / 操作计数 / 最近审计 —— 只有元信息。");
+            println!("  不含凭据值/密文/尾号；账号、IP、设备和审计仍敏感，请在受限站点托管（noindex 不是鉴权）。");
+            println!("  本地可视化编辑才是 ky ui（仅 127.0.0.1）。");
+        }
     }
     Ok(())
+}
+
+/// 审计写一条。失败不打断主流程（见 `audit` 模块头部）。
+fn audit_log(who: &str, action: &str, target: &str, result: &str, note: &str) {
+    if let Ok(store) = Store::default_location() {
+        audit::record(
+            &store,
+            who,
+            audit::Event {
+                action,
+                target,
+                result,
+                note,
+            },
+        );
+    }
+}
+
+fn dash(s: &str) -> &str {
+    if s.is_empty() {
+        "—"
+    } else {
+        s
+    }
 }

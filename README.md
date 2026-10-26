@@ -55,7 +55,7 @@
 
 * 🔒 **别名注入 (Alias Injection)**: 用别名（如 `github_token`）引用凭证，`ky run` 在运行时将值注入子进程，无需把明文写进提示词。子进程仍可读取或输出该值。
 * 🌐 **本地极客 Web GUI 与向导 (Web GUI & Wizard)**: 一键 `ky ui` 唤起本地极客暗黑风面板；`ky wizard` 提供终端四步分类引导，彻底告别命名不统一。
-* 🛡️ **Auth Guard 多因素授权守卫 (Multi-Factor Guard)**: 根密钥加密为 `master.key.enc`，支持本地 SSH 公钥无感解锁 + Google Authenticator 动态门禁。
+* 🛡️ **旧版 Auth Guard 兼容**: 早期版本用公开 SSH `.pub` 内容派生本地解密 key；它不验证私钥，TOTP 配置当前也未接入敏感命令校验。
 * 🤖 **多平台 CLI 智能对接 (AI Connect)**: 一键 `ky connect`，自动将规则和技能注入 `Gemini/agy/Claude/Codex/Hermes` 及项目本地助手 记忆与规则库。
 * 🖥️ **开发者加密台账中心 (Developer Ledger)**: 加密管理服务器账号密码、云服务租金、CLI 客户端多 Profile 凭证令牌，支持 URI 寻址。
 * ⚡ **极简短命令 (First-Class `ky`)**: `ky` 作为官方第一公民，敲 `ky list`、`ky run`、`ky ui` 享受最极客的开发者心流。
@@ -247,6 +247,78 @@ kyvault cli get studio-cli webkubor             # 输出: jwt_token_main
 kyvault get secret://cli/studio-cli/test-user   # 输出: jwt_token_test
 ```
 
+### 🧾 账号体系、操作审计与只读面板
+
+三件事补上「谁、哪个账号、别人能不能看」这一层：
+
+```bash
+# 1. 一个 profile = 一个账号，把散在各平台的凭据收成一组
+kyvault profile add work --platform github --username alice --org acme --cli gh \
+  --link secret://github/pat
+kyvault profile use work          # 切换当前账号
+kyvault run --profile work -- npm run deploy   # 整组注入：变量名 = ref 名大写（PAT）
+
+# 2. 审计：谁在什么时候读过/改过哪条（只记 ref 与时间，不记明文）
+kyvault audit --limit 50
+kyvault audit --action get --actor alice --json
+# 操作人：--as <名字> > KY_ACTOR > 库内 git user.name > $USER
+# 团队谁改的：git log 的提交信息已带操作者（chore(secrets): sync by <name> at <ts>）
+
+# 3. 只读面板：导出静态 HTML，可以放任何静态托管
+kyvault panel --out panel.html
+```
+
+面板不含凭据值、密文或尾号，但账号、IP、设备与审计仍属于敏感元信息，应使用带访问控制的站点托管；`noindex` 不能代替登录鉴权。可写、能查看明文的 `kyvault ui` 仅绑定 `127.0.0.1`。
+
+### 服务器 Agent 协作（实验性）
+
+在受信密码库主机上，由本地管理员审批设备公钥、来源 IP 与逐条授权：
+
+```bash
+kyvault broker register prod-agent --principal agent:deploy \
+  --pubkey /path/to/agent.pub --allow-ip 192.0.2.10 \
+  --allow-ref secret://github/deploy --ttl-hours 24
+kyvault broker authorized-key prod-agent
+kyvault broker status
+kyvault broker revoke prod-agent
+```
+
+`authorized-key` 只生成配置行供审阅，不会修改 SSH 设置。管理员应将其装入专用账户的 `authorized_keys`，使用 OpenSSH `restrict`、`from=` 与 fixed command；Agent 不得拥有该账户的其他登录路径。store、程序和授权文件必须由可信管理员维护，目录仅本人可读。不能把环境变量 `SSH_CONNECTION` 单独当认证；身份成立依赖正确的 sshd/forced-command 部署。`principal` 与 `--as` 仍是人工标签，认证的是登记的 SSH key，不检测私钥是否被复制。
+
+Agent 通过专用 SSH config、已确认的 broker host key 连接，并核对预期设备：
+
+```bash
+kyvault broker probe --host vault-broker --expect-device prod-agent \
+  --ssh-config /path/to/broker-ssh-config
+kyvault broker run --host vault-broker --expect-device prod-agent \
+  --ssh-config /path/to/broker-ssh-config \
+  --env GITHUB_TOKEN=secret://github/deploy -- git push
+```
+
+Agent 使用自己的 SSH 私钥，不拿整库 master key。新请求受 IP、精确 ref、期限与撤销约束，服务端审计写失败则不释放凭据；服务端审计文件仍不防本机管理员篡改。撤销只阻止后续发放；已获准的请求和已复制的静态值不能追回。Mac/Windows 主设备签名审批与自动 enrollment 尚未完成。Broker 主机当前需支持 POSIX shell/OpenSSH；Windows 可作为 SSH 客户端，原生 Windows broker 尚未验收。
+
+### 凭据有效性与重复监察
+
+```bash
+kyvault check openai production  # 联网检查，保存状态、HTTP 分类、检查时间和耗时
+kyvault inspect                  # 离线只读：类型/平台/账户、孤儿关联、时间问题与历史健康状态
+kyvault inspect --duplicates     # 显式解密比较重复值；仅输出引用分组，不输出值、尾号或指纹
+```
+
+健康检查不把网络错误、403 或 429 判作凭据失效。`check` 返回 0 表示通过/限流（限流不证明认证成功），1 表示认证失败，2 表示权限/网络/接口等未知问题；不要用任意非零退出码自动轮换。报告显示的是最近一次记录，默认不联网。计划任务可由操作系统调度，当前没有自动创建周期任务或通知渠道。
+
+### 🦊 已有 glab？不用再抄一遍 PAT
+
+本机 `glab auth login` 过之后，`kyvault init --remote <仓库地址>` 会直接复用 glab 的登录态建私有库并首推：
+
+```bash
+kyvault gitlab auth        # 先看当前会用哪把凭证（env / glab 配置文件 / glab CLI）
+kyvault init --remote https://gitlab.com/team/vault.git
+```
+
+凭证优先级：`KY_GITLAB_TOKEN` → `glab` 配置文件 → `glab auth status --show-token`。
+调 API 优先走 `glab api`（token 不进 `ps`），没有 glab 才回落 `curl` 且 token 走 stdin。
+
 ---
 
 ## 📁 安全架构与 master.key 核心规范
@@ -254,42 +326,44 @@ kyvault get secret://cli/studio-cli/test-user   # 输出: jwt_token_test
 ```
 ~/.config/kyvault/store/ (GitLab 团队仓库)
 ├── auth.json        # Auth Guard 授权方法配置 (SSH 指纹、TOTP 加密 secret)
-├── master.key.enc   # 加密态根密钥 (SSH 公钥派生 AES 密钥加密，替代明文 master.key)
+├── master.key.enc   # 旧版兼容包裹文件（不是有效的公钥加密保护）
 ├── secrets.json     # AES-256-GCM 加密密文 (入仓 Git 同步)
 ├── meta.json        # 审计元信息 (脱敏, 记录更新时间、last4、scopes、组织)
+├── accounts.json    # 账号注册表 (profile / 登录名 / 组织 / ref; 不含密钥材料, 入仓)
+├── audit.log        # 操作审计 (谁读过/改过哪条; 有读事件, 默认不入仓)
 └── .lock            # 跨进程文件排他锁 (防止 Agent 并发写入冲突)
 ```
 
-### 🛡️ Auth Guard 多因素授权守卫 (v2.4.0+)
-
-`master.key` 不再以明文存储。通过 `kyvault auth setup`，将 master.key 用 SSH 公钥材料派生的 AES 密钥加密为 `master.key.enc`，明文自动删除。
-
-- **SSH Key 绑定**（主力）：零交互自动解锁。只要本机 SSH 公钥还在且指纹匹配，Agent 毫无感知。支持绑定多把公钥，任一把匹配即可。
-- **TOTP 谷歌验证器**（可选）：对 `master-key --reveal` 等敏感操作额外要求 6 位动态验证码。
-- **策略**：`any_one`（默认）——任意一种方法通过即解锁。
+### 🛡️ 旧版 Auth Guard 配置（仅兼容）
 
 ```bash
-# 首次启用
-kyvault auth setup
-
-# 查看守卫状态
+# 这些命令只读取/关闭旧 auth.json；setup/add 默认拒绝，兼容迁移需显式设置 KYVAULT_ALLOW_INSECURE_LEGACY_AUTH=1。
 kyvault auth status
-
-# 添加/移除授权方法
-kyvault auth add ssh ~/.ssh/id_ed25519.pub
-kyvault auth add totp
-kyvault auth remove ssh-id_rsa
-
-# 回退到明文模式
-kyvault auth disable
+kyvault auth list
 ```
+
+> 旧格式使用公开 SSH `.pub` 内容派生 key，且 TOTP 校验未接入敏感命令。请勿把它用于密库保密或远程 Agent 授权。方案见 [人类与 Agent 协作提案](docs/proposals/2026-10-22-human-agent-collaboration.md)。
+
+### 📋 人类与 Agent 协作安全边界
+
+| 模式 | 用途 | 访问权限 |
+|---|---|---|
+| 本地 file | 单机用户与本地 Agent | 能解锁该 vault 的进程可读全库 |
+| Git Sync | 小型可信组同步密文 | 同一 master key 的持有者可读全库；IP 与 `visibility` 不做授权 |
+| Broker（实验性 CLI 原型） | SSH 设备身份 + IP/CIDR + 精确 ref + 期限/撤销 | Server 持有整库 root key；Agent 仅请求获准条目，不 clone 密库 |
+
+Broker 使用 OpenSSH forced command，不是公网服务。必须由管理员在专用低权限 SSH 账户安装生成的 `authorized_keys` 行，并通过 sshd policy 禁止交互 shell、SFTP、用户 startup hooks、环境覆盖与其他登录 key。IP 取 `SSH_CONNECTION` 并与 OpenSSH `from=` 双重约束。`--as` 是人工审批标签，不是 Mac/Windows 主设备签名；当前每条响应都返回请求的静态值，拿到值的进程仍可保留或外传。启用前应在隔离测试账号和服务器上 review 部署。
+
+- 本地 `audit.log` 与 `--as` 仅为操作线索，不是认证后的不可抵赖审计。
+- 有效性检查、到期/重复监察、多平台多账号、设备登记与 Agent Grant 的分阶段方案见 [人类与 Agent 协作提案](docs/proposals/2026-10-22-human-agent-collaboration.md)。
+- 文件后端的 AES-GCM 负责认证加密；公开明文 SHA-256 不作为共享重复检测指纹。
 
 ### 🔑 什么是 master.key？
 `master.key` 是在本地生成的 32 字节（256 位）高强度安全随机数（以 44 字符的标准 Base64 编码保存）。
 它是整套密钥库加解密的**唯一根凭据**：
 1. **纯本地计算**：kyvault 使用 `SHA-256(Base64Decode(master.key))` 派生 AES 密钥，对每条凭证生成独立 12 字节随机 Nonce 进行 AES-256-GCM 认证加密。解密零网络依赖。
 2. **物理隔离与绝对不入仓**：`master.key` / `master.key.enc` 被 `.gitignore` 强力排除，`kyvault gitlab push` 前会进行双重防泄露检查。
-3. **本地查看与迁移备份**：
+3. **本地查看与迁移备份**（明文 master.key 模式）：
    ```bash
    kyvault master-key           # 查看路径、权限、SHA-256 指纹
    kyvault master-key --reveal  # 导出明文（备份至 1Password / 换机迁移）
@@ -314,7 +388,7 @@ kyvault auth disable
 
 - **加密算法**: AES-256-GCM（认证加密）
 - **密钥派生**: SHA-256
-- **密钥保护**: Auth Guard（SSH Key / TOTP 加密 master.key）
+- **包装文件**: 旧版 `master.key.enc` 格式只为兼容保留，不验证 SSH 私钥，不能视为安全保护
 - **存储与同步**: 本地脱机解密，GitLab 团队密文同步
 - **权限与并发**: master.key.enc 仅当前用户可读写 (0600)，跨进程 `.lock` 排他锁
 
@@ -360,7 +434,7 @@ kyvault auth disable
 | - | `kyvault gitlab push` | 提交推送密文 (严查key) | `kyvault gitlab push` |
 | - | `kyvault gitlab sync` | 自动同步 (pull+push) | `kyvault gitlab sync` |
 | - | `kyvault gitlab setup`| 克隆团队仓库至本地 | `kyvault gitlab setup git@gitlab.com:org/vault.git` |
-| **Auth Guard 守卫** | | | |
+| `Auth Guard` | 旧配置只读与关闭；setup/add 默认禁止，兼容迁移需显式 opt-in | `kyvault auth status` |
 | - | `kyvault auth setup` | 交互式首次配置 | `kyvault auth setup` |
 | - | `kyvault auth add` | 添加授权方法 | `kyvault auth add ssh ~/.ssh/id_ed25519.pub` |
 | - | `kyvault auth list` | 查看已绑定方法 | `kyvault auth list` |

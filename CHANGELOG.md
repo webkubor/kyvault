@@ -4,8 +4,81 @@
 
 ## [Unreleased]
 
-**这一版没有改一行 Rust 代码 —— 全是「让项目能被找到」的工程。**
+### 服务器 Agent 协作：OpenSSH forced-command broker（Experimental）
 
+目标：服务器 Agent 只取当前任务获准的凭据，不拿整库 master key，也不需要把主密码复制到每台机器。
+
+- **`ky agent init` + `ky broker admit`**：服务器侧只生成自己的 key 并打印一张 `kyticket-…`（不含任何凭据）；vault host 侧一条命令验票、按设备 ID 回查 cs 台账、登记精确授权、把 forced-command 行写进 authorized_keys（写前备份、同设备不重复追加）。重复 admit = 续期/改授权，不报错也不堆行。两台机器各一条命令即可接入。
+- **`ky broker adopt <host-id>`**：设备身份不再手填，直接从 CortexOS 舰队台账（`registry/fleet-hosts.json`）读 id / public_ip / agent_id；kyvault 只补公钥指纹与逐条凭据授权。台账缺 IP 时拒绝领养（不退化成任意来源）；同一公网 IP 上的其他主机只提示不合并身份（实际台账里 gigi 与 xiaomei 同 IP，按 IP 授权等于按机器授权）。决策记录见 `docs/decisions/2026-10-22-broker-ownership.md`。
+- **`ky broker register|list|status|revoke|authorized-key`**：本地管理员审批设备 SSH 公钥、来源 IP/CIDR、精确 ref 与有效期，生成带 `restrict,from=...,command=...` 的 authorized_keys 行供人工审阅安装。
+- **`ky broker serve`**：只能作为 sshd fixed command 运行；从 `SSH_CONNECTION` 取实际对端 IP，校验设备状态、CIDR、精确 ref、期限与撤销。
+- **精确到叶子**：拒绝 `secret://server/<host>` 这类聚合 ref，避免一次授权读出该主机全部字段；也拒绝 cli 聚合。
+- **`ky broker probe|run --expect-device`**：Agent 用自己的 SSH 私钥连接，强制校验 host key、禁用密码/转发/ControlMaster，并核对返回设备 ID；`run` 把值注入本机子进程。
+- **强制审计**：allow/deny、请求 ID、设备、来源 IP、ref 列表写入 `broker-audit.jsonl`；审计写失败则拒绝释放凭据。审计不含明文、密文、last4 或客户端原文。
+
+边界（务必如实对待）：`principal`/`--as` 是人工标签；真实身份是安装到 forced command 的 SSH key。IP 是 sshd 看到的对端地址，跳板/NAT 后是跳板出口。撤销只阻止后续请求，已取走的静态值不能追回；本地审计不防同机管理员篡改。部署必须使用专用低权限 SSH 账户并锁定 sshd 配置，程序不会自动修改你的 SSH 设置。Mac/Windows 主设备签名审批、一次性 enrollment 与自动轮换尚未实现。
+
+### 凭据有效性与重复监察（Added）
+
+- **`ky check`** 现在区分 `valid / invalid / permission_limited / rate_limited / unknown / api_error / unsupported`，把状态、HTTP 分类、检查时间与耗时写入 `health.json`（0600，不含值/文案/last4）。429 与 403 不再被当作“已认证”；退出码改为 0 通过/限流、1 认证失败、2 未知，**不再建议任何非零即轮换**。
+- **`ky inspect`**：离线只读盘点平台/类型/账户、profile 关联、孤儿引用、同 URI 多存储位置、时间字段异常与历史健康状态；默认不读 master key。
+- **`ky inspect --duplicates`**：显式解密后用一次性随机 HMAC 在内存中分组，只输出重复 ref 列表，不输出明文、尾号或指纹。
+- `ky panel` 增加设备与历史健康段，并明确这些仍是敏感元信息，`noindex` 不是访问控制。
+
+### 安全模型更正：旧 Auth Guard 不验证 SSH 私钥
+
+此前文档把 Auth Guard 描述成「SSH 公钥绑定保护 master.key」「本机凭 SSH Key 零交互解锁」。代码复核发现：旧实现实际从公开 `.pub` 文件派生 AES key，只检查指纹，不会请求私钥签名；TOTP 校验函数也没有被任何敏感命令调用。拿到 `auth.json`、`master.key.enc` 与公钥即可重算解密 key。旧实现不构成私钥保护、多因素认证或 Agent 身份认证。
+
+- 旧 Auth Guard 的 `setup` / `add` 现在默认拒绝新建或扩展；仅为旧格式迁移兼容时可显式设 `KYVAULT_ALLOW_INSECURE_LEGACY_AUTH=1`。已有数据仍可读、导出或关闭，后续需提供到安全 key wrapping 的迁移工具。
+- 新协作模型区分 Local、Git Sync、Broker。按 ref 的 Agent Grant、设备身份、服务端审计与 IP 附加策略见 `docs/proposals/2026-10-22-human-agent-collaboration.md`。
+- 安全表述的更正已落实到代码与文档；broker 已实现在上一节（实验性），旧 auth 文件到安全 key wrapping 的迁移/替换流程仍需单独设计。
+
+### 操作审计：谁读过、谁改过（Added）
+
+此前只有 `meta.json` 里的 `updated_at` —— 时间有，人不明；而 `get` 是唯一会输出
+明文的命令，读行为却完全不留痕。泄露之后连「有没有人读过」都答不上来。
+
+- **`ky audit`**：本地 `audit.log`（JSONL，0600）记录 `get / set / delete /
+  annotate / run / import / pull / push / sync / init / profile` 的时间、actor、
+  目标 ref、结果。**不记明文、不记密文、不记 last4** —— 审计日志本身若成了泄漏面，
+  就抵消了加它的意义。
+- **actor 来源**：`--as <name>` → `KY_ACTOR` → 库内 `git user.name` → `$USER`。
+- **团队维度**：`gitlab push` 的提交信息从固定模板改为
+  `chore(secrets): sync by <actor> at <ts>`；库的 git 身份也从写死的 `kyvault`
+  改为真实操作者。以前所有人看起来都是同一个「kyvault」，等于没有作者信息。
+- **默认不入仓**：`audit.log` 含读事件，push 到团队仓就变成监视而不是审计。
+  需要共享时设 `KY_AUDIT_SYNC=1`；`KY_AUDIT=0` 可整体关闭。
+
+### 多账户体系：一个 profile = 一个账号（Added）
+
+`account / key / cli / server / identity` 五套平行命令都回答不了那句最常见的问话：
+「我有几个 GitHub 账号，每个挂了几条东西，现在用的是哪个？」
+
+- **`ky profile add|list|show|use|current|link|unlink|remove`**，落 `accounts.json`
+  （结构性元信息，入仓共享；权限 0600，因为写着别人的登录名）。
+- **`ky run --profile <name>`**：把该账号名下所有 ref 一次注入子进程，变量名 =
+  ref 名大写化（`secret://github/pat` → `PAT`）。这是「一把钥匙开一批锁」的用法。
+
+### 只读托管面板（Added）
+
+- **`ky panel --out panel.html`**：自包含静态 HTML，含账号、条目、操作计数与最近
+  审计。不含明文、密文、last4，带 `noindex`，可直接扔到 GitHub Pages / 对象存储。
+- 刻意不提供「把 `ky ui` 挂公网」：`ui` 可写、能看明文，绑 `127.0.0.1` 是安全模型
+  的一部分，不是将就。
+
+### 复用本机 glab 登录态（Added）
+
+以前只认 `KY_GITLAB_TOKEN`，没有就「不代你建仓库」—— 而凭证就在旁边的
+`glab-cli/config.yml` 里躺着。
+
+- **凭证优先级**：`KY_GITLAB_TOKEN` → glab 配置文件 → `glab auth status --show-token`。
+- **`ky gitlab auth`**：只读探测，打印将使用哪个 host、凭证来自哪里、token 脱敏摘要。
+- **建私有库**：`ky init --remote` 在 glab 已登录时直接建项目（`visibility=private`）
+  并首推；token 走环境变量交给一次性 credential helper，不落 argv。
+- **API 通道**：优先 `glab api`（token 不进 `ps`）；没有 glab 才回落 `curl`，且
+  header 走 `--config -` 从 stdin 读。
+
+### 可发现性：让项目能被找到（Added）
 起因是一次真实的困惑：在 GitHub 搜「token管理」「秘钥管理」，搜不到这个工具。
 查下来发现项目一直被收录着，是**描述和 topics 里根本没有这些词** ——
 GitHub 默认搜索索引的是 name + description + topics，README 不参与。
@@ -135,11 +208,11 @@ API密钥管理 不存在 → #5 · 密钥管理 #10 → #6 · token管理 不�
 
 ## [2.4.0] - 2026-09-22
 
-**安全架构重大升级：Auth Guard 多因素授权守卫，master.key 从明文保护升级为加密态保护。**
+**旧版 Auth Guard 配置格式（当前仅兼容读取；其安全承诺已撤回）。**
 
-告别裸文件 `master.key` 时代——通过 SSH 公钥绑定和可选 TOTP（Google 验证器），将 `master.key` 加密为 `master.key.enc`，即使 store 被整体拷走也无法解密。本地 Agent 凭 SSH 公钥零交互自动解锁，日常操作毫无感知。
+这一版引入了 `auth.json` / `master.key.enc` 包裹流程。后续安全复核发现它从公开 SSH `.pub` 字节派生 AES key，不验证私钥持有；TOTP 校验函数也没有接入敏感命令。因此，下面的 2026-09-22 原始说明记录当时交付的功能形状，不能作为当前安全保证。该格式新建/扩展默认停用；详见本文件 [Unreleased 安全模型更正](#unreleased)。
 
-### ✨ 新增
+### 原始交付内容（历史记录）
 - **Auth Guard 多因素授权守卫（`kyvault auth`）**：
   - `setup`：交互式首次配置，自动扫描 `~/.ssh/*.pub`，绑定 SSH 公钥并加密 master.key。
   - `add ssh <path>`：追加绑定 SSH 公钥（支持多把，任一把可解锁）。

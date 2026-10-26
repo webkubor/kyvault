@@ -72,7 +72,7 @@ impl<'a> GitLabRepo<'a> {
                     if !content.is_empty() && !content.ends_with('\n') {
                         content.push('\n');
                     }
-                    content.push_str("master.key\n.lock\n*.tmp\n");
+                    content.push_str("master.key\n.lock\n*.tmp\naudit.log\n");
                     std::fs::write(&gitignore, &content)?;
                 }
             }
@@ -196,7 +196,9 @@ impl<'a> GitLabRepo<'a> {
         self.assert_master_key_safe()?;
 
         // Stage secrets.json, meta.json, .gitignore
-        for file in ["secrets.json", "meta.json", ".gitignore"] {
+        // accounts.json 一起走：账号注册表是团队共同维护的结构性元信息，
+        // 不含密钥材料（密钥仍是 secrets.json 里的密文）。
+        for file in ["secrets.json", "meta.json", "accounts.json", ".gitignore"] {
             if self.root().join(file).exists() {
                 self.run_git(&["add", file])?;
             }
@@ -212,7 +214,13 @@ impl<'a> GitLabRepo<'a> {
             .unwrap_or_else(|_| "main".to_string());
 
         if has_staged {
-            let msg = format!("feat(secrets): sync from kyvault {}", now_utc());
+            // 提交信息里带操作者：团队仓的 git log 要能回答「谁改的」。
+            // 只写时间戳的话，所有人看起来都是同一个「kyvault」。
+            let msg = format!(
+                "chore(secrets): sync by {} at {}",
+                crate::audit::actor(None),
+                now_utc()
+            );
             self.run_git(&["commit", "-m", &msg])?;
             println!("📝 已创建提交: {msg}");
         }
@@ -277,7 +285,7 @@ impl<'a> GitLabRepo<'a> {
             if !gi_content.is_empty() && !gi_content.ends_with('\n') {
                 gi_content.push('\n');
             }
-            gi_content.push_str("master.key\n.lock\n*.tmp\n");
+            gi_content.push_str("master.key\n.lock\n*.tmp\naudit.log\n");
             std::fs::write(&gitignore, gi_content)?;
         }
 

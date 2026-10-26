@@ -16,13 +16,15 @@
 
 - 凭证用 **AES-256-GCM** 认证加密落盘；每条凭证独立随机 Nonce。
 - 根密钥 `master.key` 是本地生成的 32 字节随机数，经 `SHA-256(Base64Decode(master.key))` 派生 AES 密钥。
-  Auth Guard 启用后，`master.key` 不再以明文存在，只留 `master.key.enc`。
-- `master.key` / `master.key.enc` 被**密钥库自己的** `.gitignore` 排除
-  （`master.key`、`master.key.enc`、`auth.json`、`*.key`，由 `kyvault init` 自动补写并合并进已有内容）；
-  `kyvault gitlab push` 前还会用 `git check-ignore` 再确认一次。
 - 文件后端的加解密**完全离线**，不产生网络请求。
 - `master.key.enc` 权限为 `0600`；写入用跨进程排他锁 `.lock` 防并发冲突。
-- 启用 Auth Guard 的 SSH 公钥绑定后，本机持有对应私钥即可解锁，无需交互。
+- `ky run` 只把值注入指定子进程，不会主动将明文传给模型；子进程本身仍可读取或输出该值。
+
+**旧版 Auth Guard 兼容实现不构成密钥保护。** 它从公开 `.pub` 文件派生 AES key，并未验证 SSH 私钥持有权；TOTP 校验也未接入敏感命令。拿到 `auth.json`、`master.key.enc` 和绑定的公钥即可重算该 key。旧 `setup` / `add` 默认停用；确有旧格式迁移需求时才显式设置 `KYVAULT_ALLOW_INSECURE_LEGACY_AUTH=1`。
+
+**本地 file / Git Sync 的信任边界**：每个能取得 master key 的主体可解密整个 vault。GitLab SSH key/deploy key 控制仓库访问，不控制单条凭据；`visibility` 和 `scopes` 当前是元数据，`get` 尚未据此拒绝访问。服务器 IP 台账字段本身不参与授权；broker 另有来源 IP/CIDR 策略。
+
+**实验性 SSH broker**：只有在受信管理员维护的专用 OpenSSH 账户、`restrict/from=/command=`、可信程序和 0700 密库目录下，forced command 才把登记的 SSH key 与设备 ID 绑定，服务端再检查实际对端 IP、精确 ref、期限与撤销。`SSH_CONNECTION` 并非独立的身份认证，不能把 `broker serve` 作为普通远程 shell 入口。Agent 不获得 master key，服务端审计写失败则拒绝取用；日志仍可被本机管理员修改，不能叫不可抵赖。撤销只阻止后续请求，不追回已取走的静态凭据。`principal`、`--as`、`KY_ACTOR`、`$USER` 都是标签；Mac/Windows 主设备签名审批尚未实现。
 
 **不保证（请不要依赖这些）**
 
@@ -40,10 +42,10 @@
 
 **防**
 
-- `.env` 明文进入 AI 上下文 / 会话记录 / 训练数据（用 `ky run` 时）。
-- 密文仓库被推到 GitLab 后，凭证以明文形式躺在远端。
-- 别人拿到你机器上的密文文件，但没有 `master.key`。
-- 凭证过期没换，导致线上排障时才发现。
+- 使用 `ky run` 可避免先把凭据明文写入命令/模型上下文；不保证子进程输出不会泄漏，也不保证第三方训练数据政策。
+- file 后端只将 AES-GCM 密文同步到 Git 时，不会主动将凭据值作为仓库内容。
+- 若攻击者仅有凭据密文、没有 master key 或旧 Auth Guard 的可重建材料，AES-GCM 提供加密保护。
+- `check` 与 `inspect` 能提供检查/过期线索；目前没有自动调度、自动通知或自动轮换保证。
 
 **不防**
 
