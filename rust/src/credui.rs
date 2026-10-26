@@ -598,44 +598,6 @@ fn urlencode(s: &str) -> String {
         .collect()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn meta(platform: &str, name: &str, kind: &str, account: &str, updated: &str) -> SecretMeta {
-        SecretMeta {
-            platform: platform.into(),
-            name: name.into(),
-            kind: kind.into(),
-            account: account.into(),
-            updated_at: updated.into(),
-            ..Default::default()
-        }
-    }
-
-    #[test]
-    fn login_plan_keeps_one_and_marks_duplicates() {
-        let all = vec![
-            meta("email", "a-login", "登录密码", "a@163.com", "2026-01-01"),
-            meta("email", "a-old", "密码", "a@163.com", "2026-09-01"),
-            meta("email", "a-auth", "授权码", "a@163.com", "2026-09-02"),
-            meta("google", "backup", "密码", "a@163.com", "2026-09-03"),
-            meta("email", "b-login", "登录密码", "b@163.com", "2026-09-04"),
-        ];
-        let p = login_plan(&all, "a@163.com");
-        assert_eq!(p.target, "secret://email/a-login");
-        let dups: Vec<String> = p.duplicates.iter().map(|m| m.r#ref()).collect();
-        assert_eq!(dups, vec!["secret://email/a-old"]);
-    }
-
-    #[test]
-    fn login_plan_new_slot_when_none() {
-        let p = login_plan(&[], "x@gmail.com");
-        assert_eq!(p.target, "secret://email/x-gmail-com-login");
-        assert!(p.existing.is_none() && p.duplicates.is_empty());
-    }
-}
-
 fn open_browser(url: &str) {
     #[cfg(target_os = "macos")]
     let _ = std::process::Command::new("open").arg(url).status();
@@ -906,3 +868,41 @@ async function done() {
 </body>
 </html>
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn meta(platform: &str, name: &str, kind: &str, account: &str, updated: &str) -> SecretMeta {
+        SecretMeta {
+            platform: platform.into(),
+            name: name.into(),
+            kind: kind.into(),
+            account: account.into(),
+            updated_at: updated.into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn login_plan_keeps_one_and_marks_duplicates() {
+        let all = vec![
+            meta("email", "a-login", "登录密码", "a@163.com", "2026-01-01"),
+            meta("email", "a-old", "密码", "a@163.com", "2026-09-01"),
+            meta("email", "a-auth", "授权码", "a@163.com", "2026-09-02"),
+            meta("google", "backup", "密码", "a@163.com", "2026-09-03"),
+            meta("email", "b-login", "登录密码", "b@163.com", "2026-09-04"),
+        ];
+        let p = login_plan(&all, "a@163.com");
+        assert_eq!(p.target, "secret://email/a-login");
+        let dups: Vec<String> = p.duplicates.iter().map(|m| m.r#ref()).collect();
+        assert_eq!(dups, vec!["secret://email/a-old"]);
+    }
+
+    #[test]
+    fn login_plan_new_slot_when_none() {
+        let p = login_plan(&[], "x@gmail.com");
+        assert_eq!(p.target, "secret://email/x-gmail-com-login");
+        assert!(p.existing.is_none() && p.duplicates.is_empty());
+    }
+}
