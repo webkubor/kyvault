@@ -2,6 +2,13 @@
 //!
 //! 零外部依赖，使用标准库 `std::net::TcpListener` 启动超轻量 localhost Web 服务。
 //! 单页极客科技暗黑界面，支持可视化分类点选、规范化 URI 生成、密码加解密存取。
+//!
+//! 绑 127.0.0.1 只挡得住别的机器，挡不住本机浏览器里打开的任意网页：网页的 JS
+//! 照样能请求 127.0.0.1。所以这里能读明文的接口必须再加三道：
+//! - URL 带每次启动随机生成的 token，猜不到路径就只有 404；
+//! - Host 只认 127.0.0.1/localhost（挡 DNS rebinding）；
+//! - POST 只收 application/json 且不回 CORS 头 —— 跨站页面发这种请求必先预检，
+//!   预检得不到许可，请求就发不出来，响应也读不到。
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -44,7 +51,8 @@ pub fn start_server(port: u16, auto_open: bool) -> Result<()> {
         }
     };
 
-    let url = format!("http://127.0.0.1:{current_port}");
+    let token = format!("{:032x}", rand::random::<u128>());
+    let url = format!("http://127.0.0.1:{current_port}/{token}/");
     box_top("🌐 kyvault Web GUI");
     println!();
     status_line("本地服务", true, &format!("已监听 {url}"));
@@ -66,8 +74,9 @@ pub fn start_server(port: u16, auto_open: bool) -> Result<()> {
     for stream in listener.incoming() {
         match stream {
             Ok(mut s) => {
+                let token = token.clone();
                 thread::spawn(move || {
-                    let _ = handle_connection(&mut s);
+                    let _ = handle_connection(&mut s, &token, current_port);
                 });
             }
             Err(_) => break,
@@ -76,7 +85,7 @@ pub fn start_server(port: u16, auto_open: bool) -> Result<()> {
     Ok(())
 }
 
-fn handle_connection(stream: &mut TcpStream) -> Result<()> {
+fn handle_connection(stream: &mut TcpStream, token: &str, port: u16) -> Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut req_line = String::new();
     reader.read_line(&mut req_line)?;
@@ -85,21 +94,40 @@ fn handle_connection(stream: &mut TcpStream) -> Result<()> {
         return Ok(());
     }
     let method = parts[0];
-    let path = parts[1];
+    let full_path = parts[1];
 
     let mut content_length = 0;
+    let mut host = String::new();
+    let mut content_type = String::new();
     loop {
         let mut line = String::new();
         reader.read_line(&mut line)?;
         if line.trim().is_empty() {
             break;
         }
-        if line.to_lowercase().starts_with("content-length:") {
-            if let Some(val) = line.split(':').nth(1) {
-                content_length = val.trim().parse::<usize>().unwrap_or(0);
+        if let Some((k, v)) = line.split_once(':') {
+            match k.trim().to_ascii_lowercase().as_str() {
+                "content-length" => content_length = v.trim().parse::<usize>().unwrap_or(0),
+                "host" => host = v.trim().to_string(),
+                "content-type" => content_type = v.trim().to_ascii_lowercase(),
+                _ => {}
             }
         }
     }
+
+    let host_ok = host == format!("127.0.0.1:{port}") || host == format!("localhost:{port}");
+    let routed = full_path
+        .split('?')
+        .next()
+        .and_then(|p| p.strip_prefix('/'))
+        .and_then(|p| p.strip_prefix(token))
+        .filter(|_| host_ok)
+        .filter(|_| method != "POST" || content_type.starts_with("application/json"))
+        .filter(|_| content_length <= 64 * 1024);
+    let Some(rest) = routed else {
+        return send_response(stream, "404 Not Found", "text/plain", b"Not Found");
+    };
+    let path = if rest.is_empty() { "/" } else { rest };
 
     let mut body = vec![0u8; content_length];
     if content_length > 0 {
@@ -236,7 +264,7 @@ fn send_response(
     body: &[u8],
 ) -> Result<()> {
     let header = format!(
-        "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Frame-Options: DENY\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n",
         body.len()
     );
     stream.write_all(header.as_bytes())?;
@@ -392,18 +420,20 @@ const HTML_CONTENT: &str = r#"<!DOCTYPE html>
 <div id="toast" class="toast">操作成功</div>
 
 <script>
+const base = location.pathname.replace(/\/$/, '');
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let gCategories = [];
 let gCurrentCat = null;
 let gCurrentPlat = null;
 let gSecrets = [];
 
 async function init() {
-  const catRes = await fetch('/api/categories');
+  const catRes = await fetch(base + '/api/categories');
   gCategories = await catRes.json();
   renderCategories();
   selectCategory(gCategories[0].id);
 
-  const statusRes = await fetch('/api/status');
+  const statusRes = await fetch(base + '/api/status');
   const status = await statusRes.json();
   document.getElementById('store-count').innerText = `${status.secrets_count} 条密钥已就绪`;
 }
@@ -470,7 +500,7 @@ async function submitSecret() {
     return;
   }
 
-  const res = await fetch('/api/set', {
+  const res = await fetch(base + '/api/set', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -493,7 +523,7 @@ async function submitSecret() {
 }
 
 async function loadSecrets() {
-  const res = await fetch('/api/secrets');
+  const res = await fetch(base + '/api/secrets');
   const data = await res.json();
   gSecrets = data.secrets || [];
   renderSecretsTable(gSecrets);
@@ -507,19 +537,19 @@ function renderSecretsTable(list) {
   }
   tbody.innerHTML = list.map(s => `
     <tr>
-      <td><span style="font-weight:600; color:var(--text-bright);">${s.ref}</span></td>
-      <td><span class="badge" style="background:#1f2937; color:#8b949e;">${s.kind || '-'}</span></td>
-      <td><code>...${s.last4 || '****'}</code></td>
-      <td style="color:var(--text-dim);">${s.account || '-'}</td>
+      <td><span style="font-weight:600; color:var(--text-bright);">${esc(s.ref)}</span></td>
+      <td><span class="badge" style="background:#1f2937; color:#8b949e;">${esc(s.kind || '-')}</span></td>
+      <td><code>...${esc(s.last4 || '****')}</code></td>
+      <td style="color:var(--text-dim);">${esc(s.account || '-')}</td>
       <td>
-        <button class="btn-copy" onclick="revealSecret('${s.ref}')">复制明文</button>
+        <button class="btn-copy" data-ref="${esc(s.ref)}" onclick="revealSecret(this.dataset.ref)">复制明文</button>
       </td>
     </tr>
   `).join('');
 }
 
 async function revealSecret(uri) {
-  const res = await fetch('/api/reveal', {
+  const res = await fetch(base + '/api/reveal', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ uri })
