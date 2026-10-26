@@ -36,6 +36,7 @@ kyvault set secret://platform/key_name - --file /path/to/key.pem --kind "Private
 
 # 5. 校验密钥有效性与余额（验证通过自动同步审计元信息至 meta.json）
 kyvault check <platform> <key_name>
+kyvault check email <key_name>      # 邮箱授权码 / 应用专用密码：IMAP 登录验证（不是 HTTP API）
 
 kyvault master-key          # 显示路径、0600 权限与脱敏指纹
 # 注意：Auth Guard 目前仅为旧版兼容包装；公开 SSH .pub 会被用作派生材料，未验证私钥持有。
@@ -52,7 +53,9 @@ kyvault gitlab auth         # 当前会用哪把凭证（KY_GITLAB_TOKEN / glab 
 # 本机 glab 已登录时无需再抄 PAT：init --remote 会直接复用 glab 登录态建私有库
 
 # 9. 本地极客 Web GUI 与引导向导
-kyvault ui                  # 启动本地暗黑风极客 Web GUI（自动唤起浏览器）
+kyvault add                 # 浏览器录入：去空格 → 找旧条目 → 先验证（IMAP / 平台接口），通过才写库
+kyvault add --email x@163.com --login   # 邮箱登录密码：两次输入核对；一个邮箱只留一条，新的覆盖旧的
+kyvault ui                  # 启动本地暗黑风极客 Web GUI（自动唤起浏览器，地址带一次性随机 token）
 kyvault wizard              # 终端交互式分类引导向导（规整化命名）
 
 # 10. 操作审计（谁、什么时候、读过/改过哪条 —— 只记元信息）

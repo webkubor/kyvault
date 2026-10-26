@@ -300,6 +300,8 @@ kyvault get secret://cli/studio-cli/test-user   # output: jwt_token_test
 | `kyvault platform <name>` | `kyvault platform <name>` | Platform detail | `kyvault platform github` |
 | **API validation** | | | |
 | - | `kyvault check` | Validate key | `kyvault check openai --key sk-xxx` |
+| - | `kyvault check email` | Re-verify mail app password via IMAP | `kyvault check email gmail-app-password` |
+| - | `kyvault add` | Browser entry: normalize → verify → save | `kyvault add --email you@gmail.com` |
 | - | `kyvault providers` | Supported platforms | `kyvault providers` |
 | **AI integration** | | | |
 | - | `kyvault run` | Inject env | `kyvault run --env X=val -- cmd` |

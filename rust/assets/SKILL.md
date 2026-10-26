@@ -32,6 +32,7 @@ echo "<value>" | kyvault set secret://platform/key_name -
 
 # 5. 校验密钥有效性与余额（验证通过自动同步审计元信息至 meta.json）
 kyvault check <platform> <key_name>
+kyvault check email <key_name>      # 邮箱授权码 / 应用专用密码：IMAP 登录验证（不是 HTTP API）
 
 # 6. 本地主密钥状态
 kyvault master-key          # 显示路径、权限与脱敏指纹
@@ -46,7 +47,9 @@ kyvault gitlab status       # 查看本地与远端密文同步状态及 master.
 kyvault gitlab sync         # 自动 pull rebase 后 push 推送最新密文
 
 # 9. 本地极客 Web GUI 与引导向导
-kyvault ui                  # 启动本地暗黑风极客 Web GUI（自动唤起浏览器）
+kyvault add                 # 浏览器录入：去空格 → 找旧条目 → 先验证（IMAP / 平台接口），通过才写库
+kyvault add --email x@163.com --login   # 邮箱登录密码：两次输入核对；一个邮箱只留一条，新的覆盖旧的
+kyvault ui                  # 启动本地暗黑风极客 Web GUI（自动唤起浏览器，地址带一次性随机 token）
 kyvault wizard              # 终端交互式分类引导向导（规整化命名）
 ```
 

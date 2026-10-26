@@ -55,6 +55,7 @@
 
 * 🔒 **别名注入 (Alias Injection)**: 用别名（如 `github_token`）引用凭证，`ky run` 在运行时将值注入子进程，无需把明文写进提示词。子进程仍可读取或输出该值。
 * 🌐 **本地极客 Web GUI 与向导 (Web GUI & Wizard)**: 一键 `ky ui` 唤起本地极客暗黑风面板；`ky wizard` 提供终端四步分类引导，彻底告别命名不统一。
+* 🧾 **浏览器录入、先验证再写库 (`ky add`)**: 邮箱授权码 / 应用专用密码、邮箱登录密码、API Key 都在本地页面粘贴：自动去空格与零宽字符、大小写原样保留；先用 IMAP 或平台接口验证，通过才加密写入；一个邮箱只保留一条登录密码，新的覆盖旧的。
 * 🛡️ **旧版 Auth Guard 兼容**: 早期版本用公开 SSH `.pub` 内容派生本地解密 key；它不验证私钥，TOTP 配置当前也未接入敏感命令校验。
 * 🤖 **多平台 CLI 智能对接 (AI Connect)**: 一键 `ky connect`，自动将规则和技能注入 `Gemini/agy/Claude/Codex/Hermes` 及项目本地助手 记忆与规则库。
 * 🖥️ **开发者加密台账中心 (Developer Ledger)**: 加密管理服务器账号密码、云服务租金、CLI 客户端多 Profile 凭证令牌，支持 URI 寻址。
@@ -74,7 +75,10 @@ cargo install kyvault
 # 2. 一键连接本地所有 AI 智能体 (Claude / Codex / agy / Hermes / Cursor)
 ky connect
 
-# 3. 极客 Web GUI 可视化录入与检索（自动打开本地浏览器）
+# 3. 浏览器录入凭据：自动去空格 → 找旧条目 → 先验证，通过才写库
+ky add                              # 也可 --email you@gmail.com / --email you@163.com --login / --provider deepseek
+
+#    极客 Web GUI 可视化检索（自动打开本地浏览器，地址带一次性随机 token）
 ky ui
 
 # 4. 或命令行引导式规范录入
@@ -268,7 +272,7 @@ kyvault audit --action get --actor alice --json
 kyvault panel --out panel.html
 ```
 
-面板不含凭据值、密文或尾号，但账号、IP、设备与审计仍属于敏感元信息，应使用带访问控制的站点托管；`noindex` 不能代替登录鉴权。可写、能查看明文的 `kyvault ui` 仅绑定 `127.0.0.1`。
+面板不含凭据值、密文或尾号，但账号、IP、设备与审计仍属于敏感元信息，应使用带访问控制的站点托管；`noindex` 不能代替登录鉴权。可写、能查看明文的 `kyvault ui` 仅绑定 `127.0.0.1`，且地址带每次启动随机生成的 token、只收 JSON POST、不返回 CORS 头 —— 只绑本机挡不住本机浏览器里打开的其他网页。
 
 ### 服务器 Agent 协作（实验性）
 
@@ -301,6 +305,7 @@ Agent 使用自己的 SSH 私钥，不拿整库 master key。新请求受 IP、�
 
 ```bash
 kyvault check openai production  # 联网检查，保存状态、HTTP 分类、检查时间和耗时
+kyvault check email 163-smtp-auth  # 邮箱授权码 / 应用专用密码：IMAP 登录验证，邮箱取条目账号备注
 kyvault inspect                  # 离线只读：类型/平台/账户、孤儿关联、时间问题与历史健康状态
 kyvault inspect --duplicates     # 显式解密比较重复值；仅输出引用分组，不输出值、尾号或指纹
 ```
@@ -415,6 +420,8 @@ Broker 使用 OpenSSH forced command，不是公网服务。必须由管理员�
 | `kyvault platform <name>` | `kyvault platform <name>` | 平台详情 | `kyvault platform github` |
 | **API 验证** | | | |
 | - | `kyvault check` | 验证 key 有效性与余额 | `kyvault check openai --key sk-xxx` |
+| - | `kyvault check email` | IMAP 复验邮箱授权码 | `kyvault check email gmail-app-password` |
+| - | `kyvault add` | 浏览器录入凭据（先验证再写库） | `kyvault add --email you@163.com` (或 `ky add`) |
 | - | `kyvault providers` | 支持平台列表 | `kyvault providers` |
 | **AI 集成** | | | |
 | - | `kyvault run` | 注入env单向执行 | `kyvault run --env X=val -- cmd` |
@@ -442,7 +449,7 @@ Broker 使用 OpenSSH forced command，不是公网服务。必须由管理员�
 | - | `kyvault auth disable` | 关闭守卫 | `kyvault auth disable` |
 | - | `kyvault auth status` | 守卫状态概览 | `kyvault auth status` |
 | **引导与图形界面** | | | |
-| - | `kyvault ui` | 启动本地极客 Web GUI（自动唤起浏览器） | `kyvault ui` (或 `ky ui`) |
+| - | `kyvault ui` | 启动本地极客 Web GUI（自动唤起浏览器，地址带随机 token） | `kyvault ui` (或 `ky ui`) |
 | - | `kyvault wizard` | 交互式分类引导向导 (规范URI) | `kyvault wizard` (或 `ky wizard`) |
 | **自检与更新** | | | |
 | - | `kyvault doctor` | 工具自检修复 | `kyvault doctor` |
