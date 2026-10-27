@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/keyring-banner/cs-token4ai-1784197546810397000.png" alt="Kyvault Banner" width="100%">
+  <img src="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/blog/projects/keyring-banner/banner.webp" alt="Kyvault Banner" width="100%">
 </p>
 
 <h1 align="center">🔐 Kyvault</h1>
@@ -29,12 +29,12 @@
 ## 🎬 30 秒演示
 
 <p align="center">
-  <img src="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/kyvault-video/kyvault-demo.gif" alt="kyvault 30 秒演示：明文密钥如何流进 AI 上下文，又如何被别名替代" width="680">
+  <img src="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/blog/projects/kyvault-video/kyvault-demo.gif" alt="kyvault 30 秒演示：明文密钥如何流进 AI 上下文，又如何被别名替代" width="680">
 </p>
 
 <p align="center">
   <sub>一条命令把密钥从「明文躺在上下文里」变成「只有别名的引用」。<br/>
-  <a href="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/kyvault-video/kyvault-demo.mp4">下载 MP4（1920×1080）</a></sub>
+  <a href="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/blog/projects/kyvault-video/kyvault-demo.mp4">下载 MP4（1920×1080）</a></sub>
 </p>
 
 ---

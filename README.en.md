@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/keyring-banner/cs-token4ai-1784197546810397000.png" alt="Kyvault Banner" width="100%">
+  <img src="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/blog/projects/keyring-banner/banner.webp" alt="Kyvault Banner" width="100%">
 </p>
 
 <h1 align="center">🔐 Kyvault</h1>
@@ -31,12 +31,12 @@
 ## 🎬 30-second demo
 
 <p align="center">
-  <img src="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/kyvault-video/kyvault-demo.gif" alt="kyvault 30-second demo: how a plaintext key flows into AI context, and how an alias replaces it" width="680">
+  <img src="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/blog/projects/kyvault-video/kyvault-demo.gif" alt="kyvault 30-second demo: how a plaintext key flows into AI context, and how an alias replaces it" width="680">
 </p>
 
 <p align="center">
   <sub>One command turns a plaintext key in context into an alias reference.<br/>
-  <a href="https://cdn.jsdelivr.net/gh/webkubor/picx-images-hosting@master/blog/projects/kyvault-video/kyvault-demo.mp4">Download MP4 (1920×1080)</a></sub>
+  <a href="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/blog/projects/kyvault-video/kyvault-demo.mp4">Download MP4 (1920×1080)</a></sub>
 </p>
 
 ---
