@@ -32,7 +32,7 @@ cd rust && cargo fmt
 ## Development Setup
 
 ```bash
-git clone https://github.com/webkubor/kyvault.git
+git clone git@github.com:webkubor/kyvault.git
 cd kyvault
 # Follow the Quick Start in README
 ```

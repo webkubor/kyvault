@@ -366,7 +366,7 @@ Welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ```bash
 # Dev environment
-git clone https://github.com/webkubor/kyvault.git
+git clone git@github.com:webkubor/kyvault.git
 cd kyvault
 cd rust
 cargo test          # includes legacy-vault compat (decrypts Python 1.x vaults in tests/fixtures)

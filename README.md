@@ -496,7 +496,7 @@ Broker 使用 OpenSSH forced command，不是公网服务。必须由管理员�
 
 ```bash
 # 开发环境
-git clone https://github.com/webkubor/kyvault.git
+git clone git@github.com:webkubor/kyvault.git
 cd kyvault
 cd rust
 cargo test          # 含老库兼容测试（对着 tests/fixtures 里 Python 1.x 写的密钥库解）
