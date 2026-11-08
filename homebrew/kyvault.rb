@@ -5,17 +5,17 @@
 class Kyvault < Formula
   desc "Local-first encrypted secret and API key manager"
   homepage "https://github.com/webkubor/kyvault"
-  version "2.7.0"
+  version "2.7.1"
   license "MIT"
 
   on_macos do
     on_arm do
       url "https://github.com/webkubor/kyvault/releases/download/v2.7.0/kyvault-aarch64-apple-darwin.tar.gz"
-      sha256 "167777f0339eb95fc84921f32e39637a27fc1aa9d01ee19917f532f5cf6001fc"
+      sha256 "1544f86ee49b05da060eb04b0581f9ab58a4bc3f16937ddc6f83dcaf72c5347f"
     end
     on_intel do
       url "https://github.com/webkubor/kyvault/releases/download/v2.7.0/kyvault-x86_64-apple-darwin.tar.gz"
-      sha256 "5c2e981b2a2773c9f49539af851b90b794c81ef3b980cb1e89f860212bdb7c2a"
+      sha256 "9850c5ee28b10c8d20341659b164f85523bc9c5efa211c8dad3b1167d9caf07e"
     end
   end
 
