@@ -51,12 +51,39 @@
 
 ---
 
+## 🖥️ 本地 GUI
+
+不想敲命令？`ky ui` 一键唤起本地极客 Web GUI —— 向导式录入、可视化检索，全程零命令。
+
+<p align="center">
+  <img src="docs/assets/ky-ui-wizard.png" alt="ky ui 智能存入向导：点选分类 → 点选平台 → 自动生成规范 URI → 粘贴即存" width="88%">
+</p>
+<p align="center">
+  <sub><b>智能存入向导</b> —— 选大类 → 选平台 → URI 自动生成，粘贴密钥点「安全加密存入」即完成。</sub>
+</p>
+
+<p align="center">
+  <img src="docs/assets/ky-ui-ledger.png" alt="ky ui 凭证检索台账：搜索、分类、别名与末位标识一览" width="88%">
+</p>
+<p align="center">
+  <sub><b>凭证检索台账</b> —— 全库检索、按平台/别名过滤，末位标识辅助辨认（不暴露完整密钥）。</sub>
+</p>
+
+GUI 只绑 `127.0.0.1`，地址带每次启动随机生成的 token —— 本机其他网页借不走你的明文。
+
+**macOS 用户还可以一键生成 Dock 图标**（点图标 = 打开 GUI，不用开终端）：
+
+```bash
+bash scripts/make-dock-app.sh   # 生成 ~/Applications/Kyvault GUI.app，拖进 Dock 即可
+```
+
+---
+
 ## 🔥 一屏特性亮点
 
 * 🔒 **别名注入 (Alias Injection)**: 用别名（如 `github_token`）引用凭证，`ky run` 在运行时将值注入子进程，无需把明文写进提示词。子进程仍可读取或输出该值。
 * 🌐 **本地极客 Web GUI 与向导 (Web GUI & Wizard)**: 一键 `ky ui` 唤起本地极客暗黑风面板；`ky wizard` 提供终端四步分类引导，彻底告别命名不统一。
 * 🧾 **浏览器录入、先验证再写库 (`ky add`)**: 邮箱授权码 / 应用专用密码、邮箱登录密码、API Key 都在本地页面粘贴：自动去空格与零宽字符、大小写原样保留；先用 IMAP 或平台接口验证，通过才加密写入；一个邮箱只保留一条登录密码，新的覆盖旧的。
-* 🛡️ **旧版 Auth Guard 兼容**: 早期版本用公开 SSH `.pub` 内容派生本地解密 key；它不验证私钥，TOTP 配置当前也未接入敏感命令校验。
 * 🤖 **多平台 CLI 智能对接 (AI Connect)**: 一键 `ky connect`，自动将规则和技能注入 `Gemini/agy/Claude/Codex/Hermes` 及项目本地助手 记忆与规则库。
 * 🖥️ **开发者加密台账中心 (Developer Ledger)**: 加密管理服务器账号密码、云服务租金、CLI 客户端多 Profile 凭证令牌，支持 URI 寻址。
 * ⚡ **极简短命令 (First-Class `ky`)**: `ky` 作为官方第一公民，敲 `ky list`、`ky run`、`ky ui` 享受最极客的开发者心流。
@@ -80,6 +107,9 @@ ky add                              # 也可 --email you@gmail.com / --email you
 
 #    极客 Web GUI 可视化检索（自动打开本地浏览器，地址带一次性随机 token）
 ky ui
+
+#    macOS：一键生成 Dock 图标，点图标即开 GUI（见上方「本地 GUI」节）
+bash scripts/make-dock-app.sh
 
 # 4. 或命令行引导式规范录入
 ky wizard
@@ -112,20 +142,7 @@ ky run --env GITHUB_TOKEN=secret://github/pat -- git push
 
 > **⚠️ name 是别名，不要填密钥本身。**
 > `secret://<platform>/<name>` 里的 `name` **不加密** —— 它是寻址用的，`list` 会原样打印。
-> 把密钥填进 name 等于「加密存了一份、明文又漏一份」，加密就白做了。
->
-> ```bash
-> ✅ kyvault set secret://deepseek/api-key -        # 可读别名
-> ✅ kyvault set secret://github/main-pat -         # 多账号用 pat-work / pat-personal
-> ❌ kyvault set secret://deepseek/sk-9dcea1111... - # 密钥当 name
-> ```
->
-> **当前（v2.2.0）`set` 不会校验 name** —— 上述「密钥当 name」会被原样接受、`list` 也会
-> 原样打印出来。这个判断只能靠人做，所以把它写进红线清单：往 `set` 里塞
-> `sk-...` / `ghp_...` 之类当 name 的，等于自废加密。
->
-> 如果将来加了 name 校验（按 `sk-`/`ghp_`/`glpat-`/`AKIA`/`AIza` 等已知前缀匹配），届时 `list`
-> 对历史数据会打码显示 `…{last4}`（值的最后 4 位，目前已是这个格式）。在此之前——守住入参即可。
+> 把密钥填进 name 等于「加密存了一份、明文又漏一份」。往 `set` 里塞 `sk-...` / `ghp_...` 当 name 等于自废加密。
 
 ### 🔄 5. 极简无缝迁移 (.env Migration)
 * **无感导入**：支持一键导入项目已有的 `.env` 配置文件，并自动匹配最适合 AI 使用的变量别名。

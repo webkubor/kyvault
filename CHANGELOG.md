@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+## [2.7.1] - 2026-11-08
+
+### macOS Dock 一键启动（新增）
+
+- 新增 `scripts/make-dock-app.sh`：一条命令在 `~/Applications` 生成「Kyvault GUI.app」，拖进 Dock 后**点图标即打开 `ky ui`**，不用再开终端敲命令。
+- 图标点击时自动探测 `ky` 的路径（`KY_BIN` 可覆盖），已有实例在跑时不会重复起第二个 —— 只弹一条系统通知提醒「看浏览器标签页」。
+- 生成的是本机快捷方式（AppleScript applet），不签名不公证、不出本机；`--open` 参数可在生成后立刻打开一次。
+
+### README：GUI 截图上首屏（文档）
+
+- README 首屏新增「本地 GUI」一节，放 `ky ui` 真实界面截图（智能存入向导 + 凭证检索台账），UI 不再藏着掖着。
+- 英文版 README 同步新增 "Local GUI" 一节。
+- 精简「name 是别名」警告块：五段说明与示例压缩为三行红线。
+
+
 ## [2.7.0] - 2026-10-26
 
 ### `ky ui` 跨站读取明文漏洞修复（Security）

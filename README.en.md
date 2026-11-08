@@ -53,6 +53,34 @@
 
 ---
 
+## 🖥️ Local GUI
+
+Prefer clicking over typing? `ky ui` launches a local web GUI — wizard-based entry and a searchable ledger, zero commands required.
+
+<p align="center">
+  <img src="docs/assets/ky-ui-wizard.png" alt="ky ui wizard: pick category → pick platform → URI auto-generated → paste and store" width="88%">
+</p>
+<p align="center">
+  <sub><b>Smart entry wizard</b> — choose a category and platform, the canonical URI is generated for you; paste the secret and click store.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/assets/ky-ui-ledger.png" alt="ky ui credential ledger: search, filter, aliases and last-4 markers" width="88%">
+</p>
+<p align="center">
+  <sub><b>Credential ledger</b> — full-text search across the vault, filter by platform/alias, last-4 markers help you recognize entries without exposing full values.</sub>
+</p>
+
+The GUI binds to `127.0.0.1` only, and every launch uses a fresh random token in the URL — other pages open in your browser cannot read your secrets.
+
+**macOS: one-click Dock icon** (click the icon = open the GUI, no terminal needed):
+
+```bash
+bash scripts/make-dock-app.sh   # builds ~/Applications/Kyvault GUI.app; drag it into the Dock
+```
+
+---
+
 ## 🔥 Highlights
 
 * 🔒 **Alias injection**: Reference credentials by name (e.g. `github_token`); `ky run` injects values into the child environment at runtime without putting them in prompts. The child can still read or print those values.
