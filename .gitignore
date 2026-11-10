@@ -14,3 +14,6 @@ build/
 
 # agent worktree（嵌套 git 仓，不该进本仓）
 .claude/
+
+# workbuddy 本地运行时记忆（不入库）
+.workbuddy-ai/
