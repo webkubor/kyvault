@@ -104,13 +104,32 @@
   <dialog id="credential" aria-labelledby="credential-title">
     <form id="secret-form" autocomplete="off">
       <div class="dialog-heading"><h2 id="credential-title" data-i18n="cred.title"></h2><button type="button" class="quiet close" data-i18n-aria="dialog.close" aria-label="">×</button></div>
-      <label for="secret-reference" data-i18n="cred.ref.label"></label>
-      <input id="secret-reference" required placeholder="github/work" autocomplete="off" spellcheck="false">
+      <p id="cred-request-note" class="hint" hidden></p>
+      <label for="secret-platform" data-i18n="cred.platform.label"></label>
+      <select id="secret-platform"></select>
+      <label for="secret-name" data-i18n="cred.name.label"></label>
+      <input id="secret-name" required placeholder="work" autocomplete="off" spellcheck="false">
+      <label for="secret-account" data-i18n="cred.account.label"></label>
+      <input id="secret-account" placeholder="octocat@example.com" autocomplete="off" spellcheck="false">
+      <label for="secret-alias" data-i18n="cred.alias.label"></label>
+      <input id="secret-alias" placeholder="github_token" autocomplete="off" spellcheck="false">
       <label for="secret-value" data-i18n="cred.value.label"></label>
       <input id="secret-value" type="password" required autocomplete="new-password" spellcheck="false">
-      <p class="hint" data-i18n="cred.value.hint"></p>
+      <p class="hint" id="cred-verify-hint" data-i18n="cred.value.hint"></p>
       <p id="secret-error" class="error" role="alert" hidden></p>
       <div class="dialog-actions"><button type="button" class="quiet close" data-i18n="action.cancel"></button><button class="primary" type="submit" data-i18n="action.saveCredential"></button></div>
+    </form>
+  </dialog>
+
+  <dialog id="agent-request" aria-labelledby="agent-request-title">
+    <form id="agent-request-form" autocomplete="off">
+      <div class="dialog-heading"><h2 id="agent-request-title" data-i18n="req.title"></h2><button type="button" class="quiet close" data-i18n-aria="dialog.close" aria-label="">×</button></div>
+      <p id="agent-request-meta" class="hint"></p>
+      <label for="agent-request-value" data-i18n="cred.value.label"></label>
+      <input id="agent-request-value" type="password" required autocomplete="new-password" spellcheck="false">
+      <p class="hint" id="agent-request-hint" data-i18n="req.paste.hint"></p>
+      <p id="agent-request-error" class="error" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" id="agent-request-discard" class="quiet" data-i18n="req.discard"></button><button class="primary" type="submit" data-i18n="req.save"></button></div>
     </form>
   </dialog>
 

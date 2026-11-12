@@ -444,6 +444,7 @@ Broker 使用 OpenSSH forced command，不是公网服务。必须由管理员�
 | - | `kyvault check` | 验证 key 有效性与余额 | `kyvault check openai --key sk-xxx` |
 | - | `kyvault check email` | IMAP 复验邮箱授权码 | `kyvault check email gmail-app-password` |
 | - | `kyvault add` | 浏览器录入凭据（先验证再写库） | `kyvault add --email you@163.com` (或 `ky add`) |
+| - | `kyvault request` | Agent 声明录入请求 → 人粘密文 → 自动校验入库建别名 | `ky request declare --platform github --name ci-token --alias github_token --open` (或 `ky req`) |
 | - | `kyvault providers` | 支持平台列表 | `kyvault providers` |
 | **AI 集成** | | | |
 | - | `kyvault run` | 注入env单向执行 | `kyvault run --env X=val -- cmd` |

@@ -209,6 +209,12 @@ enum Cmd {
         #[arg(long)]
         no_open: bool,
     },
+    /// Agent 侧凭据录入请求：声明要存什么 → 人在本机界面粘密文 → Agent 读到回执
+    #[command(alias = "req")]
+    Request {
+        #[command(subcommand)]
+        action: RequestCmd,
+    },
     /// 把密钥使用规则/技能包写进本地各家 AI 助手
     Connect,
     /// 检查并升级到最新版（走 GitHub Release + install.sh）
@@ -498,6 +504,60 @@ enum AliasCmd {
     List,
     /// 删除别名
     Delete { name: String },
+}
+
+#[derive(Subcommand)]
+enum RequestCmd {
+    /// 声明一条待录入凭据（只写元信息，不碰密文）
+    Declare {
+        /// 平台 id，如 github / openai / feishu（ky providers 看清单）
+        #[arg(long)]
+        platform: String,
+        /// 条目名称，拼成 secret://<platform>/<name>
+        #[arg(long)]
+        name: String,
+        /// 账号（GitHub 用户名 / 邮箱 / 组织）
+        #[arg(long, default_value = "")]
+        account: String,
+        /// 类型，如 Token / API Key；留空则由平台推断
+        #[arg(long, default_value = "")]
+        kind: String,
+        /// 存完自动建的别名，agent 之后用它取用
+        #[arg(long, default_value = "")]
+        alias: String,
+        /// 给人看的备注：为什么要这把凭据
+        #[arg(long, default_value = "")]
+        note: String,
+        /// 有效期（分钟），默认 30
+        #[arg(long)]
+        ttl: Option<u64>,
+        /// 声明后立刻唤起本机 Ky.app / ky ui 录入界面
+        #[arg(long)]
+        open: bool,
+        /// 只输出 id（方便脚本串联 wait）
+        #[arg(long)]
+        quiet: bool,
+    },
+    /// 列出待处理的录入请求
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// 查一条请求的当前状态
+    Status { id: String },
+    /// 阻塞等待人录入完成（超时返回当前状态，不算失败）
+    Wait {
+        id: String,
+        /// 最长等待秒数，默认 300
+        #[arg(long, default_value = "300")]
+        timeout: u64,
+    },
+    /// 落地一条请求：密文从 stdin 读（避免进 ps/ history），校验通过才写库
+    Fulfill { id: String },
+    /// 标记放弃（人不想存这把）
+    Abort { id: String },
+    /// 清理已完成的请求记录
+    Clean,
 }
 
 enum Backend {
@@ -1302,6 +1362,141 @@ fn run() -> Result<()> {
                     login,
                 },
             )?;
+        }
+        Cmd::Request { action } => {
+            use kyvault::requests::{self, Spec};
+            match action {
+                RequestCmd::Declare {
+                    platform,
+                    name,
+                    account,
+                    kind,
+                    alias,
+                    note,
+                    ttl,
+                    open,
+                    quiet,
+                } => {
+                    let req = requests::declare(
+                        Spec {
+                            platform,
+                            name,
+                            account,
+                            kind,
+                            alias,
+                            note,
+                        },
+                        &who,
+                        ttl,
+                    )?;
+                    if quiet {
+                        println!("{}", req.id);
+                    } else {
+                        println!("✓ 已登记录入请求 {}", req.id);
+                        println!("  条目  secret://{}/{}", req.spec.platform, req.spec.name);
+                        if !req.spec.alias.is_empty() {
+                            println!("  别名  {}", req.spec.alias);
+                        }
+                        println!(
+                            "  现在去 Ky.app（或 ky add）把它存进去：ky request wait {}",
+                            req.id
+                        );
+                    }
+                    if open {
+                        // 已有 Ky.app 就让它接管（单实例插件会把参数转给已运行的实例）；
+                        // 没有就退回本地 Web 录入页，两步都要能走通。
+                        if !kyvault::requests::open_desktop(&req.id) {
+                            println!("（未找到 Ky.app，改用本地录入页）");
+                            let vault = AuditedBackend {
+                                backend: Backend::select()?,
+                                who: who.clone(),
+                            };
+                            kyvault::credui::run(
+                                &vault,
+                                8766,
+                                true,
+                                kyvault::credui::Prefill {
+                                    email: None,
+                                    provider: Some(req.spec.platform.clone()),
+                                    login: false,
+                                },
+                            )?;
+                        }
+                    }
+                }
+                RequestCmd::List { json } => {
+                    let items = requests::list()?;
+                    if json {
+                        println!("{}", serde_json::to_string_pretty(&items)?);
+                    } else if items.is_empty() {
+                        println!("（没有录入请求）");
+                    } else {
+                        for r in items {
+                            println!(
+                                "{:<6} {:<10} secret://{}/{}  {}",
+                                r.status.as_str(),
+                                r.id,
+                                r.spec.platform,
+                                r.spec.name,
+                                r.created_at
+                            );
+                        }
+                    }
+                }
+                RequestCmd::Status { id } => {
+                    let req = requests::get(&id)?;
+                    println!("{}", serde_json::to_string_pretty(&req)?);
+                }
+                RequestCmd::Wait { id, timeout } => {
+                    let outcome = requests::wait(
+                        &id,
+                        std::time::Duration::from_secs(timeout.clamp(1, 24 * 3600)),
+                        std::time::Duration::from_millis(400),
+                    )?;
+                    println!("{}", serde_json::to_string_pretty(&outcome)?);
+                    if outcome.status == requests::Status::Failed {
+                        std::process::exit(1);
+                    }
+                }
+                RequestCmd::Fulfill { id } => {
+                    use std::io::Read;
+                    let mut value = String::new();
+                    std::io::stdin().read_to_string(&mut value)?;
+                    let store = Store::default_location()?;
+                    let aliases = Aliases::default_location()?;
+                    let outcome = requests::fulfill(
+                        &store,
+                        &aliases,
+                        &id,
+                        value.trim_end_matches(['\r', '\n']),
+                    )?;
+                    println!(
+                        "✓ {} 已入库（{}）",
+                        outcome.r#ref.clone().unwrap_or_default(),
+                        outcome.message
+                    );
+                    if let Some(alias) = &outcome.alias {
+                        println!(
+                            "  别名 {alias} → {}",
+                            outcome.r#ref.clone().unwrap_or_default()
+                        );
+                    }
+                    println!("  末4位 …{}", outcome.last4.clone().unwrap_or_default());
+                }
+                RequestCmd::Abort { id } => {
+                    let req = requests::fail(&id, "已被 agent 或用户放弃")?;
+                    println!("✓ 已放弃 {}", req.id);
+                }
+                RequestCmd::Clean => {
+                    let mut n = 0;
+                    for r in requests::list()? {
+                        if r.status != requests::Status::Pending && requests::remove(&r.id)? {
+                            n += 1;
+                        }
+                    }
+                    println!("✓ 清理了 {n} 条已结束的请求");
+                }
+            }
         }
         Cmd::Connect => kyvault::connect::run()?,
         Cmd::Update { assume_yes } => kyvault::update::run(assume_yes)?,
