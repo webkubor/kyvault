@@ -344,6 +344,120 @@ pub fn save_secret(
         .map_err(|_| "密钥保存失败，请检查本地密钥库")?;
     read_snapshot(&state, &session)
 }
+
+/// 手动录入升级版：平台下拉 + 账号 + 别名。API Key 平台先在线校验再入库。
+#[tauri::command]
+pub fn save_secret_with_meta(
+    reference: String,
+    value: String,
+    kind: Option<String>,
+    account: Option<String>,
+    alias: Option<String>,
+) -> Result<serde_json::Value> {
+    let _session_guard = (); // 校验在 fulfill 之外：手动录入不绑定请求
+    validate_reference(&reference)?;
+    if value.is_empty() || value.len() > 65_536 {
+        return Err("密钥须为 1–65536 字节".into());
+    }
+    let (platform, _) =
+        kyvault::model::parse_ref(&reference).map_err(|_| "引用格式错误".to_string())?;
+    let store = vault()?;
+    let aliases = kyvault::alias::Aliases::default_location().map_err(|e| e.to_string())?;
+
+    // 有校验端点的平台先验一把：401 的 key 不该进库。查不了（无端点/网络不通）
+    // 就按未验证入库，并如实返回 —— 不假装验过。
+    let (check_status, check_message) = if kyvault::providers::get_provider(&platform).is_some() {
+        let r = kyvault::providers::validate_key(&platform, &value);
+        if r.valid {
+            (r.status.to_string(), r.message)
+        } else if r.status == "unsupported" || r.status == "unknown" {
+            (
+                "unverified".to_string(),
+                "已保存，但这次没能在线验证（网络或平台不支持）".to_string(),
+            )
+        } else {
+            return Err(format!(
+                "校验未通过（{}），密钥没有入库：{}",
+                r.status, r.message
+            ));
+        }
+    } else {
+        (
+            "unverified".to_string(),
+            "平台无在线校验接口，已按原样入库".to_string(),
+        )
+    };
+
+    let kind = kind
+        .filter(|k| !k.trim().is_empty())
+        .map(|k| k.trim().to_string())
+        .or_else(|| default_kind(&platform));
+    let account = account.filter(|a| !a.trim().is_empty());
+    store
+        .set_secret_with_meta(&reference, &value, kind.as_deref(), account.as_deref())
+        .map_err(|_| "密钥保存失败，请检查本地密钥库")?;
+
+    let alias = alias
+        .map(|a| a.trim().to_lowercase())
+        .filter(|a| !a.is_empty());
+    if let Some(a) = &alias {
+        aliases.set(a, &reference).map_err(|_| "别名写入失败")?;
+    }
+    let last4 = kyvault::model::last4(&value);
+    Ok(serde_json::json!({
+        "ok": true,
+        "reference": reference,
+        "status": check_status,
+        "message": check_message,
+        "alias": alias.unwrap_or_default(),
+        "last4": last4,
+    }))
+}
+
+fn default_kind(platform: &str) -> Option<String> {
+    let kind = match platform {
+        "github" | "gitlab" | "openrouter" | "cloudflare" | "feishu" => "Token",
+        _ => "API Key",
+    };
+    Some(kind.to_string())
+}
+
+/// Agent 发起的待录入请求清单（只有元信息，永远没有密文）。
+#[tauri::command]
+pub fn pending_requests() -> Result<Vec<serde_json::Value>> {
+    let items = kyvault::requests::summaries().map_err(|e| e.to_string())?;
+    Ok(items
+        .into_iter()
+        .map(|m| {
+            serde_json::json!({
+                "id": m["id"], "platform": m["platform"], "name": m["name"],
+                "account": m["account"], "kind": m["kind"], "alias": m["alias"],
+                "note": m["note"], "requested_by": m["requested_by"],
+                "created_at": m["created_at"],
+            })
+        })
+        .collect())
+}
+
+/// 按 Agent 请求入库：校验 → 加密写库 → 建别名 → 写回执。
+///
+/// 校验失败时返回 Err，请求留在 pending，人可以改值重试。
+#[tauri::command]
+pub fn fulfill_request(id: String, value: String) -> Result<serde_json::Value> {
+    let store = vault()?;
+    let aliases = kyvault::alias::Aliases::default_location().map_err(|e| e.to_string())?;
+    let outcome =
+        kyvault::requests::fulfill(&store, &aliases, &id, &value).map_err(|e| e.to_string())?;
+    serde_json::to_value(&outcome).map_err(|e| e.to_string())
+}
+
+/// 人明确放弃一条请求。
+#[tauri::command]
+pub fn discard_request(id: String) -> Result<()> {
+    kyvault::requests::fail(&id, "已被用户放弃").map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn delete_secret(reference: String, state: State<DesktopState>) -> Result<Snapshot> {
     let session = active(&state)?;

@@ -24,6 +24,7 @@ pub mod model;
 pub mod panel;
 pub mod providers;
 pub mod registry;
+pub mod requests;
 pub mod store;
 pub mod tui;
 pub mod ui;

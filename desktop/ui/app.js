@@ -20,10 +20,12 @@ const desktop = Boolean(window.__TAURI__?.core);
 function wipeForms() {
   $('#text-form').reset();
   $('#secret-form').reset();
+  $('#agent-request-form').reset();
   $('#redaction-text').textContent = '';
   $('#redaction-preview').hidden = true;
   reviewed = null;
 }
+
 function lockView() {
   epoch++;
   state.locked = true;
@@ -146,12 +148,52 @@ $('#text-form').addEventListener('submit', async (e) => {
   } catch { setFormError('#text-error', 'editor.err.review'); }
   finally { busy = false; $('#text-submit').disabled = false; }
 });
+$('#add').addEventListener('click', () => {
+  if (state.view !== 'vault') return openEditor();
+  wipeForms();
+  setFormError('#secret-error', null);
+  resetCredentialForm();
+  $('#credential').showModal();
+});
+// —— Agent 请求录入：下拉数据来自后端校验表，提交走「先验证后入库」。 ——
+const PLATFORMS = [
+  ['github', '🐙 GitHub'], ['gitlab', '🦊 GitLab'], ['openai', '🤖 OpenAI'],
+  ['anthropic', '🟠 Anthropic'], ['deepseek', '🐋 DeepSeek'], ['moonshot', '🌙 Moonshot'],
+  ['zhipu', '💡 智谱'], ['qwen', '🧵 通义'], ['doubao', '🌱 豆包'], ['gemini', '✨ Gemini'],
+  ['groq', '⚡ Groq'], ['openrouter', '🛣️ OpenRouter'], ['siliconflow', '🌫️ SiliconFlow'],
+  ['together', '🧩 Together'], ['fireworks', '🎆 Fireworks'], ['baichuan', '🐴 百川'],
+  ['spark', '✨ 讯飞'], ['minimax', '📉 MiniMax'], ['aliyun', '☁️ 阿里云'],
+  ['cloudflare', '🧱 Cloudflare'], ['feishu', '🐦 飞书'],
+];
+let agentRequest = null;
+
+function resetCredentialForm() {
+  const select = $('#secret-platform');
+  if (!select.options.length) {
+    for (const [id, label] of PLATFORMS) {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = label;
+      select.appendChild(opt);
+    }
+  }
+  $('#cred-request-note').hidden = true;
+  $('#cred-verify-hint').textContent = t('cred.value.hint');
+}
+
 $('#secret-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (busy || state.locked) return;
-  const reference = $('#secret-reference').value.trim();
+  const platform = $('#secret-platform').value;
+  const name = $('#secret-name').value.trim().toLowerCase();
+  const account = $('#secret-account').value.trim();
+  const alias = $('#secret-alias').value.trim().toLowerCase();
   const value = $('#secret-value').value;
   setFormError('#secret-error', null);
+  if (!/^[a-z0-9][a-z0-9._-]*$/.test(platform) || !/^[a-z0-9][a-z0-9._-]*$/.test(name)) {
+    return setFormError('#secret-error', 'cred.err.name');
+  }
+  const reference = `secret://${platform}/${name}`;
   try {
     const snapshot = await invoke('snapshot');
     if (state.locked || snapshot.locked) return lockView();
@@ -159,9 +201,84 @@ $('#secret-form').addEventListener('submit', async (e) => {
       const ok = await confirm('confirm.replace.title', 'confirm.replace.copy', 'confirm.replace.label', { ref: reference });
       if (!ok) return;
     }
-    if (await action('save_secret', { reference, value }, 'status.credSaved', '#secret-error')) $('#credential').close();
   } catch { setFormError('#secret-error', 'cred.err.check'); }
+  busy = true;
+  try {
+    await invoke('save_secret_with_meta', {
+      reference,
+      value,
+      kind: null,
+      account: account || null,
+      alias: alias || null,
+    });
+    setStatus('status.credSaved');
+    $('#credential').close();
+    await refresh();
+  } catch {
+    setFormError('#secret-error', 'err.generic');
+  } finally { busy = false; }
 });
+
+function openAgentRequest(request) {
+  agentRequest = request;
+  $('#agent-request-meta').textContent = t('req.meta', {
+    platform: request.platform,
+    name: request.name,
+    who: request.requested_by || 'agent',
+  }) + (request.note ? `\n${request.note}` : '');
+  $('#agent-request-value').value = '';
+  setFormError('#agent-request-error', null);
+  $('#agent-request').showModal();
+  $('#agent-request-value').focus();
+}
+$('#agent-request-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (busy || state.locked || !agentRequest) return;
+  const value = $('#agent-request-value').value;
+  setFormError('#agent-request-error', null);
+  busy = true;
+  try {
+    await invoke('fulfill_request', { id: agentRequest.id, value });
+    setStatus('status.reqSaved');
+    $('#agent-request').close();
+    agentRequest = null;
+    await refresh();
+  } catch {
+    // 校验失败的信息在后端消息里，这里给通用提示；请求仍在待处理。
+    setFormError('#agent-request-error', 'req.err.invalid');
+  } finally { busy = false; }
+});
+$('#agent-request-discard').addEventListener('click', async () => {
+  if (!agentRequest) return;
+  try { await invoke('discard_request', { id: agentRequest.id }); } catch {}
+  $('#agent-request').close();
+  agentRequest = null;
+});
+for (const id of ['agent-request']) $('#' + id).addEventListener('close', () => { agentRequest = null; });
+
+// Agent 通过 `ky request declare --open` 唤起 Ky.app 时，后端把 id 转成事件。
+// 锁定时先记下，解锁后兜底弹出 —— 不能因为“当时锁着”就丢掉 Agent 的请求。
+let pendingRequestId = null;
+function tryOpenAgentRequest() {
+  if (!pendingRequestId || state.locked) return;
+  const id = pendingRequestId;
+  invoke('pending_requests')
+    .then((items) => {
+      const hit = items.find((r) => r.id === id);
+      if (hit && !$('#agent-request').open) openAgentRequest(hit);
+    })
+    .catch(() => {})
+    .finally(() => { pendingRequestId = null; });
+}
+if (desktop) {
+  listen('request-credential', (event) => {
+    const id = typeof event.payload === 'string' ? event.payload : event.payload?.id;
+    if (!id) return;
+    pendingRequestId = id;
+    tryOpenAgentRequest();
+  });
+}
+
 $('#detail').addEventListener('click', async (e) => {
   const command = e.target.closest('[data-action]')?.dataset.action;
   if (!command) return;
@@ -218,6 +335,8 @@ $('#unlock').addEventListener('click', async () => {
     setFormError('#unlock-error', null);
     await refresh();
     setStatus('status.ready');
+    // 锁定期间到达的 Agent 录入请求，现在补弹。
+    tryOpenAgentRequest();
   } catch { setFormError('#unlock-error', 'locked.err'); }
 });
 

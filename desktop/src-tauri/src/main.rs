@@ -18,7 +18,18 @@ pub fn show(app: &tauri::AppHandle) {
 
 fn main() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| show(app)))
+        .plugin(tauri_plugin_single_instance::init(|app, args, _| {
+            // Agent 通过 `ky request declare --open` 传 `--request <id>` 唤起已运行的
+            // Ky.app。这里把请求 id 转给前端弹出预填的录入框。
+            if let Some(id) = args
+                .iter()
+                .position(|a| a == "--request")
+                .and_then(|i| args.get(i + 1))
+            {
+                let _ = app.emit("request-credential", id.to_string());
+            }
+            show(app)
+        }))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _, event| {
@@ -64,6 +75,21 @@ fn main() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.set_focus();
+            }
+            // 冷启动也会带 --request <id>（第一次启动 Ky.app 时）。
+            let args: Vec<String> = std::env::args().collect();
+            if let Some(id) = args
+                .iter()
+                .position(|a| a == "--request")
+                .and_then(|i| args.get(i + 1))
+            {
+                let handle = app.handle().clone();
+                let id = id.to_string();
+                // 前端模块加载需要一点时间；延迟发射避免事件被吞。
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(800));
+                    let _ = handle.emit("request-credential", id);
+                });
             }
             let handle = app.handle().clone();
             std::thread::spawn(move || {
@@ -183,7 +209,11 @@ fn main() {
             commands::copy_reference,
             commands::copy_secret,
             commands::save_secret,
+            commands::save_secret_with_meta,
             commands::delete_secret,
+            commands::pending_requests,
+            commands::fulfill_request,
+            commands::discard_request,
             commands::lock_app,
             commands::unlock_app,
             commands::clear_history,

@@ -1,6 +1,6 @@
 ---
 name: kyvault-ops
-version: 2.7.0
+version: 2.8.0
 description: 使用 kyvault (或快捷短命令 ky) 在本地与 GitLab 团队环境中端对端管理加密 API Key、服务器资产台账与多 Profile 凭证。支持 Claude、Codex、Gemini 与 Hermes 全自动读写与子进程安全注入。
 license: MIT
 author: webkubor
@@ -57,6 +57,15 @@ kyvault add                 # 浏览器录入：去空格 → 找旧条目 → �
 kyvault add --email x@163.com --login   # 邮箱登录密码：两次输入核对；一个邮箱只留一条，新的覆盖旧的
 kyvault ui                  # 启动本地暗黑风极客 Web GUI（自动唤起浏览器，地址带一次性随机 token）
 kyvault wizard              # 终端交互式分类引导向导（规整化命名）
+
+# 9a. Agent 帮用户存新凭据（推荐路径，明文不经过模型上下文）
+ky request declare --platform github --name ci-token --alias github_token --note "CI 用" --open
+#   --open 自动唤起 Ky.app（已装时）弹出预填录入框；人粘密文即可
+ky request wait <id> --timeout 300     # 阻塞等回执：done/failed/expired/pending
+ky request list / status <id>          # 查看与排查
+ky request abort <id>                  # 用户拒绝时放弃
+# 无桌面环境（CI/SSH）：人把密文粘给 stdin，ky request fulfill <id> 校验后写库
+echo "<token>" | ky request fulfill <id>
 
 # 10. 操作审计（谁、什么时候、读过/改过哪条 —— 只记元信息）
 kyvault audit                       # 最近 30 条
