@@ -270,6 +270,15 @@ $('#agent-request-value').addEventListener('input', () => {
   if (state.locked || !desktop) return;
   invoke('touch_activity').catch(() => {});
 });
+// 用户粘贴完整密钥后直接走保存流程，不要求再点「校验并保存」。
+// 延迟到 paste 默认动作完成后提交，确保表单读到刚粘贴的值。
+$('#agent-request-value').addEventListener('paste', () => {
+  setTimeout(() => {
+    if (!busy && agentRequest && $('#agent-request').open) {
+      $('#agent-request-form').requestSubmit();
+    }
+  }, 0);
+});
 
 // Agent 通过 `ky request declare --open` 唤起 Ky.app 时，后端把 id 转成事件。
 // 锁定时先记下，解锁后兜底弹出 —— 不能因为“当时锁着”就丢掉 Agent 的请求。
