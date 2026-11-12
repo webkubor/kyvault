@@ -137,12 +137,38 @@ fn step_clean_removes_finished_but_keeps_pending() {
     });
 }
 
+fn step_xiaomi_token_plan_saves_without_probe() {
+    with_inbox(|| {
+        let (_tmp, store, aliases) = fixture_store();
+        let req = requests::declare(spec("xiaomi", "token-plan"), "test-agent", None).unwrap();
+        let outcome =
+            requests::fulfill(&store, &aliases, &req.id, "synthetic-xiaomi-key-1234").unwrap();
+        assert_eq!(outcome.status, Status::Done);
+        assert!(outcome.message.contains("不做自动探测"));
+        assert_eq!(
+            store
+                .get_secret("secret://xiaomi/token-plan")
+                .unwrap()
+                .as_deref(),
+            Some("synthetic-xiaomi-key-1234")
+        );
+        assert_eq!(
+            aliases.get("github_token").as_deref(),
+            Some("secret://xiaomi/token-plan")
+        );
+        let receipt = requests::get(&req.id).unwrap().result.unwrap();
+        assert_eq!(receipt.status, "unverified");
+        assert!(receipt.message.contains("不做自动探测"));
+    });
+}
+
 /// 这些测试共享进程级 KYVAULT_STORE_DIR，必须串行 —— 合成一个入口按序跑。
 #[test]
 fn requests_flow_serial() {
     step_declare_creates_pending_request_with_meta_only();
     step_declare_rejects_invalid_names();
     step_unknown_platform_saves_unverified();
+    step_xiaomi_token_plan_saves_without_probe();
     step_failed_request_rejects_double_fulfill();
     step_abort_marks_failed();
     step_clean_removes_finished_but_keeps_pending();

@@ -119,9 +119,12 @@ pub struct Result_ {
     /// 末 4 位，仅供人眼确认「存的是哪一把」。
     #[serde(default)]
     pub last4: String,
-    /// 校验结论原文（valid / invalid / unknown …）。
+    /// 校验结论代码（valid / unverified / invalid …）。
     #[serde(default)]
     pub status: String,
+    /// 校验或未验证的说明，不含密文。
+    #[serde(default)]
+    pub message: String,
     /// 建立成功的别名。
     #[serde(default)]
     pub alias: String,
@@ -289,13 +292,21 @@ pub fn pending() -> Result<Vec<Request>> {
 }
 
 /// 标记完成。ref 与末 4 位是给人和 Agent 看的回执。
-pub fn complete(id: &str, r#ref: &str, last4: &str, status: &str, alias: &str) -> Result<Request> {
+pub fn complete(
+    id: &str,
+    r#ref: &str,
+    last4: &str,
+    status: &str,
+    message: &str,
+    alias: &str,
+) -> Result<Request> {
     let mut req = get(id)?;
     req.status = Status::Done;
     req.result = Some(Result_ {
         r#ref: r#ref.to_string(),
         last4: last4.to_string(),
         status: status.to_string(),
+        message: message.to_string(),
         alias: alias.to_string(),
     });
     write_request(&inbox_dir()?, &req)?;
@@ -310,6 +321,7 @@ pub fn fail(id: &str, message: &str) -> Result<Request> {
         r#ref: String::new(),
         last4: String::new(),
         status: message.to_string(),
+        message: message.to_string(),
         alias: String::new(),
     });
     write_request(&inbox_dir()?, &req)?;
@@ -348,12 +360,17 @@ pub fn wait(id: &str, timeout: Duration, poll: Duration) -> Result<Outcome> {
                     r#ref: String::new(),
                     last4: String::new(),
                     status: String::new(),
+                    message: String::new(),
                     alias: String::new(),
                 });
                 return Ok(Outcome {
                     id: req.id,
                     status: Status::Done,
-                    message: result.status,
+                    message: if result.message.is_empty() {
+                        result.status.clone()
+                    } else {
+                        result.message
+                    },
                     r#ref: Some(result.r#ref),
                     last4: Some(result.last4),
                     alias: Some(result.alias),
@@ -468,11 +485,11 @@ pub fn fulfill(
     }
 
     let last4 = crate::model::last4(value);
-    let done = complete(id, &r#ref, &last4, &check_status, &alias)?;
+    let done = complete(id, &r#ref, &last4, &check_status, &check_message, &alias)?;
     Ok(Outcome {
         id: done.id,
         status: Status::Done,
-        message: check_status,
+        message: check_message,
         r#ref: Some(r#ref),
         last4: Some(last4),
         alias: (!alias.is_empty()).then_some(alias),
@@ -482,6 +499,15 @@ pub fn fulfill(
 /// 校验一把密钥。平台不在校验表里就放行 —— 只能保证「语法没问题」，
 /// 但这个判断必须说出来，不能假装验过了。
 fn verify(platform: &str, value: &str) -> (String, String) {
+    // Xiaomi's Token Plan API key is restricted by Xiaomi to interactive use in
+    // compatible coding/agent tools. A probe from this CLI would be automation,
+    // so deliberately save it without sending any request to Xiaomi.
+    if platform == "xiaomi" {
+        return (
+            "unverified".to_string(),
+            "小米 Token Plan Key 已按原样入库；根据小米规则不做自动探测，仅用于兼容工具中的交互式使用".to_string(),
+        );
+    }
     if crate::providers::get_provider(platform).is_none() {
         return (
             "unverified".to_string(),
@@ -518,6 +544,7 @@ fn note_failure(id: &str, message: &str) -> Result<()> {
         r#ref: String::new(),
         last4: String::new(),
         status: message.to_string(),
+        message: message.to_string(),
         alias: String::new(),
     });
     write_request(&inbox_dir()?, &req)

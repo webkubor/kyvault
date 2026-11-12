@@ -32,6 +32,14 @@ pub const CATEGORIES: &[CategoryPreset] = &[
         default_kind: "API Key",
         platforms: &[
             PlatformPreset {
+                id: "xiaomi",
+                name: "Xiaomi MiMo (Token Plan)",
+                icon: "🌙",
+                default_name: "token-plan",
+                suggested_names: &["token-plan", "backup"],
+                placeholder: "API Key",
+            },
+            PlatformPreset {
                 id: "deepseek",
                 name: "DeepSeek",
                 icon: "🔵",

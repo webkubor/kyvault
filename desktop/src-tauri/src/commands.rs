@@ -366,7 +366,13 @@ pub fn save_secret_with_meta(
 
     // 有校验端点的平台先验一把：401 的 key 不该进库。查不了（无端点/网络不通）
     // 就按未验证入库，并如实返回 —— 不假装验过。
-    let (check_status, check_message) = if kyvault::providers::get_provider(&platform).is_some() {
+    let (check_status, check_message) = if platform == "xiaomi" {
+        (
+            "unverified".to_string(),
+            "小米 Token Plan Key 已保存；按小米规则不做自动探测，仅用于兼容工具中的交互式使用"
+                .to_string(),
+        )
+    } else if kyvault::providers::get_provider(&platform).is_some() {
         let r = kyvault::providers::validate_key(&platform, &value);
         if r.valid {
             (r.status.to_string(), r.message)

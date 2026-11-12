@@ -163,7 +163,7 @@ const PLATFORMS = [
   ['groq', '⚡ Groq'], ['openrouter', '🛣️ OpenRouter'], ['siliconflow', '🌫️ SiliconFlow'],
   ['together', '🧩 Together'], ['fireworks', '🎆 Fireworks'], ['baichuan', '🐴 百川'],
   ['spark', '✨ 讯飞'], ['minimax', '📉 MiniMax'], ['aliyun', '☁️ 阿里云'],
-  ['cloudflare', '🧱 Cloudflare'], ['feishu', '🐦 飞书'],
+  ['cloudflare', '🧱 Cloudflare'], ['feishu', '🐦 飞书'], ['xiaomi', '🌙 Xiaomi MiMo Token Plan'],
 ];
 let agentRequest = null;
 
@@ -221,11 +221,13 @@ $('#secret-form').addEventListener('submit', async (e) => {
 
 function openAgentRequest(request) {
   agentRequest = request;
-  $('#agent-request-meta').textContent = t('req.meta', {
+  const isXiaomiPlan = request.platform === 'xiaomi';
+  $('#agent-request-meta').textContent = t(isXiaomiPlan ? 'req.meta.xiaomi' : 'req.meta', {
     platform: request.platform,
     name: request.name,
     who: request.requested_by || 'agent',
   }) + (request.note ? `\n${request.note}` : '');
+  $('#agent-request-hint').textContent = t(isXiaomiPlan ? 'req.paste.xiaomi' : 'req.paste.hint');
   $('#agent-request-value').value = '';
   setFormError('#agent-request-error', null);
   $('#agent-request').showModal();

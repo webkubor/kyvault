@@ -64,7 +64,12 @@ ky request declare --platform github --name ci-token --alias github_token --note
 ky request wait <id> --timeout 300     # 阻塞等回执：done/failed/expired/pending
 ky request list / status <id>          # 查看与排查
 ky request abort <id>                  # 用户拒绝时放弃
+# Xiaomi MiMo Token Plan Key：
+#   ky request declare --platform xiaomi --name token-plan --alias xiaomi_token_plan --note "MiMo Token Plan" --open
+#   小米官方仅允许 Token Plan Key 在兼容工具中的交互式使用；ky 不对该 Key 做自动探测
+#   （脚本/后端探测可能违反套餐规则），只标记 unverified 并加密入库。
 # 无桌面环境（CI/SSH）：人把密文粘给 stdin，ky request fulfill <id> 校验后写库
+#   Token Plan Key 不适用于脚本工作流，不要对其使用 fulfill/自动注入。
 echo "<token>" | ky request fulfill <id>
 
 # 10. 操作审计（谁、什么时候、读过/改过哪条 —— 只记元信息）
