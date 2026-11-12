@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-11-12
+
 ### 桌面应用 Ky（新增，Tauri 2）
 
 - 新增 `desktop/`：基于 Tauri 2 的原生 macOS 桌面应用，替代原先 `ky ui` 的浏览器页面形态。CLI 与 TUI 保持不变，继续面向 Agent 与脚本。
@@ -14,6 +16,18 @@
 - 闲置 5 分钟自动锁定敏感内容；复制密钥 30 秒后自动清空剪贴板。
 - 资源占用：应用包 4.57 MiB，空闲常驻内存约 90 MB，CPU 约 0%。
 - 图标沿用站点现有的薄荷色「K」标记衍生，出处与推导过程记录在 `desktop/brand/README.md`。
+
+### Agent 凭据录入请求（新增）
+
+- `ky request declare`：Agent 声明需要的凭据和别名，人在本机 Ky 界面粘贴密文即写入；明文只进本机界面，不经过 Agent 输出或命令参数。
+- 锁定期间到达的录入请求，解锁后补弹；进入录入态时刷新活动；粘贴即自动保存，粘贴对话框可靠性修复。
+- 新增 Xiaomi MiMo Token Plan 凭据流。
+
+### `ky set` 文件入口与 PEM 截断拒收（新增）
+
+- `ky set <ref> - --file <path>`：长 PEM/多行明文从文件读，支持 `@path` 写法，避免明文进 argv 或 shell history。
+- 明文有 PEM 头却没有配对尾行时默认拒收；确认无误可加 `--force` 强写。
+- 写入时记 sha256 / 行数 / 字节数；新增 `cargo fmt` pre-commit 门禁和 CONTRIBUTING 说明。
 
 ## [2.7.1] - 2026-11-08
 
