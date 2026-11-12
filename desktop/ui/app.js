@@ -263,12 +263,12 @@ $('#agent-request-discard').addEventListener('click', async () => {
   agentRequest = null;
 });
 for (const id of ['agent-request']) $('#' + id).addEventListener('close', () => { agentRequest = null; });
-// 录入弹窗打开期间，人在粘贴框里的每个键都算「活动」：后端 5 分钟空闲
-// 自动锁定读的是会话活动时间，录入是安全敏感操作，不该被空闲锁打断。
-// 这里通过一个轻量的已解锁态命令（snapshot）顺路续租，不引入新命令面。
+// 录入框里的键盘输入计入「活动」，但保留后端 5 分钟空闲锁。
+// 如果用户暂停过久，锁定会关闭弹窗并清除未保存内容；待请求保持在 inbox，
+// 解锁后上面的轮询会重新打开，用户可再次粘贴，不能静默丢掉请求。
 $('#agent-request-value').addEventListener('input', () => {
   if (state.locked || !desktop) return;
-  invoke('snapshot').catch(() => {});
+  invoke('touch_activity').catch(() => {});
 });
 
 // Agent 通过 `ky request declare --open` 唤起 Ky.app 时，后端把 id 转成事件。
