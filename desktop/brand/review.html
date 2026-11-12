@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src &#x27;none&#x27;; img-src data:; style-src &#x27;unsafe-inline&#x27;; script-src &#x27;sha256-MmUMefbhT1lrB310Tr4Npg5tqr7lvXn0EHJAX6QtLrA=&#x27;; connect-src &#x27;none&#x27;; font-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>品牌标识 · 离线评审</title>
+<style>
+:root {color-scheme:light; font:15px/1.55 system-ui,sans-serif;color:#18212f;background:#f1f4f8}
+* {box-sizing:border-box} [hidden] {display:none!important} body {margin:0} main {max-width:1160px;margin:auto;padding:28px 20px}
+h1 {font-size:28px;margin:0 0 10px} h2 {font-size:23px} h3 {font-size:17px;margin:18px 0 8px}
+p {margin:8px 0} button,a.download {font:inherit;border:1px solid #9ca9b9;border-radius:7px;background:#fff;color:#172534;padding:7px 12px;cursor:pointer;text-decoration:none}
+button:hover,a.download:hover {background:#e8eef5} button:focus-visible,a:focus-visible,textarea:focus-visible {outline:3px solid #147aab;outline-offset:2px}
+button[aria-pressed="true"] {background:#183d64;color:white;border-color:#183d64}
+.controls,.actions,.tokens {display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}
+.notice {border-left:4px solid #b77812;background:#fff8e7;padding:12px 16px}
+.project {background:#fff;border:1px solid #cbd3df;border-radius:12px;margin:24px 0;padding:22px;overflow-wrap:anywhere}
+.preview-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:14px;margin:16px 0}
+figure {margin:0} .canvas {min-height:190px;display:flex;align-items:center;justify-content:center;border:1px solid #a9b2c0;border-radius:8px;background:#fff}
+.canvas[data-bg="dark"] {background:#0d1117}
+.canvas[data-bg="checker"] {background-color:#fff;background-image:conic-gradient(#d3d8de 25%,transparent 0 50%,#d3d8de 0 75%,transparent 0);background-size:20px 20px}
+.canvas img {width:32px;height:32px;object-fit:contain} figcaption {margin-top:6px;color:#4c596a}
+.icon-row {margin:10px 0 4px} .icon-canvas {min-height:96px;padding:10px}
+.icon-canvas img {width:24px;height:24px;object-fit:contain}
+.token {border:1px solid #d2dae4;border-radius:6px;padding:6px 10px} .swatch {display:inline-block;width:16px;height:16px;border:1px solid #8795a6;vertical-align:middle;margin-right:7px}
+small,.muted {color:#4c596a} .evidence {font-size:13px;margin:4px 0 12px}
+pre,textarea {font:13px/1.5 ui-monospace,monospace;background:#f6f8fb;border:1px solid #c3cedc;border-radius:6px;padding:12px;max-width:100%}
+pre {white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto} textarea {display:block;width:100%;min-height:85px}
+.status {min-height:1.6em;color:#294a32} .manual {min-height:200px} .checks {padding-left:22px} a {color:#155c96}
+@media(max-width:560px) {main {padding:18px 12px}.project {padding:14px} h1 {font-size:24px}}
+</style></head><body><main>
+<h1>品牌标识 · 离线评审</h1><p>素材已内嵌，无网络依赖。外部来源链接仅供人工核验。</p>
+<p class="notice">仅做结构检查；未解码/渲染像素，未验证透明度、留白、非空图、token 与实际颜色一致性或 32px 可辨性。需要另行真实渲染并目视验收。 本页不是渲染验收报告。截图须另存到交付目录 screenshots/ 并注明来源、背景、尺寸和测试范围。</p>
+<div class="controls" role="group" aria-label="预览背景">
+<button type="button" data-background="light">浅底 #FFFFFF</button>
+<button type="button" data-background="dark">深底 #0D1117</button>
+<button type="button" data-background="checker">棋盘</button></div>
+<div class="controls" role="group" aria-label="预览尺寸">
+<button type="button" data-size="32">32px</button><button type="button" data-size="64">64px</button><button type="button" data-size="128">128px</button></div>
+<div class="actions" id="downloads"></div><noscript>本页需启用 JavaScript 才能切换预览、下载和复制。所有逻辑均已内嵌。</noscript>
+<div id="projects"></div></main><script>
+const DATA = {"manifest":{"projects":[{"id":"ky","name":"Ky \u00b7 desktop icon","sources":[{"url":"https://github.com/webkubor/kyvault/blob/main/docs/index.html#L53","label":"Existing K brand mark"},{"url":"https://github.com/webkubor/kyvault/blob/main/docs/styles.css#L2","label":"Existing mint and charcoal tokens"}],"tokens":{"primary":"#66f0b5","accent":"#080d10","onLight":"#080d10","onDark":"#66f0b5","background":"transparent"},"tokenSources":{"primary":"Project existing --green docs/styles.css:2","accent":"Project existing --bg docs/styles.css:2","onLight":"Existing charcoal repurposed for light-background mark","onDark":"Existing mint brand foreground","background":"Transparent portable symbol; desktop icon adds charcoal tile"},"rationale":["New interpretation: the existing K becomes a cut key: its lower diagonal has two teeth, linking Ky to secret retrieval by alias.","The K silhouette retains the project initial; stepped lower arm is the memory cue. This is a local desktop derivative, not a claim of historical symbolism."],"userDecisions":["Preserve existing Ky brand where viable; authorized redesign if existing asset missing or unsuitable."],"recommendations":["Use the charcoal tile icon in Dock and UI; use bare mark on editorial surfaces. New path shape remains a proposal, not user-approved brand standard."],"asset":"mark.svg","darkAsset":"mark-dark.svg","iconAsset":"icon.svg","oldAsset":null}]},"projects":[{"id":"ky","name":"Ky \u00b7 desktop icon","tokens":{"primary":"#66f0b5","accent":"#080d10","onLight":"#080d10","onDark":"#66f0b5","background":"transparent"},"tokenSources":{"primary":"Project existing --green docs/styles.css:2","accent":"Project existing --bg docs/styles.css:2","onLight":"Existing charcoal repurposed for light-background mark","onDark":"Existing mint brand foreground","background":"Transparent portable symbol; desktop icon adds charcoal tile"},"rationale":["New interpretation: the existing K becomes a cut key: its lower diagonal has two teeth, linking Ky to secret retrieval by alias.","The K silhouette retains the project initial; stepped lower arm is the memory cue. This is a local desktop derivative, not a claim of historical symbolism."],"userDecisions":["Preserve existing Ky brand where viable; authorized redesign if existing asset missing or unsuitable."],"recommendations":["Use the charcoal tile icon in Dock and UI; use bare mark on editorial surfaces. New path shape remains a proposal, not user-approved brand standard."],"sources":[{"label":"Existing K brand mark","value":"https://github.com/webkubor/kyvault/blob/main/docs/index.html#L53","url":"https://github.com/webkubor/kyvault/blob/main/docs/index.html#L53"},{"label":"Existing mint and charcoal tokens","value":"https://github.com/webkubor/kyvault/blob/main/docs/styles.css#L2","url":"https://github.com/webkubor/kyvault/blob/main/docs/styles.css#L2"}],"assets":{"asset":{"path":"mark.svg","filename":"mark.svg","mime":"image/svg+xml","svg":"\u003csvg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 256 256\" role=\"img\" aria-label=\"Ky mark\"\u003e\u003ctitle\u003eKy \u2014 K key-cut mark\u003c/title\u003e\u003cpath d=\"M 62 48 H 94 V 112 L 153 48 H 195 L 125 123 L 194 198 H 153 V 182 H 138 V 166 L 94 119 V 208 H 62 Z\" fill=\"#080d10\"/\u003e\u003c/svg\u003e\n","dataUri":"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9Ikt5IG1hcmsiPjx0aXRsZT5LeSDigJQgSyBrZXktY3V0IG1hcms8L3RpdGxlPjxwYXRoIGQ9Ik0gNjIgNDggSCA5NCBWIDExMiBMIDE1MyA0OCBIIDE5NSBMIDEyNSAxMjMgTCAxOTQgMTk4IEggMTUzIFYgMTgyIEggMTM4IFYgMTY2IEwgOTQgMTE5IFYgMjA4IEggNjIgWiIgZmlsbD0iIzA4MGQxMCIvPjwvc3ZnPgo=","sha256":"9b1b18d90cfbb6037abbbe58c365fa792b978abba421ec98fc74c2bb7988d2d2","validation":{"format":"SVG","viewBox":[0.0,0.0,256.0,256.0],"checks":"\u6b63\u65b9\u5f62\u3001title/aria\u3001\u9759\u6001\u5b89\u5168\u5b50\u96c6\u53ca\u5185\u90e8\u5f15\u7528\u901a\u8fc7"},"limitation":"\u4ec5\u505a\u7ed3\u6784\u68c0\u67e5\uff1b\u672a\u89e3\u7801/\u6e32\u67d3\u50cf\u7d20\uff0c\u672a\u9a8c\u8bc1\u900f\u660e\u5ea6\u3001\u7559\u767d\u3001\u975e\u7a7a\u56fe\u3001token \u4e0e\u5b9e\u9645\u989c\u8272\u4e00\u81f4\u6027\u6216 32px \u53ef\u8fa8\u6027\u3002\u9700\u8981\u53e6\u884c\u771f\u5b9e\u6e32\u67d3\u5e76\u76ee\u89c6\u9a8c\u6536\u3002"},"darkAsset":{"path":"mark-dark.svg","filename":"mark-dark.svg","mime":"image/svg+xml","svg":"\u003csvg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 256 256\" role=\"img\" aria-label=\"Ky mark\"\u003e\u003ctitle\u003eKy \u2014 K key-cut mark\u003c/title\u003e\u003cpath d=\"M 62 48 H 94 V 112 L 153 48 H 195 L 125 123 L 194 198 H 153 V 182 H 138 V 166 L 94 119 V 208 H 62 Z\" fill=\"#66f0b5\"/\u003e\u003c/svg\u003e\n","dataUri":"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9Ikt5IG1hcmsiPjx0aXRsZT5LeSDigJQgSyBrZXktY3V0IG1hcms8L3RpdGxlPjxwYXRoIGQ9Ik0gNjIgNDggSCA5NCBWIDExMiBMIDE1MyA0OCBIIDE5NSBMIDEyNSAxMjMgTCAxOTQgMTk4IEggMTUzIFYgMTgyIEggMTM4IFYgMTY2IEwgOTQgMTE5IFYgMjA4IEggNjIgWiIgZmlsbD0iIzY2ZjBiNSIvPjwvc3ZnPgo=","sha256":"66481a885f538304e1fcb7918b3a7cb8cabba6d955d4969d7256173267d6ebbd","validation":{"format":"SVG","viewBox":[0.0,0.0,256.0,256.0],"checks":"\u6b63\u65b9\u5f62\u3001title/aria\u3001\u9759\u6001\u5b89\u5168\u5b50\u96c6\u53ca\u5185\u90e8\u5f15\u7528\u901a\u8fc7"},"limitation":"\u4ec5\u505a\u7ed3\u6784\u68c0\u67e5\uff1b\u672a\u89e3\u7801/\u6e32\u67d3\u50cf\u7d20\uff0c\u672a\u9a8c\u8bc1\u900f\u660e\u5ea6\u3001\u7559\u767d\u3001\u975e\u7a7a\u56fe\u3001token \u4e0e\u5b9e\u9645\u989c\u8272\u4e00\u81f4\u6027\u6216 32px \u53ef\u8fa8\u6027\u3002\u9700\u8981\u53e6\u884c\u771f\u5b9e\u6e32\u67d3\u5e76\u76ee\u89c6\u9a8c\u6536\u3002"},"oldAsset":null,"iconAsset":{"path":"icon.svg","filename":"icon.svg","mime":"image/svg+xml","svg":"\u003csvg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 256 256\" role=\"img\" aria-label=\"Ky mark\"\u003e\u003ctitle\u003eKy \u2014 K key-cut mark\u003c/title\u003e\u003crect x=\"12\" y=\"12\" width=\"232\" height=\"232\" rx=\"52\" fill=\"#080d10\"/\u003e\u003cpath d=\"M 62 48 H 94 V 112 L 153 48 H 195 L 125 123 L 194 198 H 153 V 182 H 138 V 166 L 94 119 V 208 H 62 Z\" fill=\"#66f0b5\"/\u003e\u003c/svg\u003e\n","dataUri":"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9Ikt5IG1hcmsiPjx0aXRsZT5LeSDigJQgSyBrZXktY3V0IG1hcms8L3RpdGxlPjxyZWN0IHg9IjEyIiB5PSIxMiIgd2lkdGg9IjIzMiIgaGVpZ2h0PSIyMzIiIHJ4PSI1MiIgZmlsbD0iIzA4MGQxMCIvPjxwYXRoIGQ9Ik0gNjIgNDggSCA5NCBWIDExMiBMIDE1MyA0OCBIIDE5NSBMIDEyNSAxMjMgTCAxOTQgMTk4IEggMTUzIFYgMTgyIEggMTM4IFYgMTY2IEwgOTQgMTE5IFYgMjA4IEggNjIgWiIgZmlsbD0iIzY2ZjBiNSIvPjwvc3ZnPgo=","sha256":"ace550df79566476da512b53d0ad6c7a6016c1faf1aa5d3cdd918bf95f7365de","validation":{"format":"SVG","viewBox":[0.0,0.0,256.0,256.0],"checks":"\u6b63\u65b9\u5f62\u3001title/aria\u3001\u9759\u6001\u5b89\u5168\u5b50\u96c6\u53ca\u5185\u90e8\u5f15\u7528\u901a\u8fc7"},"limitation":"\u4ec5\u505a\u7ed3\u6784\u68c0\u67e5\uff1b\u672a\u89e3\u7801/\u6e32\u67d3\u50cf\u7d20\uff0c\u672a\u9a8c\u8bc1\u900f\u660e\u5ea6\u3001\u7559\u767d\u3001\u975e\u7a7a\u56fe\u3001token \u4e0e\u5b9e\u9645\u989c\u8272\u4e00\u81f4\u6027\u6216 32px \u53ef\u8fa8\u6027\u3002\u9700\u8981\u53e6\u884c\u771f\u5b9e\u6e32\u67d3\u5e76\u76ee\u89c6\u9a8c\u6536\u3002"},"iconDarkAsset":null}}],"limitation":"\u4ec5\u505a\u7ed3\u6784\u68c0\u67e5\uff1b\u672a\u89e3\u7801/\u6e32\u67d3\u50cf\u7d20\uff0c\u672a\u9a8c\u8bc1\u900f\u660e\u5ea6\u3001\u7559\u767d\u3001\u975e\u7a7a\u56fe\u3001token \u4e0e\u5b9e\u9645\u989c\u8272\u4e00\u81f4\u6027\u6216 32px \u53ef\u8fa8\u6027\u3002\u9700\u8981\u53e6\u884c\u771f\u5b9e\u6e32\u67d3\u5e76\u76ee\u89c6\u9a8c\u6536\u3002"};
+const root = document.getElementById('projects');
+const bgButtons = [...document.querySelectorAll('[data-background]')];
+const sizeButtons = [...document.querySelectorAll('[data-size]')];
+let background = 'light', size = 32;
+function el(tag, value, className) {
+  const node = document.createElement(tag);
+  if (value !== undefined) node.textContent = value;
+  if (className) node.className = className;
+  return node;
+}
+function button(label, action) {
+  const b = el('button', label); b.type = 'button'; b.addEventListener('click', action); return b;
+}
+function download(label, filename, content, type) {
+  const a = el('a', label, 'download'); a.download = filename;
+  a.href = 'data:' + type + ';base64,' + btoa(Array.from(new TextEncoder().encode(content), b => String.fromCharCode(b)).join(''));
+  return a;
+}
+function jsonDownload(label, filename, data) {
+  return download(label, filename, JSON.stringify(data, null, 2), 'application/json');
+}
+function list(parent, title, values, empty) {
+  parent.append(el('h3', title));
+  if (!values.length) {parent.append(el('p', empty, 'muted')); return;}
+  const ul = el('ul'); values.forEach(value => ul.append(el('li', value))); parent.append(ul);
+}
+function assetTask(label, asset) {
+  if (!asset) return label + '：无';
+  return label + '：' + asset.path + '\nSHA-256: ' + asset.sha256 + '\n' +
+    (asset.svg !== null ? '完整 SVG：\n' + asset.svg : '完整位图 data URI（不能替代最终 SVG）：\n' + asset.dataUri);
+}
+function fullTask(p, note) {
+  return [
+    '请依据以下完整资料继续处理品牌标识，并保留离线评审页和真实截图。',
+    '项目：' + p.name + ' (' + p.id + ')',
+    '先调用当次环境能力发现/工具帮助，再按授权选择工具及模型；不得把复制任务当成已调用。',
+    '用户已给定/确认（仅来自 manifest.userDecisions；空白不代表批准）：\n' + (p.userDecisions.join('\n') || '未记录'),
+    '建议（未获用户确认）：\n' + (p.recommendations.join('\n') || '未记录'),
+    '本页补充（建议，待用户确认）：\n' + (note.trim() || '无'),
+    'Design tokens：\n' + JSON.stringify(p.tokens, null, 2),
+    'Token 来源（来源分类按记录，不代表已经核验）：\n' + JSON.stringify(p.tokenSources, null, 2),
+    '理念（按输入记录；未经说明不得当成用户决策或历史事实）：\n' + (p.rationale.join('\n') || '未记录'),
+    '生产来源（未联网验证）：\n' + (p.sources.map(s => s.label + ' — ' + s.value).join('\n') || '未记录'),
+    ...Object.entries(p.assets).map(([key, value]) => assetTask(key, value)),
+    '结构检查：\n' + JSON.stringify(Object.fromEntries(Object.entries(p.assets).filter(([,a]) => a).map(([k,a]) => [k,a.validation])), null, 2),
+    '验证边界：' + DATA.limitation,
+    '交付：token + 来源、理念、完整 SVG、review.html、manifest JSON；截图保存到交付目录 screenshots/。',
+    '真实渲染浅底 #FFFFFF / 深底 #0D1117 / 棋盘的 32px，查看 64/128px；若提供 iconAsset，另在宿主实际底色上核对 16/24px；说明实际测试范围、截图来源及未做项。',
+    '原始 manifest（相对路径以原 manifest 目录为根；上文已附实际素材）：\n' + JSON.stringify(DATA.manifest, null, 2)
+  ].join('\n\n');
+}
+async function copyTask(content, status, fallback) {
+  status.textContent = '正在复制…'; fallback.hidden = true;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try { await navigator.clipboard.writeText(content); status.textContent = '完整任务已复制。'; return; }
+      catch (_) { /* file:// or permissions may require the explicit fallback below. */ }
+    }
+    fallback.value = content; fallback.hidden = false; fallback.focus(); fallback.select();
+    if (!document.execCommand('copy')) throw new Error('copy returned false');
+    fallback.hidden = true; status.textContent = '完整任务已复制。';
+  } catch (_) {
+    fallback.value = content; fallback.hidden = false; fallback.focus(); fallback.select();
+    status.textContent = '自动复制失败。请在下方选中完整任务并手动复制；尚未复制成功。';
+  }
+}
+const downloadBar = document.getElementById('downloads');
+downloadBar.append(jsonDownload('下载完整 JSON（含内嵌素材）', 'brand-review-bundle.json', DATA),
+  jsonDownload('下载原 manifest', 'manifest.json', DATA.manifest));
+const views = [];
+DATA.projects.forEach((p, index) => {
+  const section = el('article', undefined, 'project'); section.append(el('h2', p.name));
+  section.append(el('p', 'ID: ' + p.id, 'muted'));
+  const grid = el('div', undefined, 'preview-grid');
+  const next = el('figure'), nextCanvas = el('div', undefined, 'canvas'); nextCanvas.dataset.bg = background;
+  const nextImg = el('img'); nextImg.alt = p.name + ' 新标识'; nextCanvas.append(nextImg);
+  const caption = el('figcaption'); next.append(nextCanvas, caption); grid.append(next);
+  let oldImg = null, oldCanvas = null;
+  if (p.assets.oldAsset) {
+    const old = el('figure'); oldCanvas = el('div', undefined, 'canvas'); oldCanvas.dataset.bg = background;
+    oldImg = el('img'); oldImg.alt = p.name + ' 旧标识'; oldImg.src = p.assets.oldAsset.dataUri;
+    oldCanvas.append(oldImg); old.append(oldCanvas, el('figcaption', '旧图（对照，不推定为已批准规范）')); grid.append(old);
+  } else grid.append(el('p', '首次设计 / 未提供旧图', 'muted'));
+  section.append(grid);
+  // the derived app icon: the slot a host renders at 16-24px, where a mark
+  // that only works large has to be simplified rather than detailed
+  if (p.assets.iconAsset) {
+    const iconRow = el('div', undefined, 'icon-row');
+    const iconFig = el('figure'); const iconCanvas = el('div', undefined, 'canvas icon-canvas');
+    iconCanvas.dataset.bg = background;
+    const iconImg = el('img'); iconImg.alt = p.name + ' 应用图标 24px'; iconCanvas.append(iconImg);
+    const iconSmall = el('img'); iconSmall.alt = p.name + ' 应用图标 16px'; iconCanvas.append(iconSmall);
+    const iconCaption = el('figcaption');
+    iconFig.append(iconCanvas, iconCaption); iconRow.append(iconFig);
+    const note = el('p', '派生图标固定以 24px / 16px 预览；深底使用深色变体（如有），其他背景使用主版本。图片内的 currentColor 不继承宿主文字颜色；实际槽位与宿主主题仍须单独验证。', 'muted');
+    section.append(el('h3', '派生应用图标'), iconRow, note);
+    views.push({p, nextImg, nextCanvas, caption, oldImg, oldCanvas, iconImg, iconSmall, iconCanvas, iconCaption});
+  } else {
+    views.push({p, nextImg, nextCanvas, caption, oldImg, oldCanvas});
+  }
+  section.append(el('h3', 'Design tokens 与来源'));
+  const tokens = el('div', undefined, 'tokens');
+  Object.entries(p.tokens).forEach(([key, value]) => {
+    const item = el('div', undefined, 'token');
+    const swatch = el('span', undefined, 'swatch');
+    // Only values validated as hex/transparent are applied as CSS.
+    if (/^#(?:[a-f\d]{3}|[a-f\d]{4}|[a-f\d]{6}|[a-f\d]{8})$/i.test(value) || value === 'transparent') swatch.style.backgroundColor = value;
+    item.append(swatch, el('strong', key + ': ' + value), el('p', p.tokenSources[key], 'evidence')); tokens.append(item);
+  }); section.append(tokens);
+  list(section, '设计理念（按输入记录）', p.rationale, '未记录理念');
+  list(section, '用户给定 / 已确认', p.userDecisions, '未记录用户决策；不能推定为批准');
+  list(section, '本次建议（待用户确认）', p.recommendations, '未记录建议');
+  section.append(el('h3', '生产资料与来源（构建时未联网核验）'));
+  const sources = el('ul');
+  p.sources.forEach(s => {
+    const li = el('li');
+    if (s.url) {const a = el('a', s.label + ' — ' + s.value); a.href = s.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; li.append(a);}
+    else li.textContent = s.label + ' — ' + s.value + '（manifest 相对路径，不随 HTML 分发）';
+    sources.append(li);
+  });
+  section.append(p.sources.length ? sources : el('p', '未记录来源，未核验', 'muted'));
+  const actions = el('div', undefined, 'actions');
+  Object.entries(p.assets).forEach(([key, asset]) => {
+    if (!asset) return;
+    const a = el('a', '下载 ' + key + ' · ' + asset.filename, 'download');
+    a.href = asset.dataUri; a.download = asset.filename; actions.append(a);
+    const detail = el('details'); detail.append(el('summary', key + ' · 结构检查 / 实际素材'));
+    detail.append(el('p', JSON.stringify(asset.validation)), el('p', asset.limitation, 'muted'));
+    if (asset.svg !== null) detail.append(el('pre', asset.svg));
+    section.append(detail);
+  });
+  section.append(actions);
+  const noteId = 'review-note-' + index;
+  const label = el('label', '评审补充（本次建议，待用户确认；刷新前请复制保存）'); label.htmlFor = noteId;
+  const note = el('textarea'); note.id = noteId;
+  const fallback = el('textarea', undefined, 'manual'); fallback.hidden = true; fallback.readOnly = true;
+  fallback.setAttribute('aria-label', '自动复制失败时的完整任务');
+  const status = el('p', '', 'status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+  section.append(label, note, button('复制完整任务（含实际素材）', () => copyTask(fullTask(p, note.value), status, fallback)), status, fallback);
+  root.append(section);
+});
+function refresh() {
+  views.forEach(v => {
+    const dark = background === 'dark' && v.p.assets.darkAsset;
+    const asset = dark || v.p.assets.asset;
+    v.nextImg.src = asset.dataUri; v.nextImg.width = v.nextImg.height = size;
+    v.nextImg.style.width = v.nextImg.style.height = size + 'px'; v.nextCanvas.dataset.bg = background;
+    v.caption.textContent = '新图 · ' + (dark ? '独立深底版' : '主版本') + ' · ' + size + 'px';
+    if (v.oldImg) {v.oldImg.style.width = v.oldImg.style.height = size + 'px'; v.oldCanvas.dataset.bg = background;}
+    if (v.iconImg) {
+      const icon = background === 'dark' && v.p.assets.iconDarkAsset || v.p.assets.iconAsset;
+      v.iconImg.src = v.iconSmall.src = icon.dataUri;
+      v.iconImg.style.width = v.iconImg.style.height = '24px';
+      v.iconSmall.style.width = v.iconSmall.style.height = '16px'; v.iconCanvas.dataset.bg = background;
+      v.iconCaption.textContent = '应用图标 · ' + (background === 'dark' && v.p.assets.iconDarkAsset ? '深色版' : '主版本') + ' · 24px / 16px（宿主实际底色另行核对）';
+    }
+  });
+  bgButtons.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.background === background)));
+  sizeButtons.forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.size) === size)));
+}
+bgButtons.forEach(b => b.addEventListener('click', () => {background = b.dataset.background; refresh();}));
+sizeButtons.forEach(b => b.addEventListener('click', () => {size = Number(b.dataset.size); refresh();}));
+refresh();
+</script></body></html>

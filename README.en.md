@@ -28,6 +28,11 @@
 
 ---
 
+## Ky desktop
+
+A standalone Tauri 2 app for local text clipboard history, versioned snippets, and the existing vault. The CLI remains available for agents and scripts. See [desktop build and storage notes](desktop/README.md). This is a local-build preview, not a published desktop release.
+
+
 ## 🎬 30-second demo
 
 <p align="center">

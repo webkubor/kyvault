@@ -17,3 +17,8 @@ build/
 
 # workbuddy 本地运行时记忆（不入库）
 .workbuddy-ai/
+
+# Desktop build outputs and installed tooling
+desktop/node_modules/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
