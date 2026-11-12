@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT Edit!
+
+[[permission]]
+identifier = "allow-discard-request"
+description = "Enables the discard_request command without any pre-configured scope."
+commands.allow = ["discard_request"]
+
+[[permission]]
+identifier = "deny-discard-request"
+description = "Denies the discard_request command without any pre-configured scope."
+commands.deny = ["discard_request"]

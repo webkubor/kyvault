@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT Edit!
+
+[[permission]]
+identifier = "allow-fulfill-request"
+description = "Enables the fulfill_request command without any pre-configured scope."
+commands.allow = ["fulfill_request"]
+
+[[permission]]
+identifier = "deny-fulfill-request"
+description = "Denies the fulfill_request command without any pre-configured scope."
+commands.deny = ["fulfill_request"]

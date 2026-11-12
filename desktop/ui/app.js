@@ -15,7 +15,12 @@ let epoch = 0;
 let reviewed = null;
 let busy = false;
 let captureErrorShown = false;
-const desktop = Boolean(window.__TAURI__?.core);
+// 运行时判定，而不是导入期定值：Tauri v2 的 withGlobalTauri 注入的是
+// window.__TAURI__，但 core 子对象是惰性填充的 —— 模块顶层 await 执行时
+// core 可能还没挂上。那时候把 desktop 定成 false，会让下面整块
+// `if (desktop)` 的弹框注册与轮询兜底全都不执行，Agent 的录入请求就永远
+// 不会弹框（2026-11-12 实测：请求 pending、后端读得到、前端不弹）。
+const desktop = Boolean(window.__TAURI__ && window.__TAURI__.core);
 
 function wipeForms() {
   $('#text-form').reset();
@@ -303,6 +308,23 @@ if (desktop) {
     pendingRequestId = id;
     tryOpenAgentRequest();
   });
+  // 无条件兜底：直接问后端要 inbox 里的 pending 请求并弹框。
+  // 不依赖事件、不依赖 pendingRequestId —— 事件在冷启动时可能早于监听器
+  // 就发出去（single-instance 只转一次 argv），而 pendingRequestId 只在
+  // 事件路径里赋值。两条路都断时，请求会一直 pending 却没人看见。
+  async function openFirstPendingRequest() {
+    if (state.locked || $('#agent-request').open) return;
+    try {
+      const items = await invoke('pending_requests');
+      if (!Array.isArray(items) || items.length === 0) return;
+      const hit = items[0];
+      if (hit && !$('#agent-request').open) openAgentRequest(hit);
+    } catch (e) {
+      // 静默吞掉会让「请求 pending 但没人看见」变得无法排查 —— 至少留个状态。
+      setStatus('status.reqPending');
+    }
+  }
+  openFirstPendingRequest();
   // 事件丢失兜底：轮询拿到 pending 请求就补弹（幂等 —— 弹窗开着就不重复开）。
   setInterval(async () => {
     if (state.locked || $('#agent-request').open || pendingRequestId) return;

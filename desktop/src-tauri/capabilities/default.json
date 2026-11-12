@@ -23,6 +23,9 @@
     "allow-unlock-app",
     "allow-clear-history",
     "allow-touch-activity",
-    "allow-set-ui-language"
+    "allow-set-ui-language",
+    "allow-pending-requests",
+    "allow-fulfill-request",
+    "allow-discard-request"
   ]
 }

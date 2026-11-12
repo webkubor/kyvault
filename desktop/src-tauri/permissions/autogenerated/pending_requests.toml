@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT Edit!
+
+[[permission]]
+identifier = "allow-pending-requests"
+description = "Enables the pending_requests command without any pre-configured scope."
+commands.allow = ["pending_requests"]
+
+[[permission]]
+identifier = "deny-pending-requests"
+description = "Denies the pending_requests command without any pre-configured scope."
+commands.deny = ["pending_requests"]
