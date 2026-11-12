@@ -257,17 +257,25 @@ $('#agent-request-discard').addEventListener('click', async () => {
 for (const id of ['agent-request']) $('#' + id).addEventListener('close', () => { agentRequest = null; });
 
 // Agent 通过 `ky request declare --open` 唤起 Ky.app 时，后端把 id 转成事件。
-if (desktop) {
-  listen('request-credential', async (event) => {
-    const id = typeof event.payload === 'string' ? event.payload : event.payload?.id;
-    if (!id || state.locked) return;
-    try {
-      const items = await invoke('pending_requests');
+// 锁定时先记下，解锁后兜底弹出 —— 不能因为“当时锁着”就丢掉 Agent 的请求。
+let pendingRequestId = null;
+function tryOpenAgentRequest() {
+  if (!pendingRequestId || state.locked) return;
+  const id = pendingRequestId;
+  invoke('pending_requests')
+    .then((items) => {
       const hit = items.find((r) => r.id === id);
-      if (hit) {
-        if (!$('#credential').open) openAgentRequest(hit);
-      }
-    } catch {}
+      if (hit && !$('#agent-request').open) openAgentRequest(hit);
+    })
+    .catch(() => {})
+    .finally(() => { pendingRequestId = null; });
+}
+if (desktop) {
+  listen('request-credential', (event) => {
+    const id = typeof event.payload === 'string' ? event.payload : event.payload?.id;
+    if (!id) return;
+    pendingRequestId = id;
+    tryOpenAgentRequest();
   });
 }
 
@@ -327,6 +335,8 @@ $('#unlock').addEventListener('click', async () => {
     setFormError('#unlock-error', null);
     await refresh();
     setStatus('status.ready');
+    // 锁定期间到达的 Agent 录入请求，现在补弹。
+    tryOpenAgentRequest();
   } catch { setFormError('#unlock-error', 'locked.err'); }
 });
 
