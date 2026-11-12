@@ -115,21 +115,42 @@ Rules enforced in `styles.css`:
 - `prefers-reduced-motion: reduce` collapses all animations/transitions to
   0.01ms and disables the press transform.
 
-## 6. Layout — compact, Raycast-style
+## 6. Layout — compact, one column
 
-- Window **820×580** (minimum **680×480**).
-- Narrow **148px** sidebar: History / Vault / Snippets / Settings, plus a lock
-  affordance and a local-only note.
-- **Search bar** (Cmd/Ctrl+F) with capture-clipboard affordance.
-- Split main: searchable **list** + **preview**.
-- **Collapsible toolbar**: the chevron collapses the view-title region and thins the
-  search bar; the state persists in `localStorage['ky.toolbarCollapsed']`.
+- Window **860×620** (minimum **680×480**).
+- Narrow **176px** sidebar: History / Vault / Snippets / Settings, plus a lock
+  affordance. Only the **active** item is tinted.
+- **One content column.** The list fills it; selecting an entry opens a
+  **detail sheet** that slides over the list (`position:absolute` inside
+  `main`, `inset:0`). There is no permanent preview pane — at 680px a
+  permanent third column left the list with no room to breathe.
+- **Search bar** (Cmd/Ctrl+F): one field with a leading glyph. The earlier
+  revision put a "搜索" label inline, a ⌘F hint on the right and a capture
+  button in the same row, which read as three competing things.
+- **Collapsible toolbar**: the chevron collapses the view-title region and
+  thins the search bar; the state persists in `localStorage['ky.toolbarCollapsed']`.
   The collapse control is a **sibling** of the collapsible region (see §6.1),
   never inside it, so the toolbar can always be re-expanded.
 - Settings is a scroll region (not a modal): monitoring opt-in, language,
   redaction note, footprint, privacy, menu-bar recents, clear history.
 
-## 6.1 Collapsible toolbar — structural rule (regression fix)
+### 6.0 Restraint rules (v3)
+
+- **One accent.** Mint is used only for the active nav item, the primary
+  button and the "redacted" badge. Nothing else is coloured.
+- **Two body type sizes.** 13px for running text, 12px for chrome. Larger
+  sizes are reserved for real headings (20px) and dialog titles (15px).
+  Running text is never given a heading size.
+- **Labels sit above their fields.** A field never carries a leading inline
+  label.
+- **Density over decoration.** List rows are title + meta line + optional
+  one-line subtitle. Nothing is boxed that does not need to be.
+- **The active nav item is the only tinted one.** The selector is
+  `.nav-item[aria-current="page"]`; `aria-current="false"` must NOT match —
+  an earlier revision used a bare `[aria-current]` attribute selector, which
+  matched every item and lit up the whole sidebar.
+
+### 6.1 Collapsible toolbar — structural rule (regression fix)
 
 **Rule: a control that collapses a region must never live inside that region.**
 

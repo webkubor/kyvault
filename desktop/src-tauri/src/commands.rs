@@ -30,7 +30,9 @@ impl Default for Prefs {
     fn default() -> Self {
         Self {
             lang: "zh-CN".into(),
-            monitoring: false,
+            // Clipboard history is the product. It is on by default and the
+            // user turns it off explicitly in Settings.
+            monitoring: true,
         }
     }
 }
@@ -85,7 +87,8 @@ impl Default for Session {
     fn default() -> Self {
         Self {
             locked: false,
-            monitoring: false,
+            // Clipboard history is the product: capture is on by default.
+            monitoring: true,
             last_activity: Instant::now(),
             clear_at: None,
             recent_secret_fingerprints: HashSet::new(),
@@ -354,7 +357,9 @@ pub fn lock(app: &tauri::AppHandle) -> Result<()> {
     let state = app.state::<DesktopState>();
     let mut session = state.session.lock().map_err(|_| "会话不可用")?;
     session.locked = true;
-    session.monitoring = false;
+    // Locking hides content; it must not silently switch off clipboard
+    // history. The capture loop already skips while locked, and the user's
+    // choice stays in prefs.json so unlocking restores it.
     app.emit("app-locked", ())
         .map_err(|_| "窗口通知失败".into())
 }
@@ -367,6 +372,9 @@ pub fn unlock_app(state: State<DesktopState>) -> Result<Snapshot> {
     let mut session = state.session.lock().map_err(|_| "会话不可用")?;
     session.locked = false;
     session.last_activity = Instant::now();
+    // Re-read the persisted choice so unlocking never leaves capture in a
+    // state the user cannot see in Settings.
+    session.monitoring = load_prefs(&state).monitoring;
     read_snapshot(&state, &session)
 }
 #[tauri::command]
@@ -415,6 +423,14 @@ mod tests {
         // A failed copy/clear leaves the independent suppression set intact.
         session.clear_at = None;
         assert!(session.is_sensitive("synthetic value"));
+    }
+
+    #[test]
+    fn clipboard_history_is_on_by_default() {
+        // The product is clipboard history; a fresh install must capture
+        // without the user hunting for a switch.
+        assert!(Prefs::default().monitoring);
+        assert!(Session::default().monitoring);
     }
 }
 

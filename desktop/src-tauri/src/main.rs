@@ -98,8 +98,10 @@ fn main() {
                     if !session.locked
                         && session.last_activity.elapsed() >= Duration::from_secs(300)
                     {
+                        // The idle lock hides content only. Clipboard history
+                        // stays on: the capture loop skips while locked, and
+                        // the user's choice survives in prefs.json.
                         session.locked = true;
-                        session.monitoring = false;
                         drop(session);
                         let _ = handle.emit("app-locked", ());
                         let _ = tray::refresh(&handle);

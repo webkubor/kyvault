@@ -8,7 +8,7 @@
 // copy survives anywhere.
 
 const { state, $, $$, setStatus, setError, setFormError, setConfirmText, invoke, listen, isComposing, readPref, writePref } = await import('./core.js');
-const { setView, renderList, renderPreview, renderNoBridge, relocalizeDynamic } = await import('./render.js');
+const { setView, renderList, renderDetail, renderNoBridge, relocalizeDynamic, closeDetail } = await import('./render.js');
 const { t, applyLanguage, syncLanguageFromSnapshot, currentLang, LANG_KEY, onLanguageChanged } = await import('./lang.js');
 
 let epoch = 0;
@@ -33,7 +33,8 @@ function lockView() {
   state.filter = '';
   $('#search').value = '';
   $('#entries').replaceChildren();
-  $('#preview').replaceChildren();
+  $('#detail').replaceChildren();
+  $('#detail').hidden = true;
   wipeForms();
   $$('dialog').forEach((d) => { if (d.open) d.close(); });
   $('#locked').showModal();
@@ -56,10 +57,9 @@ async function refresh() {
 function renderResult(snapshot) {
   state.snapshot = snapshot;
   $('#monitoring').checked = Boolean(snapshot.monitoring);
-  $('#monitor-state').textContent = snapshot.monitoring ? t('monitor.on') : t('monitor.off');
   $('#language').value = currentLang();
   renderList();
-  renderPreview();
+  renderDetail();
   if (!state.locked) setStatus('status.ready');
 }
 async function action(command, args, messageKey, errorTarget) {
@@ -162,10 +162,12 @@ $('#secret-form').addEventListener('submit', async (e) => {
     if (await action('save_secret', { reference, value }, 'status.credSaved', '#secret-error')) $('#credential').close();
   } catch { setFormError('#secret-error', 'cred.err.check'); }
 });
-$('#preview').addEventListener('click', async (e) => {
+$('#detail').addEventListener('click', async (e) => {
   const command = e.target.closest('[data-action]')?.dataset.action;
+  if (!command) return;
+  if (command === 'close-detail') return closeDetail();
   const entry = state.entry;
-  if (!command || !entry || state.locked) return;
+  if (!entry || state.locked) return;
   const { id, reference } = entry;
   if (command === 'save-as-snippet' || command === 'edit-snippet') return openEditor(entry);
   if (command === 'copy-entry') return action('copy_entry', { id }, 'status.entryCopied');
@@ -248,6 +250,9 @@ document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && !document.querySelector('dialog[open]') && state.view !== 'settings') {
     e.preventDefault();
     $('#search').focus();
+  }
+  if (e.key === 'Escape' && state.selectedId && !document.querySelector('dialog[open]')) {
+    closeDetail();
   }
 });
 

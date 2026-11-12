@@ -1,5 +1,8 @@
-// List + preview rendering for the Ky desktop UI. All user-visible strings
+// List + detail rendering for the Ky desktop UI. All user-visible strings
 // come from the i18n dictionary via t().
+//
+// Layout: one column. The list fills the column; selecting an entry opens a
+// detail sheet that slides over it. There is no permanent second pane.
 
 import { state, $, $$, el, showEl, invoke, formatWhen, firstLine, setError, relocalizeMessages } from './core.js';
 import { t } from './lang.js';
@@ -11,12 +14,11 @@ export const VIEW_META = {
   settings: 'view.settings',
 };
 
-// The view heading + description derive from the view, so they can be
-// re-rendered whenever the language changes.
+// The view heading derives from the view, so it can be re-rendered whenever
+// the language changes.
 export function renderViewHeading() {
   const key = VIEW_META[state.view] || 'view.history';
   $('#view-title').textContent = t(`${key}.title`);
-  $('#view-description').textContent = t(`${key}.desc`);
 }
 
 export function renderAddLabel() {
@@ -28,9 +30,9 @@ export function renderAddLabel() {
 
 export function renderMonitorState() {
   const on = Boolean(state.snapshot && state.snapshot.monitoring);
-  $('#monitor-state').textContent = on ? t('monitor.on') : t('monitor.off');
   const box = $('#monitoring');
   if (box && state.snapshot) box.checked = on;
+  $('#capture').hidden = state.view !== 'history';
 }
 
 // Re-render every dynamic surface that can carry language-dependent text.
@@ -40,7 +42,7 @@ export function relocalizeDynamic() {
   renderAddLabel();
   renderMonitorState();
   renderList();
-  renderPreview();
+  renderDetail();
   const editor = $('#editor');
   if (editor.open) {
     $('#text-submit').textContent = $('#redaction-preview').hidden
@@ -93,11 +95,6 @@ function matched(entries) {
   });
 }
 
-function setEmptyState(title, copy) {
-  $('#empty-title').textContent = title;
-  $('#empty-copy').textContent = copy;
-}
-
 function emptyTitle() {
   switch (state.view) {
     case 'history': return t('empty.history.title');
@@ -121,23 +118,21 @@ export function renderList() {
   const entries = currentEntries();
   const filtered = matched(entries);
   list.replaceChildren();
-  $('#count').textContent = entries.length;
-  $('#list-label').textContent = isSecretView() ? t('list.label.refs') : t('list.label.text');
-
-  const hasAny = entries.length > 0;
-  const hasMatch = filtered.length > 0;
-  showEl($('#empty'), !hasMatch);
+  showEl($('#empty'), filtered.length === 0);
 
   if (!state.snapshot) {
-    setEmptyState(t('loading.title'), t('loading.copy'));
+    $('#empty-title').textContent = t('loading.title');
+    $('#empty-copy').textContent = t('loading.copy');
     return;
   }
-  if (!hasAny) {
-    setEmptyState(emptyTitle(), emptyCopy());
+  if (entries.length === 0) {
+    $('#empty-title').textContent = emptyTitle();
+    $('#empty-copy').textContent = emptyCopy();
     return;
   }
-  if (!hasMatch) {
-    setEmptyState(t('empty.nomatch.title'), t('empty.nomatch.copy'));
+  if (filtered.length === 0) {
+    $('#empty-title').textContent = t('empty.nomatch.title');
+    $('#empty-copy').textContent = t('empty.nomatch.copy');
     return;
   }
   filtered.forEach((entry) => list.appendChild(renderEntry(entry)));
@@ -159,7 +154,8 @@ function renderEntry(entry) {
     if (entry.redacted) meta.appendChild(el('span', 'badge', t('badge.redacted')));
     if (entry.snippet) meta.appendChild(el('span', 'badge', `v${entry.version || 1}`));
     btn.appendChild(meta);
-    btn.appendChild(el('span', 'entry-subtitle', entrySubtitle(entry)));
+    const sub = entrySubtitle(entry);
+    if (sub && sub !== entryTitle(entry)) btn.appendChild(el('span', 'entry-subtitle', sub));
   }
   btn.dataset.entryKey = entryKey(entry);
   btn.setAttribute('aria-pressed', String(entryKey(entry) === state.selectedId));
@@ -170,11 +166,11 @@ function renderEntry(entry) {
 export function setView(view) {
   state.view = view;
   state.selectedId = null;
+  state.entry = null;
   state.filter = '';
   $('#search').value = '';
   showEl($('#add'), view !== 'settings');
-  showEl($('#capture'), view === 'history');
-  showEl($('#search'), view !== 'settings');
+  showEl($('#search-row'), view !== 'settings');
   showEl($('#library'), view !== 'settings');
   showEl($('#settings'), view === 'settings');
   $$('.nav-item').forEach((b) =>
@@ -182,17 +178,16 @@ export function setView(view) {
   );
   renderViewHeading();
   renderAddLabel();
+  renderMonitorState();
   renderList();
-  renderPreview();
+  renderDetail();
 }
 
 function select(entry) {
   state.selectedId = entryKey(entry);
-  $$('.entry').forEach((b) =>
-    b.setAttribute('aria-pressed', String(b.dataset.entryKey === state.selectedId))
-  );
+  state.entry = entry;
   renderList();
-  renderPreview();
+  renderDetail();
 }
 
 function selectedEntry() {
@@ -200,40 +195,70 @@ function selectedEntry() {
   return currentEntries().find((e) => entryKey(e) === state.selectedId) || null;
 }
 
-/* ---------- preview ---------- */
+export function closeDetail() {
+  state.selectedId = null;
+  state.entry = null;
+  renderList();
+  renderDetail();
+}
 
-export function renderPreview() {
-  const pane = $('#preview');
-  if (state.view === 'settings' || !state.selectedId) {
-    pane.replaceChildren();
-    renderPlaceholder();
-    return;
-  }
+/* ---------- detail sheet ---------- */
+
+export function renderDetail() {
+  const pane = $('#detail');
   const entry = selectedEntry();
-  if (!entry) {
+  if (state.view === 'settings' || !entry) {
     pane.replaceChildren();
-    renderPlaceholder();
+    showEl(pane, false);
     return;
   }
-  state.entry = entry;
-  if (isSecretView()) {
-    renderSecretPreview(entry);
-    return;
-  }
-
   pane.replaceChildren();
-  const heading = el('h2', 'entry-title', entryTitle(entry));
-  heading.style.whiteSpace = 'normal';
-  pane.appendChild(heading);
 
-  const meta = el('p', 'entry-subtitle', t('preview.saved', { time: formatWhen(entry.created_at) }));
-  pane.appendChild(meta);
+  const head = el('div', 'detail-head');
+  const back = el('button', 'icon');
+  back.type = 'button';
+  back.dataset.action = 'close-detail';
+  back.setAttribute('aria-label', t('action.back'));
+  back.appendChild(el('span', 'back-icon', ''));
+  head.appendChild(back);
+  const title = el('h2', null, isSecretView() ? entry.reference : entryTitle(entry));
+  head.appendChild(title);
+  pane.appendChild(head);
 
-  const code = el('pre', null, '…');
-  pane.appendChild(code);
+  if (isSecretView()) {
+    pane.appendChild(el('p', 'detail-note', t('preview.secret.note')));
+    pane.appendChild(secretActions(entry));
+  } else {
+    const meta = el('p', 'detail-note', t('preview.saved', { time: formatWhen(entry.created_at) }));
+    pane.appendChild(meta);
+    const body = el('div', 'detail-body', '…');
+    pane.appendChild(body);
+    pane.appendChild(entryActions(entry));
+    loadDetailText(entry, body);
+  }
+  showEl(pane, true);
+}
 
+function secretActions(entry) {
   const actions = el('div', 'actions');
-  const copyBtn = el('button', '', t('action.copy'));
+  const copyRef = el('button', '', t('action.copyReference'));
+  copyRef.type = 'button';
+  copyRef.dataset.action = 'copy-reference';
+  actions.appendChild(copyRef);
+  const copyVal = el('button', '', t('action.copySecretValue'));
+  copyVal.type = 'button';
+  copyVal.dataset.action = 'copy-secret';
+  actions.appendChild(copyVal);
+  const remove = el('button', 'quiet danger', t('action.remove'));
+  remove.type = 'button';
+  remove.dataset.action = 'delete-secret';
+  actions.appendChild(remove);
+  return actions;
+}
+
+function entryActions(entry) {
+  const actions = el('div', 'actions');
+  const copyBtn = el('button', 'primary', t('action.copy'));
   copyBtn.type = 'button';
   copyBtn.dataset.action = 'copy-entry';
   actions.appendChild(copyBtn);
@@ -257,65 +282,17 @@ export function renderPreview() {
   removeBtn.type = 'button';
   removeBtn.dataset.action = 'delete-entry';
   actions.appendChild(removeBtn);
-  pane.appendChild(actions);
-
-  showEl($('#add'), false);
-  loadPreviewText(entry, code);
+  return actions;
 }
 
-function renderSecretPreview(entry) {
-  const pane = $('#preview');
-  pane.replaceChildren();
-  const heading = el('h2', null, entry.reference);
-  heading.style.overflowWrap = 'anywhere';
-  pane.appendChild(heading);
-
-  const meta = el('p', 'entry-subtitle', t('preview.credMeta', { platform: entry.platform || 'vault' }));
-  pane.appendChild(meta);
-
-  pane.appendChild(el('p', 'muted', t('preview.secret.note')));
-
-  const actions = el('div', 'actions');
-  const copyRef = el('button', '', t('action.copyReference'));
-  copyRef.type = 'button';
-  copyRef.dataset.action = 'copy-reference';
-  actions.appendChild(copyRef);
-  const copyVal = el('button', '', t('action.copySecretValue'));
-  copyVal.type = 'button';
-  copyVal.dataset.action = 'copy-secret';
-  actions.appendChild(copyVal);
-  const remove = el('button', 'quiet danger', t('action.remove'));
-  remove.type = 'button';
-  remove.dataset.action = 'delete-secret';
-  actions.appendChild(remove);
-  pane.appendChild(actions);
-
-  showEl($('#add'), false);
-}
-
-async function loadPreviewText(entry, code) {
+async function loadDetailText(entry, body) {
   try {
     const res = await invoke('preview_text', { text: entry.text });
-    code.textContent = res && typeof res.text === 'string' ? res.text : entry.text;
-  } catch (err) {
-    if (err && err.message === 'no-bridge') {
-      code.textContent = entry.text;
-      return;
-    }
-    code.textContent = entry.text;
+    body.textContent = res && typeof res.text === 'string' ? res.text : entry.text;
+  } catch {
+    body.textContent = entry.text;
     setError('err.generic');
   }
-}
-
-function renderPlaceholder() {
-  const pane = $('#preview');
-  const box = el('div', 'preview-placeholder');
-  box.appendChild(el('span', 'eyebrow', t('ph.eyebrow')));
-  const body = el('p');
-  body.append(t('ph.line1'), document.createElement('br'), t('ph.line2'));
-  box.appendChild(body);
-  box.appendChild(el('span', '', isSecretView() ? t('ph.hint.vault') : t('ph.hint.text')));
-  pane.replaceChildren(box);
 }
 
 export function renderNoBridge() {
@@ -323,10 +300,4 @@ export function renderNoBridge() {
   renderList();
   $('#empty-title').textContent = t('desktopOnly.title');
   $('#empty-copy').textContent = t('desktopOnly.copy');
-  const pane = $('#preview');
-  const box = el('div', 'preview-placeholder');
-  box.appendChild(el('span', 'eyebrow', 'KY'));
-  box.appendChild(el('p', null, t('desktopOnly.title')));
-  box.appendChild(el('span', '', t('desktopOnly.copy')));
-  pane.replaceChildren(box);
 }
