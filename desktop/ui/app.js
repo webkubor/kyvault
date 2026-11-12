@@ -235,7 +235,13 @@ function openAgentRequest(request) {
 }
 $('#agent-request-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (busy || state.locked || !agentRequest) return;
+  // 锁定/忙碌时的录入尝试必须给出反馈 —— 静默吞掉会让人以为「存不进去」。
+  if (!agentRequest) return;
+  if (state.locked) {
+    setFormError('#agent-request-error', 'req.err.locked');
+    return;
+  }
+  if (busy) return;
   const value = $('#agent-request-value').value;
   setFormError('#agent-request-error', null);
   busy = true;
@@ -257,9 +263,18 @@ $('#agent-request-discard').addEventListener('click', async () => {
   agentRequest = null;
 });
 for (const id of ['agent-request']) $('#' + id).addEventListener('close', () => { agentRequest = null; });
+// 录入弹窗打开期间，人在粘贴框里的每个键都算「活动」：后端 5 分钟空闲
+// 自动锁定读的是会话活动时间，录入是安全敏感操作，不该被空闲锁打断。
+// 这里通过一个轻量的已解锁态命令（snapshot）顺路续租，不引入新命令面。
+$('#agent-request-value').addEventListener('input', () => {
+  if (state.locked || !desktop) return;
+  invoke('snapshot').catch(() => {});
+});
 
 // Agent 通过 `ky request declare --open` 唤起 Ky.app 时，后端把 id 转成事件。
 // 锁定时先记下，解锁后兜底弹出 —— 不能因为“当时锁着”就丢掉 Agent 的请求。
+// 事件可能在监听器就绪前发出（冷启动只发一次），所以再加轮询兜底：
+// 每 5 秒查一次 inbox，发现 pending 请求且弹窗没开就补弹。
 let pendingRequestId = null;
 function tryOpenAgentRequest() {
   if (!pendingRequestId || state.locked) return;
@@ -279,6 +294,15 @@ if (desktop) {
     pendingRequestId = id;
     tryOpenAgentRequest();
   });
+  // 事件丢失兜底：轮询拿到 pending 请求就补弹（幂等 —— 弹窗开着就不重复开）。
+  setInterval(async () => {
+    if (state.locked || $('#agent-request').open || pendingRequestId) return;
+    try {
+      const items = await invoke('pending_requests');
+      const open = items.find((r) => !$('#agent-request').open);
+      if (open) openAgentRequest(open);
+    } catch {}
+  }, 5000);
 }
 
 $('#detail').addEventListener('click', async (e) => {
