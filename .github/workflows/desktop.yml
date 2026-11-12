@@ -1,0 +1,35 @@
+name: Desktop
+on:
+  push:
+    branches: [main]
+    paths: ['desktop/**', 'rust/**', '.github/workflows/desktop.yml']
+  pull_request:
+    paths: ['desktop/**', 'rust/**', '.github/workflows/desktop.yml']
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rust
+            desktop/src-tauri
+      - run: npm ci && npm run check
+        working-directory: desktop
+      - run: cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+        working-directory: desktop/src-tauri
+      - run: cargo test --all-features
+        working-directory: rust
+      - run: npm run build -- --bundles app
+        working-directory: desktop

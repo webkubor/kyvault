@@ -1,0 +1,28 @@
+{
+  "identifier": "main",
+  "description": "Only the local Ky window can use desktop commands and receive events.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-snapshot",
+    "allow-capture-clipboard",
+    "allow-set-monitoring",
+    "allow-preview-text",
+    "allow-save-text",
+    "allow-delete-entry",
+    "allow-restore-entry",
+    "allow-copy-entry",
+    "allow-copy-reference",
+    "allow-copy-secret",
+    "allow-save-secret",
+    "allow-delete-secret",
+    "allow-lock-app",
+    "allow-unlock-app",
+    "allow-clear-history",
+    "allow-touch-activity",
+    "allow-set-ui-language"
+  ]
+}

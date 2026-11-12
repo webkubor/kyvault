@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Ky</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <header class="brand"><div class="brand-mark"><img src="logo.png" alt="Ky" width="28" height="28"></div><span class="wordmark">Ky<span class="brand-dot">.</span></span><span class="eyebrow" data-i18n="brand.eyebrow"></span></header>
+    <nav aria-label="Library">
+      <button class="nav-item" data-view="history" aria-current="page"><span aria-hidden="true">↶</span><span data-i18n="nav.history"></span></button>
+      <button class="nav-item" data-view="vault"><span aria-hidden="true">◇</span><span data-i18n="nav.vault"></span></button>
+      <button class="nav-item" data-view="snippets"><span aria-hidden="true">⌘</span><span data-i18n="nav.snippets"></span></button>
+      <button class="nav-item settings-nav" data-view="settings"><span aria-hidden="true">⚙</span><span data-i18n="nav.settings"></span></button>
+    </nav>
+    <div class="sidebar-bottom"><span class="local-note"><span class="dot"></span> <span data-i18n="local.note"></span></span><button id="lock" class="quiet"><span data-i18n="action.lock"></span> <span aria-hidden="true">↗</span></button></div>
+  </aside>
+  <main>
+    <header class="toolbar" id="toolbar">
+      <div class="toolbar-title" id="toolbar-title"><h1 id="view-title"></h1><p id="view-description"></p></div>
+      <div class="toolbar-right">
+        <button id="add" class="primary"></button>
+        <button id="collapse-toolbar" class="quiet icon" data-i18n-aria="toolbar.collapse" aria-expanded="true"><span aria-hidden="true">⌃</span></button>
+      </div>
+    </header>
+    <div class="search-row" id="search-row"><label for="search" class="search-label" data-i18n="search.label"></label><input id="search" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="search.placeholder"><kbd>⌘ F</kbd><button id="capture" class="quiet" data-i18n="action.capture"></button></div>
+    <div id="error" class="error" role="alert" hidden></div>
+    <section id="library" class="library">
+      <div class="list-pane">
+        <div class="section-label"><span id="list-label"></span><span id="count">0</span></div>
+        <ul id="entries" role="list"></ul>
+        <div id="empty" class="empty"><span class="empty-symbol" aria-hidden="true">↶</span><h2 id="empty-title"></h2><p id="empty-copy"></p></div>
+      </div>
+      <section id="preview" class="preview" aria-label="Selected item"></section>
+    </section>
+    <section id="settings" class="settings" hidden>
+      <h2 data-i18n="settings.headline"></h2><p class="muted" data-i18n="settings.lede"></p>
+      <div class="setting-row"><div><label for="monitoring" data-i18n="settings.monitoring.label"></label><p data-i18n="settings.monitoring.desc"></p></div><input id="monitoring" type="checkbox"></div>
+      <div class="setting-row"><div><label data-i18n="settings.language.label"></label><p data-i18n="settings.language.desc"></p></div><select id="language" data-i18n-aria="settings.language.aria"><option value="zh-CN">中文</option><option value="en">English</option></select></div>
+      <div class="setting-row"><div><h3 data-i18n="settings.redaction.title"></h3><p data-i18n="settings.redaction.desc"></p></div><span class="badge" data-i18n="settings.badge.always"></span></div>
+      <div class="setting-row"><div><h3 data-i18n="settings.footprint.title"></h3><p data-i18n="settings.footprint.desc"></p></div></div>
+      <div class="setting-row"><div><h3 data-i18n="settings.privacy.title"></h3><p data-i18n="settings.privacy.desc"></p></div></div>
+      <div class="setting-row"><div><h3 data-i18n="settings.tray.title"></h3><p data-i18n="settings.tray.desc"></p></div></div>
+      <div class="setting-row"><div><h3 data-i18n="settings.clear.title"></h3><p data-i18n="settings.clear.desc"></p></div><button id="clear" class="danger" data-i18n="action.clear"></button></div>
+    </section>
+    <footer><span id="status" role="status"></span><span id="monitor-state"></span></footer>
+  </main>
+
+  <dialog id="editor" aria-labelledby="editor-title">
+    <form id="text-form">
+      <div class="dialog-heading"><div><span class="eyebrow" data-i18n="editor.eyebrow"></span><h2 id="editor-title" data-i18n="editor.title"></h2></div><button type="button" class="quiet close" data-i18n-aria="dialog.close" aria-label="">×</button></div>
+      <label for="snippet-name" data-i18n="editor.snippet.label"></label>
+      <input id="snippet-name" maxlength="120" autocomplete="off">
+      <p class="hint" data-i18n="editor.snippet.hint"></p>
+      <label for="text-value" data-i18n="editor.text.label"></label>
+      <textarea id="text-value" rows="6" required spellcheck="false" autocomplete="off"></textarea>
+      <div id="redaction-preview" hidden><span class="eyebrow" data-i18n="editor.review.eyebrow"></span><pre id="redaction-text"></pre><p id="redaction-note" class="hint"></p></div>
+      <p id="text-error" class="error" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" class="quiet close" data-i18n="action.cancel"></button><button id="text-submit" class="primary" type="submit" data-i18n="action.review"></button></div>
+    </form>
+  </dialog>
+
+  <dialog id="credential" aria-labelledby="credential-title">
+    <form id="secret-form" autocomplete="off">
+      <div class="dialog-heading"><div><span class="eyebrow" data-i18n="cred.eyebrow"></span><h2 id="credential-title" data-i18n="cred.title"></h2></div><button type="button" class="quiet close" data-i18n-aria="dialog.close" aria-label="">×</button></div>
+      <label for="secret-reference" data-i18n="cred.ref.label"></label>
+      <p class="hint" id="reference-hint" data-i18n="cred.ref.hint"></p>
+      <input id="secret-reference" required placeholder="github/work" aria-describedby="reference-hint" autocomplete="off" spellcheck="false">
+      <label for="secret-value" data-i18n="cred.value.label"></label>
+      <input id="secret-value" type="password" required autocomplete="new-password" spellcheck="false">
+      <p class="hint" data-i18n="cred.value.hint"></p>
+      <p id="secret-error" class="error" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" class="quiet close" data-i18n="action.cancel"></button><button class="primary" type="submit" data-i18n="action.saveCredential"></button></div>
+    </form>
+  </dialog>
+
+  <dialog id="confirm" aria-labelledby="confirm-title"><h2 id="confirm-title"></h2><p id="confirm-copy"></p><div class="dialog-actions"><button id="confirm-cancel" autofocus data-i18n="action.cancel"></button><button id="confirm-action" class="primary"></button></div></dialog>
+
+  <dialog id="locked" aria-labelledby="locked-title"><span class="eyebrow" data-i18n="locked.eyebrow"></span><h2 id="locked-title" data-i18n="locked.title"></h2><p data-i18n="locked.copy"></p><p id="unlock-error" class="error" role="alert" hidden></p><button id="unlock" class="primary" data-i18n="action.unlock"></button></dialog>
+</body>
+</html>

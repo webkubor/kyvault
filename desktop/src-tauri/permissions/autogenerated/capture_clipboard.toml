@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-capture-clipboard"
+description = "Enables the capture_clipboard command without any pre-configured scope."
+commands.allow = ["capture_clipboard"]
+
+[[permission]]
+identifier = "deny-capture-clipboard"
+description = "Denies the capture_clipboard command without any pre-configured scope."
+commands.deny = ["capture_clipboard"]

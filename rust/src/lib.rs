@@ -12,6 +12,7 @@ pub mod connect;
 pub mod credui;
 pub mod crypto;
 pub mod d1;
+pub mod desktop;
 pub mod doctor;
 pub mod gitlab;
 pub mod glab;

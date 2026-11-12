@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-restore-entry"
+description = "Enables the restore_entry command without any pre-configured scope."
+commands.allow = ["restore_entry"]
+
+[[permission]]
+identifier = "deny-restore-entry"
+description = "Denies the restore_entry command without any pre-configured scope."
+commands.deny = ["restore_entry"]

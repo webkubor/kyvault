@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-preview-text"
+description = "Enables the preview_text command without any pre-configured scope."
+commands.allow = ["preview_text"]
+
+[[permission]]
+identifier = "deny-preview-text"
+description = "Denies the preview_text command without any pre-configured scope."
+commands.deny = ["preview_text"]

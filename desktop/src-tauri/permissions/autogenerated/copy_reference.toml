@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-copy-reference"
+description = "Enables the copy_reference command without any pre-configured scope."
+commands.allow = ["copy_reference"]
+
+[[permission]]
+identifier = "deny-copy-reference"
+description = "Denies the copy_reference command without any pre-configured scope."
+commands.deny = ["copy_reference"]

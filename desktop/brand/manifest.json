@@ -1,0 +1,46 @@
+{
+  "projects": [
+    {
+      "id": "ky",
+      "name": "Ky \u00b7 desktop icon",
+      "sources": [
+        {
+          "url": "https://github.com/webkubor/kyvault/blob/main/docs/index.html#L53",
+          "label": "Existing K brand mark"
+        },
+        {
+          "url": "https://github.com/webkubor/kyvault/blob/main/docs/styles.css#L2",
+          "label": "Existing mint and charcoal tokens"
+        }
+      ],
+      "tokens": {
+        "primary": "#66f0b5",
+        "accent": "#080d10",
+        "onLight": "#080d10",
+        "onDark": "#66f0b5",
+        "background": "transparent"
+      },
+      "tokenSources": {
+        "primary": "Project existing --green docs/styles.css:2",
+        "accent": "Project existing --bg docs/styles.css:2",
+        "onLight": "Existing charcoal repurposed for light-background mark",
+        "onDark": "Existing mint brand foreground",
+        "background": "Transparent portable symbol; desktop icon adds charcoal tile"
+      },
+      "rationale": [
+        "New interpretation: the existing K becomes a cut key: its lower diagonal has two teeth, linking Ky to secret retrieval by alias.",
+        "The K silhouette retains the project initial; stepped lower arm is the memory cue. This is a local desktop derivative, not a claim of historical symbolism."
+      ],
+      "userDecisions": [
+        "Preserve existing Ky brand where viable; authorized redesign if existing asset missing or unsuitable."
+      ],
+      "recommendations": [
+        "Use the charcoal tile icon in Dock and UI; use bare mark on editorial surfaces. New path shape remains a proposal, not user-approved brand standard."
+      ],
+      "asset": "mark.svg",
+      "darkAsset": "mark-dark.svg",
+      "iconAsset": "icon.svg",
+      "oldAsset": null
+    }
+  ]
+}

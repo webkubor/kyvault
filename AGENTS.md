@@ -25,3 +25,10 @@ cd rust && cargo test     # 测试
 - **任何改动不得把明文密钥打进日志、错误信息或 stdout**；解密后的值只在注入目标进程时短暂存在。
 - 加密实现（算法、nonce 生成、KDF）的任何改动都必须带测试与迁移说明，不允许静默换格式。
 - 本仓库自己不用密钥做 CI 测试 —— 测试一律用 fixture 假值。
+
+## 桌面界面
+
+- 修改 `desktop/ui/` 前先读根目录 `DESIGN.md`，颜色、间距与主题仅使用已有 tokens。
+- 桌面壳在 `desktop/src-tauri/`；共享数据逻辑在 `rust/src/desktop.rs`，不得在前端保存密钥或历史。
+- 使用隔离测试目录，通过 `KYVAULT_STORE_DIR` / `KY_DESKTOP_DATA_DIR` 指定，禁止测试读取真实用户密钥库或剪贴板。
+- 桌面验证：`cd desktop && npm ci && npm run check && npm run build`；`cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test`。

@@ -1,0 +1,288 @@
+/* Ky desktop UI — design tokens, vibrancy layers, motion.
+   System theme follows prefers-color-scheme. Frosted glass is progressive:
+   when the WebView supports backdrop-filter + the window is set transparent,
+   panels layer translucent green tints over the desktop; otherwise an opaque
+   fallback background is applied so text never sits on unblurred mush.
+   Motion respects prefers-reduced-motion. */
+
+:root {
+  color-scheme: light dark;
+
+  /* Motion tokens (single source for consistency). */
+  --ease: cubic-bezier(.22, .61, .36, 1);
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --dur-fast: 150ms;
+  --dur-med: 200ms;
+  --dur-slow: 260ms;
+
+  --bg: #0d1410;
+  --sidebar: #121b15;
+  --surface: #182219;
+  --text: #e3ece6;
+  --muted: #a0b0a6;
+  --line: #2b3931;
+  --accent: #66f0b5;
+  --accent-text: #0a2e1f;
+  --selection: #1d3a2b;
+  --hover: #1f2c23;
+  --danger: #ffa89a;
+  --danger-bg: #3e2924;
+  --overlay: rgba(6, 12, 9, .5);
+
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --xs: 10px; --sm: 12px; --base: 13px; --md: 15px; --lg: 23px; --xl: 30px;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s8: 32px; --s10: 40px;
+  --radius: 8px; --large-radius: 14px;
+  --control: 34px; --sidebar-width: 148px; --focus: 2px; --dialog-width: 480px;
+  --shadow: 0 18px 65px rgba(0,0,0,.4);
+
+  /* Fallback (pre-blur capability) — replaced below when effects are known.
+     Kept opaque so an unsupporting WebView is never translucent-without-blur. */
+  --body-opaque: #141b18;
+
+  font-family: var(--font); font-size: var(--base); color: var(--text);
+  accent-color: var(--accent);
+}
+
+/* Frosted glass — progressive enhancement only at the html/body level, and
+   only when backdrop-filter is actually supported. */
+@supports ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+  :root { --body-opaque: rgba(20, 27, 24, .30); }
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #eef4ef;
+    --sidebar: #e6efe8;
+    --surface: #f6faf7;
+    --text: #1d3027;
+    --muted: #617069;
+    --line: #d4e0d8;
+    --accent: #086744;
+    --accent-text: #ffffff;
+    --selection: #d9ecdf;
+    --hover: #e5efe8;
+    --danger: #a73737;
+    --danger-bg: #fbe9e6;
+    --overlay: rgba(8, 20, 14, .35);
+    --shadow: 0 18px 65px rgba(20, 40, 30, .18);
+    --body-opaque: #eef4ef;
+  }
+  @supports ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+    :root { --body-opaque: rgba(238, 244, 239, .38); }
+  }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0; height: 100vh; height: 100dvh;
+  display: grid; grid-template-columns: var(--sidebar-width) minmax(0,1fr);
+  overflow: hidden;
+  background: var(--body-opaque);
+  transition: background var(--dur-med) var(--ease);
+}
+
+/* Panels are OPAQUE by default. Only when the WebView supports
+   backdrop-filter do they switch to translucent layered glass — otherwise a
+   transparent surface would sit on unblurred colour mush. */
+.sidebar, main, dialog { background: var(--sidebar); }
+.search-row, .preview, .list-pane { background: var(--surface); }
+
+@supports ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+  .sidebar, main, dialog {
+    background: color-mix(in srgb, var(--sidebar) 58%, transparent);
+    -webkit-backdrop-filter: blur(28px) saturate(1.7);
+    backdrop-filter: blur(28px) saturate(1.7);
+  }
+  .search-row, .preview, .list-pane {
+    background: color-mix(in srgb, var(--surface) 55%, transparent);
+    -webkit-backdrop-filter: blur(28px) saturate(1.7);
+    backdrop-filter: blur(28px) saturate(1.7);
+  }
+}
+.toolbar, .settings, footer { background: transparent; }
+
+/* AA contrast: bumped muted for glass legibility. */
+.muted, .hint, .eyebrow, .entry-subtitle, .entry-meta { color: var(--muted); }
+
+button, input, textarea, select { font: inherit; color: inherit; }
+button {
+  min-height: var(--control); padding: var(--s2) var(--s3);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+button:hover { background: var(--hover); }
+button:active { transform: scale(.98); }
+button:disabled { opacity: .5; cursor: default; transform: none; }
+:focus-visible { outline: var(--focus) solid var(--accent); outline-offset: var(--focus); }
+
+.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+.primary:hover { filter: brightness(1.05); }
+.quiet { border-color: transparent; background: transparent; }
+.quiet:hover { background: var(--hover); }
+.danger { color: var(--danger); }
+.icon { padding-inline: var(--s2); min-width: var(--control); }
+select {
+  min-height: var(--control); padding: var(--s2) var(--s3);
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
+}
+
+h1,h2,h3,p { margin: 0; }
+h1 { font-size: var(--lg); letter-spacing: -.04em; font-weight: 650; }
+h2 { font-size: var(--md); font-weight: 600; }
+h3 { font-size: var(--base); font-weight: 600; }
+
+.sidebar {
+  /* Leave room for the macOS traffic lights (hidden title bar). */
+  padding: calc(var(--s8) + 30px) var(--s3) var(--s4); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column;
+}
+.brand { padding: 0 var(--s3) var(--s8); display: grid; gap: var(--s2); grid-template-columns: 32px 1fr; align-items: center; }
+.brand-mark { grid-row: span 2; }
+.brand-mark img { display: block; border-radius: 7px; }
+.wordmark { font-size: var(--xl); font-weight: 750; letter-spacing: -.07em; line-height: 1; }
+.brand-dot { color: var(--accent); }
+.eyebrow { font-size: var(--xs); font-weight: 650; letter-spacing: .09em; text-transform: uppercase; }
+nav { display: grid; gap: var(--s1); }
+.nav-item { display: flex; gap: var(--s3); align-items: center; text-align: left; background: transparent; border-color: transparent; color: var(--muted); -webkit-app-region: no-drag; }
+.nav-item > span:first-child { width: var(--s4); font-size: var(--md); text-align: center; }
+.nav-item[aria-current] { color: var(--accent); background: var(--selection); font-weight: 600; }
+.settings-nav { margin-top: var(--s5); }
+.sidebar-bottom { margin-top: auto; display: grid; gap: var(--s3); font-size: var(--xs); }
+.local-note { display: flex; gap: var(--s2); align-items: center; padding-inline: var(--s3); }
+.dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.sidebar-bottom button { font-size: var(--xs); text-align: left; display: flex; justify-content: space-between; -webkit-app-region: no-drag; }
+
+main { min-width: 0; min-height: 0; display: flex; flex-direction: column; transition: background var(--dur-med) var(--ease); }
+
+/* Collapsible toolbar: only .toolbar-title (view title + description)
+   collapses. The #add button and the #collapse-toolbar control are siblings
+   of that region, never inside it, so the control stays reachable and the
+   toolbar can always be re-expanded. */
+.toolbar {
+  padding: var(--s6); display: flex; align-items: center;
+  justify-content: space-between; gap: var(--s3);
+  transition: padding var(--dur-med) var(--ease);
+}
+.toolbar-title {
+  min-width: 0; overflow: hidden;
+  transition: max-height var(--dur-med) var(--ease), opacity var(--dur-med) var(--ease);
+}
+main.collapsed .toolbar-title { max-height: 0; opacity: 0; pointer-events: none; }
+main.collapsed .toolbar { padding-block: var(--s2); }
+/* Hidden title bar → the toolbar title area is the window drag handle. */
+.toolbar-title { -webkit-app-region: drag; }
+.toolbar button, .toolbar input, .toolbar select { -webkit-app-region: no-drag; }
+.toolbar p { margin-top: var(--s1); font-size: var(--sm); }
+.toolbar-right { display: flex; gap: var(--s2); align-items: center; flex-shrink: 0; }
+.toolbar button { white-space: nowrap; }
+#collapse-toolbar span { display: inline-block; transition: transform var(--dur-med) var(--ease); }
+main.collapsed #collapse-toolbar span { transform: rotate(180deg); }
+
+/* Compact search row in the collapsed state: the input stays usable, the
+   decorative bits shrink away. The collapse control is NOT in this row. */
+main.collapsed .search-row { margin: 0 var(--s6) var(--s3); }
+main.collapsed .search-row .search-label,
+main.collapsed .search-row kbd,
+main.collapsed #capture { display: none; }
+
+.search-row {
+  margin: 0 var(--s6) var(--s5); padding: 0 var(--s2) 0 var(--s3);
+  display: flex; gap: var(--s2); align-items: center;
+  border: 1px solid var(--line); border-radius: var(--radius);
+}
+.search-label { font-size: var(--sm); white-space: nowrap; flex: 0 0 auto; }
+.search-row input { min-width: 0; width: 100%; background: transparent; border: 0; padding: var(--s3) 0; }
+kbd { font-family: var(--font); font-size: var(--xs); color: var(--muted); white-space: nowrap; }
+#capture { font-size: var(--xs); white-space: nowrap; }
+
+.library { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,.9fr); min-height: 0; flex: 1; border-top: 1px solid var(--line); }
+.list-pane { min-height: 0; overflow: auto; padding: var(--s4) var(--s3); }
+.section-label { display: flex; justify-content: space-between; padding: 0 var(--s3) var(--s3); font-size: var(--xs); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+ul { margin: 0; padding: 0; list-style: none; }
+.entry { width: 100%; text-align: left; border-color: transparent; background: transparent; padding: var(--s3); display: grid; gap: var(--s2); transition: background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
+.entry:hover { background: var(--hover); }
+.entry[aria-pressed="true"] { background: var(--selection); border-color: var(--line); }
+.entry-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 550; }
+.entry-meta { display: flex; gap: var(--s2); font-size: var(--xs); flex-wrap: wrap; color: var(--muted); }
+.entry-subtitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--sm); }
+.badge { font-size: var(--xs); color: var(--accent); white-space: nowrap; }
+
+/* View fade/slide — one-shot class, no per-frame JS. */
+.library, .settings, .preview { animation: view-in var(--dur-med) var(--ease-out); }
+@keyframes view-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.empty { text-align: center; padding: var(--s10) var(--s3); animation: view-in var(--dur-fast) var(--ease-out); }
+
+.preview { min-width: 0; padding: var(--s5); border-left: 1px solid var(--line); overflow: auto; display: flex; flex-direction: column; gap: var(--s4); }
+.preview h2 { overflow-wrap: anywhere; }
+.preview pre, #redaction-text { font: var(--sm)/1.75 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.preview pre { flex: 1; }
+.preview .actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: auto; }
+.preview .actions button { font-size: var(--sm); }
+.preview-placeholder { margin: auto 0; }
+.preview-placeholder p { font-size: var(--lg); line-height: 1.4; letter-spacing: -.035em; margin: var(--s4) 0; }
+.preview-placeholder > span:last-child { font-size: var(--sm); line-height: 1.7; }
+.empty-symbol { display: block; font-size: var(--xl); color: var(--accent); margin-bottom: var(--s4); }
+.empty h2 { margin-bottom: var(--s2); }
+.empty p { line-height: 1.7; font-size: var(--sm); }
+
+footer { padding: var(--s3) var(--s6); border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: var(--s3); font-size: var(--xs); color: var(--muted); }
+
+.settings { overflow: auto; padding: var(--s3) var(--s6) var(--s6); flex: 1; }
+.settings > .muted { margin: var(--s2) 0 var(--s4); }
+.setting-row { display: flex; gap: var(--s5); justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding: var(--s4) 0; }
+.setting-row p { font-size: var(--sm); line-height: 1.65; margin-top: var(--s1); }
+.setting-row label { font-weight: 600; }
+.setting-row > input { flex-shrink: 0; width: var(--s5); height: var(--s5); }
+.setting-row button, .setting-row select { flex-shrink: 0; }
+
+.error { padding: var(--s3); color: var(--danger); background: var(--danger-bg); border-radius: var(--radius); font-size: var(--sm); line-height: 1.5; }
+main > .error { margin: 0 var(--s6) var(--s3); }
+
+/* Dialogs — native showModal + entry animation + backdrop fade. */
+dialog {
+  width: min(var(--dialog-width), calc(100% - var(--s8))); max-height: calc(100% - var(--s8));
+  overflow: auto; padding: var(--s6); border: 1px solid var(--line);
+  border-radius: var(--large-radius); box-shadow: var(--shadow); color: var(--text);
+}
+dialog::backdrop { background: var(--overlay); backdrop-filter: blur(3px); animation: backdrop-in var(--dur-slow) var(--ease); }
+@keyframes backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+dialog[open] { animation: dialog-in var(--dur-med) var(--ease-out); }
+@keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: none; } }
+dialog:not([open]) { display: none; }
+
+.dialog-heading { display: flex; justify-content: space-between; align-items: start; margin-bottom: var(--s5); }
+.dialog-heading h2, #locked h2 { font-size: var(--lg); margin-top: var(--s2); letter-spacing: -.035em; }
+dialog label { display: block; font-size: var(--sm); font-weight: 600; margin: var(--s4) 0 var(--s2); }
+dialog input, dialog textarea { width: 100%; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); padding: var(--s3); }
+dialog textarea { resize: vertical; max-height: 30vh; font-family: var(--mono); font-size: var(--sm); }
+.hint { font-size: var(--sm); line-height: 1.6; margin: var(--s2) 0; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: var(--s2); margin-top: var(--s5); }
+#confirm-copy, #locked > p { line-height: 1.7; margin: var(--s3) 0 var(--s5); }
+#redaction-preview { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s3); margin-top: var(--s3); max-height: 25vh; overflow: auto; }
+#redaction-text { margin-top: var(--s2); }
+
+@media (max-width: 720px) {
+  :root { --sidebar-width: 126px; }
+  .toolbar { padding: var(--s5); }
+  .toolbar p { max-width: 230px; line-height: 1.5; }
+  .search-row { margin-inline: var(--s5); }
+  kbd { display: none; }
+  .preview { padding: var(--s4); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+  button:active { transform: none; }
+  .library, .settings, .preview, .empty, dialog[open] { animation: none !important; }
+}
