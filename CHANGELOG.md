@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [2.8.1] - 2026-11-13
+
+### 桌面应用 Ky（修复）
+
+- 修复 `ky request declare --open` 弹框从未弹出的致命 bug：`32fe000` 引入 `pending_requests` / `fulfill_request` / `discard_request` 三个 Tauri 命令时，未生成对应 permission 文件、也未在 `capabilities/default.json` 注册，IPC ACL 直接拒绝 invoke，弹框逻辑从未执行。
+- 顺带修复 `desktop` 布尔判定的导入期竞态（`__TAURI__.core` 惰性填充），新增 `openFirstPendingRequest()` 无条件兜底拉取，拉取失败时状态栏可见（`status.reqPending`）而非静默。
+
 ## [2.8.0] - 2026-11-12
 
 ### 桌面应用 Ky（新增，Tauri 2）
