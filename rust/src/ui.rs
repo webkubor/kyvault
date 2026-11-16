@@ -167,7 +167,18 @@ fn handle_connection(stream: &mut TcpStream, token: &str, port: u16) -> Result<(
         }
         ("GET", "/api/secrets") => {
             let store = Store::default_location().map_err(|e| anyhow!("{e}"))?;
-            let secrets = store.list_secrets().unwrap_or_default();
+            let secrets: Vec<serde_json::Value> = store
+                .list_secrets()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|s| {
+                    let mut val = serde_json::to_value(&s).unwrap_or_default();
+                    if let Some(obj) = val.as_object_mut() {
+                        obj.insert("ref".into(), json!(s.r#ref()));
+                    }
+                    val
+                })
+                .collect();
             let res = json!({
                 "ok": true,
                 "secrets": secrets
@@ -181,31 +192,50 @@ fn handle_connection(stream: &mut TcpStream, token: &str, port: u16) -> Result<(
         }
         ("POST", "/api/set") => {
             if let Ok(payload) = serde_json::from_slice::<SetPayload>(&body) {
-                let uri = format_uri(&payload.platform, &payload.name);
-                let store = Store::default_location()?;
-                let _lock = store.lock()?;
-                store.set_secret(&uri, &payload.value)?;
-                let kind = payload.kind.as_deref().unwrap_or("API Key");
-                let acct = payload.account.as_deref().filter(|s| !s.is_empty());
-                store.annotate(&uri, Some(kind), acct, None, None, None)?;
-                if let Some(ref alias) = payload.alias {
-                    if !alias.is_empty() {
-                        let aliases = crate::alias::Aliases::default_location()?;
-                        let _ = aliases.set(alias, &uri);
+                let write_res: Result<(String, String)> = (|| {
+                    let uri = format_uri(&payload.platform, &payload.name);
+                    let store = Store::default_location()?;
+                    store.set_secret(&uri, &payload.value)?;
+                    let kind = payload.kind.as_deref().unwrap_or("API Key");
+                    let acct = payload.account.as_deref().filter(|s| !s.is_empty());
+                    store.annotate(&uri, acct, Some(kind), None, None, None)?;
+                    if let Some(ref alias) = payload.alias {
+                        if !alias.is_empty() {
+                            let aliases = crate::alias::Aliases::default_location()?;
+                            let _ = aliases.set(alias, &uri);
+                        }
+                    }
+                    let run_cmd = format!("kyvault run --env TOKEN={} -- <command>", uri);
+                    Ok((uri, run_cmd))
+                })();
+
+                match write_res {
+                    Ok((uri, run_cmd)) => {
+                        let res = json!({
+                            "ok": true,
+                            "uri": uri,
+                            "run_cmd": run_cmd
+                        });
+                        send_response(
+                            stream,
+                            "200 OK",
+                            "application/json",
+                            res.to_string().as_bytes(),
+                        )?;
+                    }
+                    Err(e) => {
+                        let res = json!({
+                            "ok": false,
+                            "error": format!("{e}")
+                        });
+                        send_response(
+                            stream,
+                            "500 Internal Server Error",
+                            "application/json",
+                            res.to_string().as_bytes(),
+                        )?;
                     }
                 }
-                let run_cmd = format!("kyvault run --env TOKEN={} -- <command>", uri);
-                let res = json!({
-                    "ok": true,
-                    "uri": uri,
-                    "run_cmd": run_cmd
-                });
-                send_response(
-                    stream,
-                    "200 OK",
-                    "application/json",
-                    res.to_string().as_bytes(),
-                )?;
             } else {
                 send_response(
                     stream,
@@ -217,25 +247,45 @@ fn handle_connection(stream: &mut TcpStream, token: &str, port: u16) -> Result<(
         }
         ("POST", "/api/reveal") => {
             if let Ok(payload) = serde_json::from_slice::<RevealPayload>(&body) {
-                let store = Store::default_location()?;
-                match store.get_secret(&payload.uri) {
-                    Ok(val) => {
-                        let res = json!({
-                            "ok": true,
-                            "value": val
-                        });
-                        send_response(
-                            stream,
-                            "200 OK",
-                            "application/json",
-                            res.to_string().as_bytes(),
-                        )?;
-                    }
+                let store_res = Store::default_location();
+                match store_res {
+                    Ok(store) => match store.get_secret(&payload.uri) {
+                        Ok(Some(val)) => {
+                            let res = json!({
+                                "ok": true,
+                                "value": val
+                            });
+                            send_response(
+                                stream,
+                                "200 OK",
+                                "application/json",
+                                res.to_string().as_bytes(),
+                            )?;
+                        }
+                        Ok(None) => {
+                            let res = json!({ "ok": false, "error": "未找到指定密钥或值为空" });
+                            send_response(
+                                stream,
+                                "404 Not Found",
+                                "application/json",
+                                res.to_string().as_bytes(),
+                            )?;
+                        }
+                        Err(e) => {
+                            let res = json!({ "ok": false, "error": format!("{e}") });
+                            send_response(
+                                stream,
+                                "500 Internal Server Error",
+                                "application/json",
+                                res.to_string().as_bytes(),
+                            )?;
+                        }
+                    },
                     Err(e) => {
                         let res = json!({ "ok": false, "error": format!("{e}") });
                         send_response(
                             stream,
-                            "404 Not Found",
+                            "500 Internal Server Error",
                             "application/json",
                             res.to_string().as_bytes(),
                         )?;
@@ -246,7 +296,7 @@ fn handle_connection(stream: &mut TcpStream, token: &str, port: u16) -> Result<(
                     stream,
                     "400 Bad Request",
                     "application/json",
-                    b"{\"ok\":false}",
+                    b"{\"ok\":false,\"error\":\"Invalid payload\"}",
                 )?;
             }
         }
@@ -274,88 +324,378 @@ fn send_response(
 }
 
 const HTML_CONTENT: &str = r#"<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>kyvault 极客凭证中心</title>
+<title>KYVAULT // 极客凭证管理引擎</title>
 <style>
-  :root {
-    --bg: #0d1117;
-    --card: #161b22;
-    --card-border: #30363d;
-    --accent: #58a6ff;
-    --accent-glow: rgba(88, 166, 255, 0.2);
-    --green: #3fb950;
-    --text: #c9d1d9;
-    --text-dim: #8b949e;
-    --text-bright: #f0f6fc;
+  :root, [data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #070b09;
+    --bg-grid: rgba(102, 240, 181, 0.035);
+    --card: rgba(12, 20, 16, 0.86);
+    --card-border: rgba(102, 240, 181, 0.16);
+    --accent: #66f0b5;
+    --accent-glow: rgba(102, 240, 181, 0.28);
+    --accent-soft: rgba(102, 240, 181, 0.09);
+    --cold-line: rgba(102, 240, 181, 0.24);
+    --cold-line-active: rgba(102, 240, 181, 0.85);
+    --text-bright: #f2f7f4;
+    --text: #c2d4cb;
+    --text-dim: #7a9487;
+    --input-bg: #050907;
+    --code-bg: #030604;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; }
-  body { background: var(--bg); color: var(--text); min-height: 100vh; padding: 24px; display: flex; flex-direction: column; align-items: center; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      color-scheme: light;
+      --bg: #f4f8f6;
+      --bg-grid: rgba(16, 128, 88, 0.04);
+      --card: #ffffff;
+      --card-border: rgba(16, 128, 88, 0.2);
+      --accent: #0f9f6e;
+      --accent-glow: rgba(16, 159, 110, 0.2);
+      --accent-soft: rgba(16, 159, 110, 0.08);
+      --cold-line: rgba(16, 128, 88, 0.32);
+      --cold-line-active: #0f9f6e;
+      --text-bright: #0c1813;
+      --text: #233830;
+      --text-dim: #5c786c;
+      --input-bg: #ffffff;
+      --code-bg: #edf5f0;
+    }
+  }
+  :root {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(to right, var(--bg-grid) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--bg-grid) 1px, transparent 1px);
+    background-size: 32px 32px;
+    color: var(--text);
+    min-height: 100vh;
+    padding: 32px 20px 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    -webkit-font-smoothing: antialiased;
+  }
   .container { width: 100%; max-width: 900px; }
-  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--card-border); }
-  .logo-box { display: flex; align-items: center; gap: 12px; }
-  .logo { font-size: 28px; }
-  h1 { font-size: 22px; color: var(--text-bright); font-weight: 700; letter-spacing: -0.5px; }
-  .badge { background: #238636; color: #fff; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-  .nav-tabs { display: flex; gap: 8px; margin-bottom: 24px; }
-  .tab-btn { background: var(--card); border: 1px solid var(--card-border); color: var(--text-dim); padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s; }
-  .tab-btn.active { background: #1f2937; border-color: var(--accent); color: var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
-  .card { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
-  .step-title { font-size: 14px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
-  .category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 20px; }
-  .cat-item, .plat-item { background: #0d1117; border: 1px solid var(--card-border); border-radius: 8px; padding: 12px; text-align: center; cursor: pointer; transition: all 0.15s; }
-  .cat-item:hover, .plat-item:hover { border-color: var(--accent); transform: translateY(-1px); }
-  .cat-item.active, .plat-item.active { border-color: var(--accent); background: rgba(88, 166, 255, 0.1); color: var(--text-bright); font-weight: 600; }
-  .cat-icon { font-size: 22px; margin-bottom: 6px; }
-  .cat-name { font-size: 13px; }
-  .uri-preview { background: #000; border: 1px dashed var(--accent); border-radius: 8px; padding: 12px 16px; margin: 16px 0; display: flex; align-items: center; justify-content: space-between; }
-  .uri-text { font-family: monospace; font-size: 15px; color: var(--green); font-weight: 600; }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--cold-line);
+    position: relative;
+  }
+  header::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    width: 104px;
+    height: 2px;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow);
+  }
+  .logo-box { display: flex; align-items: center; gap: 14px; }
+  .logo-mark {
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--cold-line);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-soft);
+    box-shadow: 0 0 16px var(--accent-glow);
+    font-size: 18px;
+  }
+  h1 {
+    font-size: 19px;
+    color: var(--text-bright);
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+  .sub-tag { font-size: 12px; color: var(--text-dim); margin-top: 3px; letter-spacing: 0.2px; }
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--accent-soft);
+    border: 1px solid var(--cold-line);
+    color: var(--accent);
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    box-shadow: 0 0 12px var(--accent-glow);
+  }
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: pulse 2.4s infinite ease-in-out;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.45; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.15); }
+  }
+  .nav-tabs { display: flex; gap: 10px; margin-bottom: 22px; }
+  .tab-btn {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    color: var(--text-dim);
+    padding: 10px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tab-btn:hover {
+    color: var(--text-bright);
+    border-color: var(--cold-line-active);
+  }
+  .tab-btn.active {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+  }
+  .step-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: 1px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+  .step-badge {
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid var(--cold-line);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+  .step-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, var(--cold-line), transparent);
+  }
+  .category-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+    gap: 10px;
+    margin-bottom: 22px;
+  }
+  .cat-item, .plat-item {
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 14px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+  }
+  .cat-item:hover, .plat-item:hover {
+    border-color: var(--cold-line-active);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  }
+  .cat-item.active, .plat-item.active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--text-bright);
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+  .cat-icon { font-size: 20px; margin-bottom: 6px; }
+  .cat-name { font-size: 12px; font-weight: 600; letter-spacing: 0.2px; }
+  .uri-preview {
+    background: var(--code-bg);
+    border: 1px solid var(--cold-line);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 18px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    box-shadow: inset 0 0 12px rgba(0,0,0,0.4);
+  }
+  .uri-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    display: block;
+    margin-bottom: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    letter-spacing: 0.6px;
+  }
+  .uri-text {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 14px;
+    color: var(--accent);
+    font-weight: 600;
+    word-break: break-all;
+    text-shadow: 0 0 10px var(--accent-glow);
+  }
   .form-group { margin-bottom: 16px; }
-  label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 6px; font-weight: 600; }
-  input, select { width: 100%; background: #0d1117; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 14px; color: var(--text-bright); font-size: 14px; outline: none; transition: border-color 0.2s; }
-  input:focus { border-color: var(--accent); }
-  .btn-submit { width: 100%; background: #238636; border: none; border-radius: 8px; color: #fff; padding: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; margin-top: 10px; }
-  .btn-submit:hover { background: #2ea043; }
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+  input, select {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text-bright);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  input:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+  }
+  .btn-submit {
+    width: 100%;
+    background: linear-gradient(135deg, var(--accent) 0%, #34d399 100%);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    color: #03140a;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    margin-top: 12px;
+    letter-spacing: 0.3px;
+    box-shadow: 0 0 18px var(--accent-glow);
+  }
+  .btn-submit:hover:not(:disabled) {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+    box-shadow: 0 0 24px rgba(102, 240, 181, 0.45);
+  }
+  .btn-submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
   .secret-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .secret-table th, .secret-table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--card-border); }
-  .secret-table th { color: var(--text-dim); font-weight: 600; }
-  .btn-copy { background: transparent; border: 1px solid var(--card-border); color: var(--text); padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 12px; }
-  .btn-copy:hover { border-color: var(--accent); color: var(--accent); }
-  .toast { position: fixed; bottom: 24px; right: 24px; background: #238636; color: #fff; padding: 12px 20px; border-radius: 8px; font-weight: 600; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+  .secret-table th, .secret-table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--card-border); vertical-align: middle; }
+  .secret-table th {
+    color: var(--text-dim);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+  .secret-table code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    color: var(--text-dim);
+  }
+  .btn-copy {
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    color: var(--text);
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn-copy:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 10px var(--accent-glow);
+  }
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: rgba(7, 16, 11, 0.94);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    display: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5), 0 0 16px var(--accent-glow);
+    font-size: 13px;
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+  }
 </style>
 </head>
 <body>
 <div class="container">
   <header>
     <div class="logo-box">
-      <span class="logo">🔐</span>
+      <div class="logo-mark">⚡</div>
       <div>
-        <h1>kyvault 极客凭证向导</h1>
-        <div style="font-size:12px; color:var(--text-dim); margin-top:2px;">纯本地端对端加密 · 自动规范化命名</div>
+        <h1>KYVAULT // 凭证管理引擎</h1>
+        <div class="sub-tag">零信任本地端对端加密 · 冷光线条 · 自动规范化命名</div>
       </div>
     </div>
     <div style="display:flex; align-items:center; gap:8px;">
-      <span id="store-count" class="badge">加载中...</span>
+      <div id="store-count" class="status-pill"><span class="status-dot"></span><span>连接引擎中...</span></div>
     </div>
   </header>
 
   <div class="nav-tabs">
-    <button class="tab-btn active" onclick="switchTab('store')">➕ 智能存入向导</button>
-    <button class="tab-btn" onclick="switchTab('list')">🔍 凭证检索台账</button>
+    <button class="tab-btn active" onclick="switchTab('store')"><span>⚡</span><span>智能存入向导</span></button>
+    <button class="tab-btn" onclick="switchTab('list')"><span>⌘</span><span>凭证检索台账</span></button>
   </div>
 
   <!-- 选项卡 1：智能存入向导 -->
   <div id="tab-store" class="tab-content">
     <div class="card">
-      <div class="step-title"><span>Step 1</span> 选择凭据大类</div>
+      <div class="step-title"><span class="step-badge">STEP 01</span><span>选择凭据大类</span><span class="step-line"></span></div>
       <div id="category-grid" class="category-grid"></div>
 
-      <div class="step-title"><span>Step 2</span> 选择或指定平台</div>
+      <div class="step-title"><span class="step-badge">STEP 02</span><span>选择或指定平台</span><span class="step-line"></span></div>
       <div id="platform-grid" class="category-grid"></div>
 
-      <div class="step-title"><span>Step 3</span> 确认用途与标准 URI</div>
+      <div class="step-title"><span class="step-badge">STEP 03</span><span>确认用途与标准 URI</span><span class="step-line"></span></div>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
         <div class="form-group">
           <label>标识 / 环境名 (Name)</label>
@@ -369,18 +709,18 @@ const HTML_CONTENT: &str = r#"<!DOCTYPE html>
 
       <div class="uri-preview">
         <div>
-          <span style="font-size:11px; color:var(--text-dim); display:block;">规范寻址 URI</span>
+          <span class="uri-label">规范寻址 URI</span>
           <span id="uri-display" class="uri-text">secret://deepseek/main</span>
         </div>
-        <button class="btn-copy" onclick="copyText(document.getElementById('uri-display').innerText)">复制 URI</button>
+        <button class="btn-copy" onclick="copyText(document.getElementById('uri-display').innerText)">复制规范 URI</button>
       </div>
 
-      <div class="step-title"><span>Step 4</span> 输入安全目标值</div>
+      <div class="step-title"><span class="step-badge">STEP 04</span><span>输入安全目标值</span><span class="step-line"></span></div>
       <div class="form-group">
         <label>密钥明文 (写入磁盘前进行 AES-256-GCM 军事级加密)</label>
         <div style="display:flex; gap:8px;">
           <input id="input-value" type="password" placeholder="粘贴密钥、Token 或密码...">
-          <button class="btn-copy" onclick="togglePassword()">👁️</button>
+          <button class="btn-copy" onclick="togglePassword()" title="显示/隐藏明文">👁️</button>
         </div>
       </div>
       <div class="form-group">
@@ -388,7 +728,7 @@ const HTML_CONTENT: &str = r#"<!DOCTYPE html>
         <input id="input-account" placeholder="如 admin@gmail.com 或 生产集群Token">
       </div>
 
-      <button class="btn-submit" onclick="submitSecret()">🔒 安全加密存入 kyvault</button>
+      <button class="btn-submit" onclick="submitSecret()">⚡ 安全加密存入 kyvault</button>
     </div>
   </div>
 
@@ -397,11 +737,11 @@ const HTML_CONTENT: &str = r#"<!DOCTYPE html>
     <div class="card">
       <div style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
         <input id="search-input" placeholder="🔍 搜索平台、别名或分类..." oninput="filterSecrets()" style="max-width:300px;">
-        <button class="btn-copy" onclick="loadSecrets()">🔄 刷新列表</button>
+        <button class="btn-copy" onclick="loadSecrets()">⟳ 刷新列表</button>
       </div>
       <table class="secret-table">
         <thead>
-          <tr>
+          <tr style="border-bottom: 1px solid var(--cold-line);">
             <th>URI 寻址 / 别名</th>
             <th>类型</th>
             <th>末位标识</th>
@@ -434,8 +774,12 @@ async function init() {
   selectCategory(gCategories[0].id);
 
   const statusRes = await fetch(base + '/api/status');
-  const status = await statusRes.json();
-  document.getElementById('store-count').innerText = `${status.secrets_count} 条密钥已就绪`;
+  if (statusRes.ok) {
+    const status = await statusRes.json();
+    document.getElementById('store-count').innerHTML = `<span class="status-dot"></span><span>${status.secrets_count} 条凭据就绪</span>`;
+  } else {
+    document.getElementById('store-count').innerHTML = `<span class="status-dot" style="background:#ef4444;box-shadow:0 0 8px #ef4444;"></span><span>状态离线</span>`;
+  }
 }
 
 function renderCategories() {
@@ -454,7 +798,7 @@ function selectCategory(catId) {
 
   const platGrid = document.getElementById('platform-grid');
   platGrid.innerHTML = gCurrentCat.platforms.map(p => `
-    <div class="plat-item ${gCurrentPlat?.id === p.id ? 'active' : ''}" onclick="selectPlatform('${p.id}')">
+    <div class="plat-item ${gCurrentPlat?.id === p.id ? 'active' : ''}" data-plat-id="${p.id}" onclick="selectPlatform('${p.id}')">
       <div class="cat-icon">${p.icon}</div>
       <div class="cat-name">${p.name}</div>
     </div>
@@ -467,8 +811,10 @@ function selectCategory(catId) {
 
 function selectPlatform(platId) {
   gCurrentPlat = gCurrentCat.platforms.find(p => p.id === platId);
-  document.querySelectorAll('.plat-item').forEach(el => el.classList.remove('active'));
-  event?.currentTarget?.classList.add('active');
+  document.querySelectorAll('.plat-item').forEach(el => {
+    const isCurrent = el.getAttribute('data-plat-id') === platId;
+    el.classList.toggle('active', isCurrent);
+  });
 
   const nameInput = document.getElementById('input-name');
   nameInput.value = gCurrentPlat.default_name || 'main';
@@ -494,31 +840,46 @@ async function submitSecret() {
   const val = document.getElementById('input-value').value.trim();
   const acct = document.getElementById('input-account').value.trim();
   const alias = document.getElementById('input-alias').value.trim();
+  const btn = document.querySelector('.btn-submit');
 
   if (!name || !val) {
     alert('请填写名称和密钥值！');
     return;
   }
 
-  const res = await fetch(base + '/api/set', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      platform: plat,
-      name: name,
-      value: val,
-      kind: gCurrentCat?.default_kind || 'API Key',
-      account: acct,
-      alias: alias
-    })
-  });
-  const data = await res.json();
-  if (data.ok) {
-    showToast(`✅ 成功加密存入 ${data.uri}`);
-    document.getElementById('input-value').value = '';
-    loadSecrets();
-  } else {
-    alert('保存失败：' + data.error);
+  const originalText = btn ? btn.innerText : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = '⏳ 正在加密写入磁盘...';
+  }
+  try {
+    const res = await fetch(base + '/api/set', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        platform: plat,
+        name: name,
+        value: val,
+        kind: gCurrentCat?.default_kind || 'API Key',
+        account: acct,
+        alias: alias
+      })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast(`✅ 成功加密存入 ${data.uri}`);
+      document.getElementById('input-value').value = '';
+      loadSecrets();
+    } else {
+      alert('保存失败：' + (data.error || '未知服务端错误'));
+    }
+  } catch (err) {
+    alert('网络或服务异常：' + (err.message || err));
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = originalText;
+    }
   }
 }
 
@@ -537,8 +898,8 @@ function renderSecretsTable(list) {
   }
   tbody.innerHTML = list.map(s => `
     <tr>
-      <td><span style="font-weight:600; color:var(--text-bright);">${esc(s.ref)}</span></td>
-      <td><span class="badge" style="background:#1f2937; color:#8b949e;">${esc(s.kind || '-')}</span></td>
+      <td><span style="font-weight:600; color:var(--accent); font-family:ui-monospace,monospace;">${esc(s.ref)}</span></td>
+      <td><span class="step-badge" style="font-size:11px;">${esc(s.kind || 'API Key')}</span></td>
       <td><code>...${esc(s.last4 || '****')}</code></td>
       <td style="color:var(--text-dim);">${esc(s.account || '-')}</td>
       <td>

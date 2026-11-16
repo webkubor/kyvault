@@ -327,26 +327,32 @@ impl Store {
         if platform == "server" {
             let mut it = name.splitn(2, '/');
             let host = it.next().unwrap_or_default();
-            return match it.next() {
-                Some(field) => self.decrypt_at(&data, &["_servers", host, field], &key),
+            match it.next() {
+                Some(field) => {
+                    if let Some(v) = self.decrypt_at(&data, &["_servers", host, field], &key)? {
+                        return Ok(Some(v));
+                    }
+                }
                 None => {
                     // 不带字段时返回整台机器的 json，与 Python 版一致
-                    let Some(fields) = data
+                    if let Some(fields) = data
                         .pointer(&format!("/_servers/{host}"))
                         .and_then(|v| v.as_object())
-                    else {
-                        return Ok(None);
-                    };
-                    let mut out = Map::new();
-                    for (k, v) in fields {
-                        out.insert(
-                            k.clone(),
-                            Value::String(decrypt_joined(v.as_str().unwrap_or_default(), &key)?),
-                        );
+                    {
+                        let mut out = Map::new();
+                        for (k, v) in fields {
+                            out.insert(
+                                k.clone(),
+                                Value::String(decrypt_joined(
+                                    v.as_str().unwrap_or_default(),
+                                    &key,
+                                )?),
+                            );
+                        }
+                        return Ok(Some(serde_json::to_string(&out)?));
                     }
-                    Ok(Some(serde_json::to_string(&out)?))
                 }
-            };
+            }
         }
         if platform == "cli" {
             if let Some((cli, profile)) = name.split_once('/') {
@@ -589,6 +595,24 @@ impl Store {
                 let host = name.split('/').next().unwrap_or_default();
                 if let Some(m) = root.get_mut("_servers").and_then(|v| v.as_object_mut()) {
                     hit = m.remove(host).is_some();
+                }
+                if !hit {
+                    if let Some(m) = root
+                        .get_mut(&platform)
+                        .and_then(|v| v.get_mut("keys"))
+                        .and_then(|v| v.as_object_mut())
+                    {
+                        hit = m.remove(&name).is_some();
+                    }
+                }
+                if !hit {
+                    if let Some(m) = root
+                        .get_mut(&platform)
+                        .and_then(|v| v.get_mut("accounts"))
+                        .and_then(|v| v.as_object_mut())
+                    {
+                        hit = m.remove(&name).is_some();
+                    }
                 }
             } else {
                 if let Some(m) = root
@@ -1040,6 +1064,24 @@ mod tests {
         // 不带字段时返回整台机器的 json
         let all = s.get_secret("secret://server/vex").unwrap().unwrap();
         assert!(all.contains("root-password"), "应返回整机 json：{all}");
+
+        // 单段 server 命名（无斜杠，如向导中录入 secret://server/multica-login-token）
+        // 应对称存入、读回与删除，不因缺少 _servers 聚合桶而静默失败
+        s.set_secret("secret://server/multica-login-token", "mlt_secret_value")
+            .unwrap();
+        assert_eq!(
+            s.get_secret("secret://server/multica-login-token")
+                .unwrap()
+                .unwrap(),
+            "mlt_secret_value"
+        );
+        assert!(s
+            .delete_secret("secret://server/multica-login-token")
+            .unwrap());
+        assert!(s
+            .get_secret("secret://server/multica-login-token")
+            .unwrap()
+            .is_none());
     }
 
     /// 读-改-写必须保住没建模的字段。对密钥库来说丢字段就是丢密钥。
