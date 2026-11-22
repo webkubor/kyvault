@@ -174,11 +174,9 @@ fn main() {
                         clipboard = arboard::Clipboard::new().ok();
                     }
                     if let Some(cb) = clipboard.as_mut() {
-                        if let Ok(text) = cb.get_text() {
-                            if text.is_empty() || text.len() > 65_536 || session.is_sensitive(&text)
-                            {
-                                continue;
-                            }
+                        // 文本优先；剪贴板里是图片时 get_text 为空/报错 → 尝试图片。
+                        let text = cb.get_text().unwrap_or_default();
+                        if !text.is_empty() && text.len() <= 65_536 && !session.is_sensitive(&text) {
                             let fingerprint = commands::fingerprint(&text);
                             if previous_fingerprint == Some(fingerprint) {
                                 continue;
@@ -198,6 +196,36 @@ fn main() {
                                         "capture-error",
                                         "历史保存失败，已暂停记录，请检查本地目录权限。",
                                     );
+                                }
+                            }
+                        } else if text.is_empty() {
+                            // 图片抓取：RGBA → PNG → 加密存储。超限/编码失败静默跳过。
+                            if let Some(img) = cb.get_image().ok() {
+                                let fp: [u8; 32] = {
+                                    use sha2::{Digest, Sha256};
+                                    let mut h = Sha256::new();
+                                    h.update(b"img");
+                                    h.update(img.width.to_le_bytes());
+                                    h.update(img.height.to_le_bytes());
+                                    h.update(&img.bytes);
+                                    h.finalize().into()
+                                };
+                                if previous_fingerprint == Some(fp) {
+                                    continue;
+                                }
+                                if let Some(png) = commands::encode_rgba_png_pub(img.width, img.height, &img.bytes) {
+                                    previous_fingerprint = Some(fp);
+                                    let source = frontmost_app();
+                                    let (w, h) = (img.width as u32, img.height as u32);
+                                    if state
+                                        .history
+                                        .capture_image(&png, w, h, source.as_deref())
+                                        .is_ok()
+                                    {
+                                        drop(session);
+                                        let _ = handle.emit("history-changed", ());
+                                        let _ = tray::refresh(&handle);
+                                    }
                                 }
                             }
                         }
@@ -235,7 +263,8 @@ fn main() {
             commands::clear_history,
             commands::set_ui_language,
             commands::get_app_info,
-            commands::install_update
+            commands::install_update,
+            commands::get_entry_image
         ])
         .run(tauri::generate_context!())
         .expect("Ky desktop failed to start");

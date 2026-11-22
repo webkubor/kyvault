@@ -18,6 +18,13 @@ fn main() {
             "unlock_app",
             "clear_history",
             "set_ui_language",
+            "pending_requests",
+            "fulfill_request",
+            "discard_request",
+            "save_secret_with_meta",
+            "get_app_info",
+            "install_update",
+            "get_entry_image",
         ]),
     ))
     .expect("Ky build configuration");

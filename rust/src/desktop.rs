@@ -15,6 +15,10 @@ use std::{
 };
 
 pub const MAX_ENTRIES: usize = 200;
+/// 图片条目的像素文件目录（相对 history root）。
+pub const IMG_DIR: &str = "img";
+/// 单张图片上限（PNG 编码后）：截图/贴图通常 &lt; 4 MiB，8 MiB 兜底防异常大图。
+pub const MAX_IMAGE_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_TEXT_BYTES: usize = 64 * 1024;
 pub const RETENTION_SECONDS: u64 = 30 * 24 * 60 * 60;
 
@@ -31,6 +35,18 @@ pub struct HistoryEntry {
     /// 复制时前台应用名（如 "Google Chrome" / "Terminal"）。
     #[serde(default)]
     pub source: Option<String>,
+    /// 图片条目的元数据。像素数据存独立的加密文件 img/<id>.enc。
+    #[serde(default)]
+    pub image: Option<ImageMeta>,
+}
+
+/// 图片条目元数据（进 JSON 索引，保持轻量；像素在单独的加密文件里）。
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ImageMeta {
+    pub width: u32,
+    pub height: u32,
+    /// PNG 编码后的字节数（展示用，如 "1.2 MB"）。
+    pub png_len: u64,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -50,6 +66,82 @@ impl DesktopHistory {
 
     pub fn capture(&self, text: &str, source: Option<&str>) -> Result<HistoryEntry> {
         self.add(None, text, source)
+    }
+
+    /// 记录一张图片：PNG 像素加密存 img/<id>.enc，索引只留元数据。
+    /// 返回条目；失败（目录不可写/编码异常）时不产生残留文件。
+    pub fn capture_image(
+        &self,
+        png: &[u8],
+        width: u32,
+        height: u32,
+        source: Option<&str>,
+    ) -> Result<HistoryEntry> {
+        if png.len() > MAX_IMAGE_BYTES {
+            bail!(
+                "Image exceeds the {} MiB history limit",
+                MAX_IMAGE_BYTES / 1024 / 1024
+            );
+        }
+        let meta = ImageMeta {
+            width,
+            height,
+            png_len: png.len() as u64,
+        };
+        let entry = self.transact(|state| {
+            state.next_id = state
+                .next_id
+                .checked_add(1)
+                .context("History identifier limit reached")?;
+            let entry = HistoryEntry {
+                id: state.next_id,
+                created_at: now()?,
+                text: String::new(),
+                redacted: false,
+                name: None,
+                version: None,
+                source: source.map(str::to_owned),
+                image: Some(meta.clone()),
+            };
+            state.entries.push(entry.clone());
+            if state.entries.len() > MAX_ENTRIES {
+                state.entries.drain(..state.entries.len() - MAX_ENTRIES);
+            }
+            Ok(entry)
+        })?;
+        // 索引写成功后再写像素文件；写失败则回滚索引里的这条。
+        let b64 = STANDARD.encode(png);
+        let payload = match crate::crypto::encrypt_joined(&b64, &self.file_key()?) {
+            Ok(p) => p,
+            Err(e) => {
+                let _ = self.delete(entry.id);
+                return Err(e);
+            }
+        };
+        let dir = self.root.join(IMG_DIR);
+        fs::create_dir_all(&dir).ok();
+        if let Err(e) = atomic_write(&dir.join(format!("{}.enc", entry.id)), payload.as_bytes()) {
+            let _ = self.delete(entry.id);
+            return Err(e);
+        }
+        Ok(entry)
+    }
+
+    /// 读回某条图片的 PNG 像素（解密 img/<id>.enc）。
+    pub fn image_data(&self, id: u64) -> Result<Vec<u8>> {
+        let path = self.root.join(IMG_DIR).join(format!("{id}.enc"));
+        let enc = fs::read_to_string(&path).with_context(|| "Image entry not found")?;
+        let b64 = crate::crypto::decrypt_joined(&enc, &self.file_key()?)?;
+        STANDARD
+            .decode(b64)
+            .map_err(|e| anyhow::anyhow!("Image decode failed: {e}"))
+    }
+
+    /// transact 里读写的文件密钥（与 history.enc 同源派生）。
+    fn file_key(&self) -> Result<[u8; 32]> {
+        let key_path = self.root.join("history.key");
+        let raw = fs::read_to_string(&key_path).context("Cannot read desktop history key")?;
+        Ok(derive_file_key(&raw)?)
     }
 
     /// Saves a configuration/snippet version. Names are also validated
@@ -105,6 +197,7 @@ impl DesktopHistory {
             name: name.map(str::to_owned),
             version,
             source: source.map(str::to_owned),
+            image: None,
         };
         state.entries.push(entry.clone());
         if state.entries.len() > MAX_ENTRIES {
@@ -228,8 +321,32 @@ impl DesktopHistory {
         if !data_path.exists() || updated != original {
             let encrypted = encrypt_joined(&updated, &key)?;
             atomic_write(&data_path, encrypted.as_bytes())?;
+            // 图片文件与索引同生命周期：清理孤儿（条目过期/删除后残留的像素文件）。
+            self.cleanup_orphan_images(&state);
         }
         Ok(result)
+    }
+
+    /// 删除 img/ 下不再被任何条目引用的加密像素文件。失败静默（只影响磁盘占用）。
+    fn cleanup_orphan_images(&self, state: &State) {
+        let dir = self.root.join(IMG_DIR);
+        let Ok(iter) = fs::read_dir(&dir) else { return };
+        let live: std::collections::HashSet<u64> = state
+            .entries
+            .iter()
+            .filter_map(|e| e.image.as_ref().map(|_| e.id))
+            .collect();
+        for item in iter.flatten() {
+            let name = item.file_name();
+            let Some(stem) = name.to_str().and_then(|n| n.strip_suffix(".enc")) else {
+                continue;
+            };
+            if let Ok(id) = stem.parse::<u64>() {
+                if !live.contains(&id) {
+                    let _ = fs::remove_file(item.path());
+                }
+            }
+        }
     }
 }
 
@@ -414,6 +531,38 @@ mod tests {
         let read = history.list().unwrap().pop().unwrap();
         assert_eq!(read.text, secret, "原文应能从加密存储读回，不再永久销毁");
         assert_eq!(read.source.as_deref(), Some("Terminal"));
+    }
+
+    #[test]
+    fn image_roundtrip_and_orphan_cleanup() {
+        // 图片：像素加密存独立文件，索引只留元数据；读回一致；删除后文件被清理。
+        let dir = tempfile::tempdir().unwrap();
+        let history = DesktopHistory::new(dir.path());
+        // 1x1 红色 PNG（最小合法图）
+        let png: Vec<u8> = [
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
+            0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78,
+            0x9C, 0x62, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+            0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ]
+        .to_vec();
+        let e = history.capture_image(&png, 1, 1, Some("Chrome")).unwrap();
+        assert_eq!(e.image.as_ref().unwrap().width, 1);
+        assert!(dir
+            .path()
+            .join("img")
+            .join(format!("{}.enc", e.id))
+            .exists());
+        let back = history.image_data(e.id).unwrap();
+        assert_eq!(back, png, "像素应能从加密文件读回");
+        // 删除条目 → 孤儿像素文件被清理。
+        history.delete(e.id).unwrap();
+        assert!(!dir
+            .path()
+            .join("img")
+            .join(format!("{}.enc", e.id))
+            .exists());
     }
 
     #[test]

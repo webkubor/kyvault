@@ -26,9 +26,25 @@
 
 ---
 
-## Ky 桌面版
+## Ky 桌面版（macOS）
 
-面向人的独立 Tauri 2 App：文本剪贴板历史、配置片段版本和本地密钥管理。CLI 继续供 Agent 与脚本使用。构建、使用与本地存储边界见 [桌面版说明](desktop/README.md)。当前为本地构建预览版，未公开发布。
+面向人的独立 Tauri 2 App，CLI 继续供 Agent 与脚本使用。
+
+<p align="center">
+  <img src="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/blog/projects/kyvault-desktop/app-main.png" alt="Ky 桌面版：剪贴板历史 · 一点即复制 · 来源可见" width="720">
+</p>
+
+**下载**：[Releases](https://github.com/webkubor/kyvault/releases) 取 `Ky_*.dmg`（Apple Silicon）。装一次之后有新版会自动提示，点一下更新即可，不用再下载安装。
+
+| 功能 | 说明 |
+|------|------|
+| 剪贴板历史 | 复制的内容自动记录（30 天），**点一条直接复制回剪贴板**，显示来自哪个 App。 |
+| 敏感内容保护 | 密钥/令牌类内容默认隐藏、点开才显示；复制出去 30 秒自动清除；数据加密存本机。 |
+| 片段 | 给常用文本起个名字**永久收藏**（剪贴板历史 30 天过期，片段不过期），修改自动留版本。 |
+| 密钥库 | 管理你的 API Key：存取只在本机，复制走「引用」而不是明文。 |
+| 隐私屏 | 离开工位一键遮屏，防旁人偷看。 |
+
+构建、使用与本地存储边界见 [桌面版说明](desktop/README.md)。
 
 
 ## 🎬 30 秒演示

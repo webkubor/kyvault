@@ -285,6 +285,10 @@ ul { margin: 0; padding: 0; list-style: none; }
 .entry-subtitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--t-sm); }
 .badge { font-size: var(--t-xs); color: var(--accent); white-space: nowrap; }
 .entry-source { color: var(--faint); white-space: nowrap; }
+.entry-thumb {
+  width: 100%; max-height: 120px; object-fit: contain; object-position: left;
+  border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface);
+}
 
 .empty { padding: var(--s10) var(--s6); max-width: 42ch; }
 .empty h2 { margin-bottom: var(--s2); }

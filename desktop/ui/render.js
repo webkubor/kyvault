@@ -82,7 +82,16 @@ export function entryKey(entry) {
   return isSecretView() ? `ref:${entry.reference}` : `id:${entry.id}`;
 }
 
+/// 字节数 → 人类可读（"1.2 MB"）。图片条目的体积标注。
+function formatSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 export function entryTitle(e) {
+  if (e.image) return t('entry.imageAlt');
   if (e.snippet) return e.snippet;
   return firstLine(e.text) || (e.redacted ? t('entry.redacted') : t('entry.text'));
 }
@@ -153,6 +162,22 @@ function renderEntry(entry) {
     const meta = el('span', 'entry-meta');
     if (entry.platform) meta.appendChild(el('span', '', entry.platform));
     meta.appendChild(el('span', 'badge', t('badge.credential')));
+    btn.appendChild(meta);
+  } else if (entry.image) {
+    // 图片条目：缩略图 + 尺寸信息；点击复制（与文本一致，主动作在监听器里）。
+    const thumb = el('img', 'entry-thumb');
+    thumb.alt = t('entry.imageAlt');
+    thumb.loading = 'lazy';
+    invoke('get_entry_image', { id: entry.id })
+      .then((res) => {
+        if (res && typeof res.png === 'string') thumb.src = `data:image/png;base64,${res.png}`;
+      })
+      .catch(() => {});
+    btn.appendChild(thumb);
+    const meta = el('span', 'entry-meta');
+    meta.appendChild(el('span', '', `${entry.image.width}×${entry.image.height}`));
+    meta.appendChild(el('span', '', formatSize(entry.image.png_len)));
+    if (entry.source) meta.appendChild(el('span', 'entry-source', t('entry.source', { app: entry.source })));
     btn.appendChild(meta);
   } else {
     btn.appendChild(el('span', 'entry-title', entryTitle(entry)));

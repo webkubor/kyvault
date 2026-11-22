@@ -155,6 +155,8 @@ pub struct Entry {
     snippet: Option<String>,
     version: Option<u64>,
     source: Option<String>,
+    /// 图片条目：宽/高/PNG 字节数。像素数据由 get_entry_image 单独取。
+    image: Option<kyvault::desktop::ImageMeta>,
 }
 impl From<HistoryEntry> for Entry {
     fn from(e: HistoryEntry) -> Self {
@@ -166,8 +168,42 @@ impl From<HistoryEntry> for Entry {
             snippet: e.name,
             version: e.version,
             source: e.source,
+            image: e.image,
         }
     }
+}
+
+/// 剪贴板 RGBA 像素 → PNG 字节。超大图（>12000px 边）或编码失败返回 None。
+/// 抓取线程（main.rs）与手动抓取（capture_clipboard）共用。
+pub fn encode_rgba_png_pub(width: usize, height: usize, bytes: &[u8]) -> Option<Vec<u8>> {
+    use std::io::Cursor;
+    if width == 0 || height == 0 || width > 12_000 || height > 12_000 {
+        return None;
+    }
+    let expected = width * height * 4;
+    if bytes.len() != expected {
+        // 有些平台给的是 BGRA 或带 padding；长度不符时不猜格式，直接放弃。
+        return None;
+    }
+    let rgba = image::RgbaImage::from_raw(width as u32, height as u32, bytes.to_vec())?;
+    let mut out = Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgba8(rgba)
+        .write_to(&mut out, image::ImageFormat::Png)
+        .ok()?;
+    let buf = out.into_inner();
+    (buf.len() <= 8 * 1024 * 1024).then_some(buf)
+}
+
+/// 取某条图片的 PNG 像素（base64），供前端 <img> 渲染。
+#[tauri::command]
+pub fn get_entry_image(id: u64, state: State<DesktopState>) -> Result<serde_json::Value> {
+    let _session = active(&state)?;
+    let png = state
+        .history
+        .image_data(id)
+        .map_err(|_| "图片读取失败或已过期")?;
+    use base64::Engine;
+    Ok(serde_json::json!({ "png": base64::engine::general_purpose::STANDARD.encode(png) }))
 }
 /// 一条发布记录（供"关于/更新"对话框展示版本与更新日志）。
 #[derive(Serialize)]
@@ -361,16 +397,28 @@ pub fn preview_text(
 #[tauri::command]
 pub fn capture_clipboard(state: State<DesktopState>) -> Result<Snapshot> {
     let session = active(&state)?;
-    let text = arboard::Clipboard::new()
-        .and_then(|mut c| c.get_text())
-        .map_err(|_| "剪贴板没有可读取的文本")?;
-    if session.is_sensitive(&text) {
-        return Err("这是从密钥库复制的敏感值，不能加入剪贴板历史".into());
+    let mut cb = arboard::Clipboard::new().map_err(|_| "剪贴板不可用")?;
+    let text = cb.get_text().unwrap_or_default();
+    if !text.is_empty() {
+        if session.is_sensitive(&text) {
+            return Err("这是从密钥库复制的敏感值，不能加入剪贴板历史".into());
+        }
+        state
+            .history
+            .capture(&text, Some("Ky"))
+            .map_err(|_| "无法保存：文本须为 1–65536 字节，且本地历史目录可写")?;
+        return read_snapshot(&state, &session);
     }
-    state
-        .history
-        .capture(&text, Some("Ky"))
-        .map_err(|_| "无法保存：文本须为 1–65536 字节，且本地历史目录可写")?;
+    // 没有文本 → 试图片（手动抓取按钮对图片同样生效）。
+    if let Some(img) = cb.get_image().ok() {
+        if let Some(png) = encode_rgba_png_pub(img.width, img.height, &img.bytes) {
+            let (w, h) = (img.width as u32, img.height as u32);
+            state
+                .history
+                .capture_image(&png, w, h, Some("Ky"))
+                .map_err(|_| "无法保存图片：本地历史目录不可写或图片过大")?;
+        }
+    }
     read_snapshot(&state, &session)
 }
 #[tauri::command]
@@ -431,6 +479,24 @@ pub fn copy_entry(id: u64, state: State<DesktopState>) -> Result<()> {
         .into_iter()
         .find(|e| e.id == id)
         .ok_or("记录已过期或被删除")?;
+    // 图片条目：解密像素 → 写回剪贴板（图片不敏感，无需清除计时）。
+    if entry.image.is_some() {
+        let png = state
+            .history
+            .image_data(id)
+            .map_err(|_| "图片读取失败或已过期")?;
+        let img = image::load_from_memory(&png).map_err(|_| "图片解码失败")?;
+        let rgba = img.to_rgba8();
+        let (w, h) = rgba.dimensions();
+        let data = arboard::ImageData {
+            width: w as usize,
+            height: h as usize,
+            bytes: std::borrow::Cow::Owned(rgba.into_raw()),
+        };
+        return arboard::Clipboard::new()
+            .and_then(|mut c| c.set_image(data))
+            .map_err(|_| "无法写入系统剪贴板".into());
+    }
     // 敏感条目复制的是原文，走与密钥库相同的 30s 自动清除，安全不退化。
     if entry.redacted {
         session.remember_secret(&entry.text)?;

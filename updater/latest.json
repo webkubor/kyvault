@@ -1,11 +1,11 @@
 {
-  "version": "0.2.4",
-  "notes": "版本与更新日志UI（关于对话框、更新提示、加载动画）；粘贴历史点条目直接复制、去掉多余新增按钮",
-  "pub_date": "2026-11-22T12:33:00Z",
+  "version": "0.2.5",
+  "notes": "剪贴板支持图片：复制图片自动记录、加密存储、点缩略图复制回剪贴板；片段说明更清楚；README 加界面截图",
+  "pub_date": "2026-11-22T12:54:07Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbS9XaUJ5RFU2Z29ZSFRySk9vV09HNi9rL0NtZGo4aFRjNWtFNlVFRVpNRjUvaWJ4azl5c1JIZS9Zcll4ODFNcVpXUzIveWRuQ2J0Z0pNMVdQcGNrNEFzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MzUwNzY3CWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMi40Ck5OY2NSNVE0STJpbkNvWkJxWU1pQVVsZitMSXJmOUh5K2ZKZkRaQUZxeGRCUDJjTWNQNWwvTjdxUUM5QTFYTjFJS2hwS2poTFprNm9GN2h2YW1DYkJnPT0K",
-      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.2.4/Ky.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbXhJM05EYmViRW9kZ05XMnhCemprUTJtZkRibGtQUHJVRW9kQUJXUVZjRFFkelRCL1YvWkwvSkJheUllb3Z2cCtjQW0rNGNqOG50aHl2ZnpvUy9GY0E4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MzUyMDI0CWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMi41CmZ6V2lWSi9kc2xkbXdqRXcrcmlwb28xWHdDaDBhRnQrYzRFa0d5a1dRN0ExdUErVFArRktsT3hMby9nVkV4NS9sbjlwc1pjY2NnWUNuRUI3RzcwR0NRPT0K",
+      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.2.5/Ky.app.tar.gz"
     }
   }
 }

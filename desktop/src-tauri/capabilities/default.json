@@ -16,6 +16,7 @@
     "allow-delete-entry",
     "allow-restore-entry",
     "allow-copy-entry",
+    "allow-get-entry-image",
     "allow-copy-reference",
     "allow-copy-secret",
     "allow-save-secret",
