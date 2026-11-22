@@ -309,6 +309,26 @@ Modern baseline only (native dialog, `:focus-visible`, `color-scheme`,
 `prefers-*`, `color-mix`, `backdrop-filter` with an `@supports` fallback,
 `hidden`). Tauri 2 ships a current WebView on all targets, so no legacy shims.
 
+## 12.5 Clarity & zero-cognitive-load decisions (2026-11-22)
+
+Product rule: a first-time user must understand every control without docs;
+every control exists to help the user reach a goal, not to make them read a
+manual. Anything an agent can do must not be asked of the user.
+
+- **Terminology is consistent across surfaces.** Sidebar nav, view headings,
+  the lock button and its dialog all use the same words: "Clipboard history /
+  My secrets / My snippets"; "Hide screen content" → "Screen content is hidden".
+  Previously the button said "Lock workspace" while the dialog said "workspace
+  hidden", which read as two different features (user reported confusion).
+- **Credential entry is minimal.** Only the two things a human must supply are
+  shown by default: platform (select) and the secret value (password field,
+  required). Name / account / alias live in a collapsed `<details>` "More
+  options" and are optional; a blank name defaults to `main`. The user never
+  has to learn what a "reference name" or "alias" is to save a key.
+- **Privacy screen is honest about what it is.** It is a privacy shield, not
+  authentication — the dialog says so in plain words and tells the user how to
+  restore. It never claims to be a device lock.
+
 ## 13. Known gaps / non-goals
 
 - No snippet **version diff** — versions are listed and restorable; diff is a

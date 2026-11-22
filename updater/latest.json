@@ -1,11 +1,11 @@
 {
-  "version": "0.2.1",
-  "notes": "根治 MiniMax 国内 M 套餐 Key 无法入库；加入真正的自动更新（后台下载安装重启）",
-  "pub_date": "2026-11-22T11:42:08Z",
+  "version": "0.2.2",
+  "notes": "界面一看就懂：统一术语、凭证录入只需选平台+粘Key，更多选项折叠；自动更新",
+  "pub_date": "2026-11-22T11:58:32Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbTcyWVZuaEJnbUIxRG4xK3RVbUJmdEhmdmFCckNJdzltWmpIS2UwVmlUYmxYL0ZLNWF1NXZuTFhucFhWaXhmQlNlSk9uL3BWbHRqeEt0enZRL3R6REE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MzQ3Mzg4CWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMi4xClgyeXJPS1NFcTRCOTlvS3B1R29Lb0kyQ2hiWHdwdU5ZWjlUMVo5T2hHU0xaYy9NcUFIQU9mM0R6am5sT0JQUW9QLzNGMjF2dUx6UkxCL1RaTzY5Q0R3PT0K",
-      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.2.1/Ky.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbXpZVVRhbWh4UkUwVGNObDM4amlHZGtCUUlqL1RheVZSQU9KT2hTelVnNWVEclNDT0J2Y001VCtPUFRHQVNJZEl2UnNhTW1PcHUzTlJ4azNubEJUTndvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MzQ4NjY2CWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMi4yClY5eW0rYmUwRDdmT2dNZ2tKWUphU2UyV1kzVXdNaWlhVkROdnpPZUF2dzkvcU1vUk5FREF2V2pQQnRVTjFrSEIxZXdsS0cvalpTMlUwYlhEdUxyUEFBPT0K",
+      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.2.2/Ky.app.tar.gz"
     }
   }
 }

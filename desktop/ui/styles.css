@@ -344,6 +344,10 @@ dialog input, dialog textarea {
 dialog input::placeholder { color: var(--faint); }
 dialog textarea { resize: vertical; max-height: 30vh; font-family: var(--mono); font-size: var(--t-sm); line-height: 1.7; }
 .hint { font-size: var(--t-xs); line-height: 1.6; color: var(--muted); margin: var(--s1) 0 0; }
+.cred-advanced { margin-top: var(--s3); border-top: 1px solid var(--hairline); padding-top: var(--s2); }
+.cred-advanced summary { font-size: var(--t-sm); color: var(--muted); cursor: pointer; padding: var(--s1) 0; }
+.cred-advanced summary:hover { color: var(--text); }
+.cred-advanced summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: var(--s2); margin-top: var(--s5); }
 #confirm-copy, #locked > p { line-height: 1.7; margin: var(--s3) 0 var(--s5); color: var(--muted); }
 #redaction-preview { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s3); margin-top: var(--s3); max-height: 25vh; overflow: auto; }

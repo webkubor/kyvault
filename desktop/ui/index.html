@@ -107,15 +107,19 @@
       <p id="cred-request-note" class="hint" hidden></p>
       <label for="secret-platform" data-i18n="cred.platform.label"></label>
       <select id="secret-platform"></select>
-      <label for="secret-name" data-i18n="cred.name.label"></label>
-      <input id="secret-name" required placeholder="work" autocomplete="off" spellcheck="false">
-      <label for="secret-account" data-i18n="cred.account.label"></label>
-      <input id="secret-account" placeholder="octocat@example.com" autocomplete="off" spellcheck="false">
-      <label for="secret-alias" data-i18n="cred.alias.label"></label>
-      <input id="secret-alias" placeholder="github_token" autocomplete="off" spellcheck="false">
       <label for="secret-value" data-i18n="cred.value.label"></label>
       <input id="secret-value" type="password" required autocomplete="new-password" spellcheck="false">
       <p class="hint" id="cred-verify-hint" data-i18n="cred.value.hint"></p>
+      <details class="cred-advanced">
+        <summary data-i18n="cred.advanced.label"></summary>
+        <p class="hint" data-i18n="cred.advanced.hint"></p>
+        <label for="secret-name" data-i18n="cred.name.label"></label>
+        <input id="secret-name" placeholder="main" autocomplete="off" spellcheck="false">
+        <label for="secret-account" data-i18n="cred.account.label"></label>
+        <input id="secret-account" placeholder="octocat@example.com" autocomplete="off" spellcheck="false">
+        <label for="secret-alias" data-i18n="cred.alias.label"></label>
+        <input id="secret-alias" placeholder="github_token" autocomplete="off" spellcheck="false">
+      </details>
       <p id="secret-error" class="error" role="alert" hidden></p>
       <div class="dialog-actions"><button type="button" class="quiet close" data-i18n="action.cancel"></button><button class="primary" type="submit" data-i18n="action.saveCredential"></button></div>
     </form>

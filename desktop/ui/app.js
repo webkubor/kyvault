@@ -113,12 +113,6 @@ function openEditor(entry) {
   setFormError('#text-error', null);
   $('#editor').showModal();
 }
-$('#add').addEventListener('click', () => {
-  if (state.view !== 'vault') return openEditor();
-  wipeForms();
-  setFormError('#secret-error', null);
-  $('#credential').showModal();
-});
 $$('.close').forEach((button) => button.addEventListener('click', () => button.closest('dialog').close()));
 for (const id of ['editor', 'credential']) $('#' + id).addEventListener('close', wipeForms);
 function resetReview() {
@@ -184,13 +178,16 @@ function resetCredentialForm() {
   }
   $('#cred-request-note').hidden = true;
   $('#cred-verify-hint').textContent = t('cred.value.hint');
+  const advanced = $('#credential .cred-advanced');
+  if (advanced) advanced.open = false;
 }
 
 $('#secret-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (busy || state.locked) return;
   const platform = $('#secret-platform').value;
-  const name = $('#secret-name').value.trim().toLowerCase();
+  // 名称留空自动填 main —— 用户不必理解"引用名"这个概念，选平台+粘 Key 就能存。
+  const name = ($('#secret-name').value.trim().toLowerCase() || 'main');
   const account = $('#secret-account').value.trim();
   const alias = $('#secret-alias').value.trim().toLowerCase();
   const value = $('#secret-value').value;
