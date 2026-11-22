@@ -8,7 +8,6 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::{tray::TrayIconBuilder, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-use tauri_plugin_updater::UpdaterExt;
 
 pub fn show(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -95,57 +94,15 @@ fn main() {
                     let _ = handle.emit("request-credential", id);
                 });
             }
-            // 发版闭环（issue #15）：真正的自动更新。启动后台自动检查 →
-            // 有新版则后台下载+安装 → 重启，用户全程零操作。网络失败静默。
+            // 发版闭环（issue #15）：启动后台只检查新版，发现新版发事件让前端显示
+            // "有新版本"提示；实际下载/安装由用户点"更新"触发（install_update），
+            // 带加载动画。不后台偷偷下载，尊重用户控制权。网络失败静默。
             {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    // 延迟 3s：先让窗口和前端就绪，更新提示能被看到。
                     tokio::time::sleep(Duration::from_secs(3)).await;
-                    // endpoint 用固定 raw 路径，不受 GitHub "latest release" 被 CLI 发版顶掉的影响。
-                    let updater = match handle
-                        .updater_builder()
-                        .endpoints(vec![
-                            // raw.githubusercontent.com 有 5 分钟 CDN 缓存（max-age=300），
-                            // 发版后短暂延迟最终一致；对单机自动更新足够，且无需 API 鉴权/限额。
-                            tauri::Url::parse(
-                                "https://raw.githubusercontent.com/webkubor/kyvault/main/updater/latest.json",
-                            )
-                            .expect("硬编码的 updater endpoint URL 必须合法"),
-                        ])
-                        .and_then(|b| b.build())
-                    {
-                        Ok(u) => u,
-                        Err(_) => return,
-                    };
-                    let update = match updater.check().await {
-                        Ok(Some(u)) => u,
-                        Ok(None) => return, // 已是最新
-                        Err(_) => return,   // 网络/manifest 失败：静默，不打扰
-                    };
-                    let version = update.version.clone();
-                    let _ = handle.emit("update-progress", serde_json::json!({
-                        "phase": "downloading", "version": version
-                    }));
-                    if update
-                        .download_and_install(
-                            |chunk, total| {
-                                let _ = handle.emit("update-progress", serde_json::json!({
-                                    "phase": "downloading", "version": version,
-                                    "downloaded": chunk, "total": total
-                                }));
-                            },
-                            || {},
-                        )
-                        .await
-                        .is_ok()
-                    {
-                        let _ = handle.emit("update-progress", serde_json::json!({
-                            "phase": "installed", "version": version
-                        }));
-                        // 给前端 1s 显示"安装完成，即将重启"，再重启生效。
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                        handle.restart();
+                    if let Err(e) = commands::install_update_check_only(&handle).await {
+                        let _ = e;
                     }
                 });
             }
@@ -276,7 +233,9 @@ fn main() {
             commands::lock_app,
             commands::unlock_app,
             commands::clear_history,
-            commands::set_ui_language
+            commands::set_ui_language,
+            commands::get_app_info,
+            commands::install_update
         ])
         .run(tauri::generate_context!())
         .expect("Ky desktop failed to start");

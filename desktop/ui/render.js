@@ -4,7 +4,7 @@
 // Layout: one column. The list fills the column; selecting an entry opens a
 // detail sheet that slides over it. There is no permanent second pane.
 
-import { state, $, $$, el, showEl, invoke, formatWhen, firstLine, setError, relocalizeMessages } from './core.js';
+import { state, $, $$, el, showEl, invoke, formatWhen, firstLine, setError, setStatus, relocalizeMessages } from './core.js';
 import { t } from './lang.js';
 
 export const VIEW_META = {
@@ -23,9 +23,15 @@ export function renderViewHeading() {
 
 export function renderAddLabel() {
   const add = $('#add');
+  // 粘贴历史里「新增文本」多余：这个页面只做「点条目→复制」。
+  // 新增只在片段/凭证页需要。
+  if (state.view === 'history') {
+    add.hidden = true;
+    return;
+  }
+  add.hidden = false;
   if (state.view === 'vault') add.textContent = t('action.add.credential');
-  else if (state.view === 'snippets') add.textContent = t('action.add.snippet');
-  else add.textContent = t('action.add.text');
+  else add.textContent = t('action.add.snippet');
 }
 
 export function renderMonitorState() {
@@ -139,6 +145,7 @@ export function renderList() {
 }
 
 function renderEntry(entry) {
+  const wrap = el('div', 'entry-wrap');
   const btn = el('button', 'entry');
   btn.type = 'button';
   if (isSecretView()) {
@@ -160,8 +167,32 @@ function renderEntry(entry) {
   }
   btn.dataset.entryKey = entryKey(entry);
   btn.setAttribute('aria-pressed', String(entryKey(entry) === state.selectedId));
-  btn.addEventListener('click', () => select(entry));
-  return btn;
+  if (isSecretView()) {
+    // 密钥视图：点条目打开详情（显示引用、复制引用）。
+    btn.addEventListener('click', () => select(entry));
+  } else {
+    // 历史/片段：核心动作是「点一下就复制到剪贴板」，一步到位。
+    btn.addEventListener('click', async () => {
+      try {
+        await invoke('copy_entry', { id: entry.id });
+        setStatus('status.entryCopied');
+      } catch {
+        setError('err.generic');
+      }
+    });
+    // 详情（显示原文/存为片段/删除）收进二级入口，不干扰主动作。
+    const more = el('button', 'entry-more');
+    more.type = 'button';
+    more.textContent = '⋯';
+    more.setAttribute('aria-label', t('action.entryDetail'));
+    more.title = t('action.entryDetail');
+    more.addEventListener('click', () => select(entry));
+    wrap.appendChild(btn);
+    wrap.appendChild(more);
+    return wrap;
+  }
+  wrap.appendChild(btn);
+  return wrap;
 }
 
 export function setView(view) {

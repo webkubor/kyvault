@@ -24,6 +24,9 @@
       <button class="nav-item" data-view="settings"><span class="nav-icon" aria-hidden="true"></span><span data-i18n="nav.settings"></span></button>
     </nav>
     <div class="sidebar-bottom">
+      <button id="about" class="version-btn" title="版本与更新">
+        <span id="version-label">Ky</span><span id="update-dot" class="update-dot" hidden></span>
+      </button>
       <button id="lock" class="quiet"><span data-i18n="action.lock"></span></button>
     </div>
   </aside>
@@ -140,5 +143,23 @@
   <dialog id="confirm" aria-labelledby="confirm-title"><h2 id="confirm-title"></h2><p id="confirm-copy"></p><div class="dialog-actions"><button id="confirm-cancel" autofocus data-i18n="action.cancel"></button><button id="confirm-action" class="primary"></button></div></dialog>
 
   <dialog id="locked" aria-labelledby="locked-title"><h2 id="locked-title" data-i18n="locked.title"></h2><p data-i18n="locked.copy"></p><p id="unlock-error" class="error" role="alert" hidden></p><button id="unlock" class="primary" data-i18n="action.unlock"></button></dialog>
+
+  <dialog id="about-dialog" class="about-dialog" aria-labelledby="about-title">
+    <div class="dialog-heading"><h2 id="about-title" data-i18n="about.title"></h2><button type="button" class="quiet close" data-i18n-aria="dialog.close" aria-label="">×</button></div>
+    <div class="about-current">
+      <span data-i18n="about.current"></span>
+      <strong id="about-version">…</strong>
+    </div>
+    <div class="about-actions">
+      <button id="check-update" class="primary" data-i18n="about.check"></button>
+      <span id="update-status" class="hint" role="status"></span>
+    </div>
+    <div id="update-detail" class="update-detail" hidden>
+      <p id="update-available-text"></p>
+      <button id="do-update" class="primary" data-i18n="about.update"></button>
+    </div>
+    <h3 data-i18n="about.history"></h3>
+    <div id="release-notes" class="release-notes"><p class="hint" data-i18n="about.loading"></p></div>
+  </dialog>
 </body>
 </html>

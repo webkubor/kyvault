@@ -1,11 +1,11 @@
 {
-  "version": "0.2.3",
-  "notes": "剪贴板历史可用：原文加密保留、默认打码点开显示、记录来源app、菜单栏快捷入口",
-  "pub_date": "2026-11-22T12:17:02Z",
+  "version": "0.2.4",
+  "notes": "版本与更新日志UI（关于对话框、更新提示、加载动画）；粘贴历史点条目直接复制、去掉多余新增按钮",
+  "pub_date": "2026-11-22T12:33:00Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbXhOejhudkI4YS9KRDlEb1NzV2pQekVObGxXNnU0MTB6NU91eGZCRzFHZGxCTkhKalZIbmRGR2xpVTdTNlZCczNOQmpCbkE1aW1ZQ0MzUmZUVzFRNHd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MzQ5NzkzCWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMi4zClNlYW03NVFMNlZtSkN2aWc4RDJIWFBabzdhRXlLREh2UjNBVGpBSlBzd3FyS2dnQStLdWxZWm1wZlVvM1JOZGNIMUlBdXdTZlhUYW8xQzY0ZWVsU0FnPT0K",
-      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.2.3/Ky.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbS9XaUJ5RFU2Z29ZSFRySk9vV09HNi9rL0NtZGo4aFRjNWtFNlVFRVpNRjUvaWJ4azl5c1JIZS9Zcll4ODFNcVpXUzIveWRuQ2J0Z0pNMVdQcGNrNEFzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MzUwNzY3CWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMi40Ck5OY2NSNVE0STJpbkNvWkJxWU1pQVVsZitMSXJmOUh5K2ZKZkRaQUZxeGRCUDJjTWNQNWwvTjdxUUM5QTFYTjFJS2hwS2poTFprNm9GN2h2YW1DYkJnPT0K",
+      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.2.4/Ky.app.tar.gz"
     }
   }
 }

@@ -12,6 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tauri::{Emitter, Manager, State};
+use tauri_plugin_updater::UpdaterExt;
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -168,6 +169,120 @@ impl From<HistoryEntry> for Entry {
         }
     }
 }
+/// 一条发布记录（供"关于/更新"对话框展示版本与更新日志）。
+#[derive(Serialize)]
+pub struct ReleaseNote {
+    pub version: String,
+    pub name: String,
+    pub body: String,
+    pub published_at: String,
+    pub url: String,
+}
+
+/// 后台只检查新版，发现后发 update-available 事件（不自动下载）。
+pub async fn install_update_check_only(app: &tauri::AppHandle) -> Result<()> {
+    let updater = app
+        .updater_builder()
+        .endpoints(vec![tauri::Url::parse(
+            "https://raw.githubusercontent.com/webkubor/kyvault/main/updater/latest.json",
+        )
+        .map_err(|e| e.to_string())?])
+        .and_then(|b| b.build())
+        .map_err(|e| e.to_string())?;
+    if let Some(update) = updater.check().await.map_err(|e| e.to_string())? {
+        let _ = app.emit(
+            "update-available",
+            serde_json::json!({"version": update.version, "current": env!("CARGO_PKG_VERSION")}),
+        );
+    }
+    Ok(())
+}
+
+/// 用户主动点"更新"：检查并安装最新版，装完重启。
+/// 结果与进度通过 update-progress 事件发给前端（含下载百分比）。
+#[tauri::command]
+pub async fn install_update(app: tauri::AppHandle) -> Result<()> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app
+        .updater_builder()
+        .endpoints(vec![
+            tauri::Url::parse(
+                "https://raw.githubusercontent.com/webkubor/kyvault/main/updater/latest.json",
+            )
+            .map_err(|e| e.to_string())?,
+        ])
+        .and_then(|b| b.build())
+        .map_err(|e| e.to_string())?;
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "已经是最新版本".to_string())?;
+    let version = update.version.clone();
+    let _ = app.emit("update-progress", serde_json::json!({"phase":"downloading","version":version}));
+    update
+        .download_and_install(
+            |chunk, total| {
+                let _ = app.emit("update-progress", serde_json::json!({
+                    "phase":"downloading","version":version,"downloaded":chunk,"total":total
+                }));
+            },
+            || {},
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+    let _ = app.emit("update-progress", serde_json::json!({"phase":"installed","version":version}));
+    // 给前端一点时间显示"安装完成"，再重启（重启逻辑交给前端 setTimeout 调 restart_app，
+    // 或直接在这里延迟重启）。这里直接延迟重启，前端会收到 installed 事件显示提示。
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        handle.restart();
+    });
+    Ok(())
+}
+
+/// 当前版本 + 桌面线的历史更新日志。联网从 GitHub Releases 拉取；
+/// 失败时返回空日志（离线可用，只是看不到日志，不影响更新机制本身）。
+#[tauri::command]
+pub fn get_app_info() -> serde_json::Value {
+    let current = env!("CARGO_PKG_VERSION").to_string();
+    let mut notes: Vec<ReleaseNote> = Vec::new();
+    if let Ok(resp) = ureq::get("https://api.github.com/repos/webkubor/kyvault/releases")
+        .set("Accept", "application/vnd.github+json")
+        .set("User-Agent", concat!("ky-desktop/", env!("CARGO_PKG_VERSION")))
+        .timeout(std::time::Duration::from_secs(10))
+        .call()
+    {
+        if let Ok(body) = resp.into_json::<serde_json::Value>() {
+            if let Some(arr) = body.as_array() {
+                for r in arr {
+                    let tag = r.get("tag_name").and_then(|v| v.as_str()).unwrap_or("");
+                    if !tag.starts_with("desktop-v") {
+                        continue;
+                    }
+                    notes.push(ReleaseNote {
+                        version: tag.trim_start_matches("desktop-v").to_string(),
+                        name: r.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        body: r.get("body").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        published_at: r
+                            .get("published_at")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        url: r
+                            .get("html_url")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                    });
+                }
+            }
+        }
+    }
+    serde_json::json!({"current": current, "notes": notes})
+}
+
 #[derive(Serialize)]
 pub struct Secret {
     reference: String,

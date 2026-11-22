@@ -308,8 +308,16 @@ if (desktop) {
     pendingRequestId = id;
     tryOpenAgentRequest();
   });
-  // 发版闭环（issue #15）：真正的自动更新 —— 后端后台下载并安装新版，
-  // 这里只负责把进度显示到状态条，用户无需任何操作，装完自动重启。
+  // 后端后台检测到新版 → 侧栏版本按钮显示小红点 + 记住版本号。
+  listen('update-available', (event) => {
+    const { version } = event.payload || {};
+    if (!version) return;
+    availableVersion = version;
+    setUpdateDot(true);
+    const label = $('#version-label');
+    if (label) label.textContent = t('about.hasUpdate');
+  });
+  // 用户点"更新"后的下载/安装进度显示到状态条。
   listen('update-progress', (event) => {
     const { phase, version } = event.payload || {};
     if (phase === 'downloading') {
@@ -378,6 +386,102 @@ $('#detail').addEventListener('click', async (e) => {
   }
 });
 $$('.nav-item').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
+
+// ---- 版本与更新日志（关于对话框）----
+let availableVersion = null; // 后端检测到新版时填入
+function setUpdateDot(on) {
+  const dot = $('#update-dot');
+  if (dot) dot.hidden = !on;
+}
+
+// 把发布说明渲染成可点击展开的列表（每条标题可点开 GitHub release 看全文）。
+function renderReleaseNotes(notes) {
+  const box = $('#release-notes');
+  if (!box) return;
+  box.replaceChildren();
+  if (!notes || !notes.length) {
+    const p = el('p', 'hint');
+    p.textContent = t('about.noNotes');
+    box.appendChild(p);
+    return;
+  }
+  for (const n of notes) {
+    const row = el('details', 'release-row');
+    const sum = el('summary', '', `v${n.version} — ${n.name || n.published_at.slice(0, 10)}`);
+    row.appendChild(sum);
+    const body = el('pre', 'release-body', n.body || t('about.noDetail'));
+    row.appendChild(body);
+    if (n.url) {
+      const a = el('a', 'release-link', t('about.openRelease'));
+      a.href = n.url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      row.appendChild(a);
+    }
+    box.appendChild(row);
+  }
+}
+
+async function loadAbout() {
+  const verLabel = $('#about-version');
+  const status = $('#update-status');
+  const detail = $('#update-detail');
+  if (verLabel) verLabel.textContent = '…';
+  if (status) status.textContent = t('about.loading');
+  if (detail) detail.hidden = true;
+  try {
+    const info = await invoke('get_app_info');
+    if (verLabel) verLabel.textContent = `v${info.current}`;
+    renderReleaseNotes(info.notes);
+    if (status) status.textContent = '';
+    if (availableVersion) {
+      if (detail) detail.hidden = false;
+      const txt = $('#update-available-text');
+      if (txt) txt.textContent = t('about.newAvailable', { version: availableVersion });
+    }
+  } catch {
+    if (status) status.textContent = t('about.loadFailed');
+  }
+}
+
+$('#about').addEventListener('click', () => {
+  const dialog = document.querySelector('dialog#about-dialog');
+  if (dialog) dialog.showModal();
+  loadAbout();
+});
+
+// 检查更新按钮：主动拉一次检测（后台也在跑，这里即时反馈），带加载动画。
+$('#check-update').addEventListener('click', async () => {
+  const btn = $('#check-update');
+  const status = $('#update-status');
+  if (btn) { btn.disabled = true; btn.classList.add('loading'); }
+  if (status) status.textContent = t('about.checking');
+  try {
+    // get_app_info 会重新拉 releases；版本检测仍由后台 check-only 事件给出。
+    await invoke('get_app_info');
+    if (status) status.textContent = availableVersion
+      ? t('about.newAvailable', { version: availableVersion })
+      : t('about.upToDate');
+  } catch {
+    if (status) status.textContent = t('about.checkFailed');
+  } finally {
+    if (btn) { btn.disabled = false; btn.classList.remove('loading'); }
+  }
+});
+
+// 更新按钮：用户主动触发下载安装，显示加载。
+$('#do-update').addEventListener('click', async () => {
+  const btn = $('#do-update');
+  const status = $('#update-status');
+  if (btn) { btn.disabled = true; btn.classList.add('loading'); }
+  if (status) status.textContent = t('about.downloading');
+  try {
+    await invoke('install_update');
+  } catch (e) {
+    if (status) status.textContent = typeof e === 'string' ? e : t('about.updateFailed');
+    if (btn) { btn.disabled = false; btn.classList.remove('loading'); }
+  }
+});
 $('#search').addEventListener('input', (e) => { state.filter = e.target.value; renderList(); });
 $('#capture').addEventListener('click', async () => {
   captureErrorShown = false;
