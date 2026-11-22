@@ -1,11 +1,11 @@
 {
-  "version": "0.2.5",
-  "notes": "剪贴板支持图片：复制图片自动记录、加密存储、点缩略图复制回剪贴板；片段说明更清楚；README 加界面截图",
-  "pub_date": "2026-11-22T12:54:07Z",
+  "version": "0.2.6",
+  "notes": "简化侧栏，移除片段入口并保护已有片段。",
+  "pub_date": "2026-11-22T15:11:00Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbXhJM05EYmViRW9kZ05XMnhCemprUTJtZkRibGtQUHJVRW9kQUJXUVZjRFFkelRCL1YvWkwvSkJheUllb3Z2cCtjQW0rNGNqOG50aHl2ZnpvUy9GY0E4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MzUyMDI0CWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMi41CmZ6V2lWSi9kc2xkbXdqRXcrcmlwb28xWHdDaDBhRnQrYzRFa0d5a1dRN0ExdUErVFArRktsT3hMby9nVkV4NS9sbjlwc1pjY2NnWUNuRUI3RzcwR0NRPT0K",
-      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.2.5/Ky.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbTc0aXgrQlFYNkpTWURib0VkbkJPazdrTStWa3pyQjN1Q0RvVVYreTFNZWp0NFVDeGNYT2x0MUxlcldSN0dSeE9GUUZaaVpDK3BQdlNHVHNXYWpOQndNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MzYwMjAzCWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMi42CjhZMFloNm9CeG5DNXBaTUFhelM1R1g0MXRELy9BSWFqNjB5TmFYR1FPaktZbEREWGdkUXZFWHdTQ0V0cDJONFl5WE5YYi8zS1JVaGZ4eGFma2Erd0RBPT0K",
+      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.2.6/Ky.app.tar.gz"
     }
   }
 }
