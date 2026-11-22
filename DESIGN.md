@@ -329,6 +329,25 @@ manual. Anything an agent can do must not be asked of the user.
   authentication — the dialog says so in plain words and tells the user how to
   restore. It never claims to be a device lock.
 
+## 12.6 Clipboard history — usable without losing secrets (2026-11-22)
+
+Product decision: clipboard history must be actually useful; protecting secrets
+and a usable history are not a binary trade-off.
+
+- **Never destroy the copied text.** The old `redact()` replaced sensitive lines
+  with `[REDACTED]` at capture time, so a user who copied keys saw a full screen
+  of `[REDACTED]` and could never recover anything. Now the original text is
+  retained in the encrypted `history.enc`; `needs_mask()` only *marks* the entry
+  sensitive. The UI shows a masked placeholder by default and reveals the original
+  only when the user clicks "Show original" — applies to both the detail pane and
+  the clipboard copy (which attaches the 30s auto-clear, same as vault secrets).
+- **Source app is recorded.** Each entry stores the frontmost app name at copy
+  time (`source: Option<String>`, `#[serde(default)]` for old data) and the UI
+  shows "from {app}". macOS uses `NSWorkspace.frontmostApplication`.
+- **Menu bar is the quick entry.** The tray already lists recent history and
+  copies an entry back on click; sensitive entries show only a redacted summary
+  there (never raw secrets in the menu bar).
+
 ## 13. Known gaps / non-goals
 
 - No snippet **version diff** — versions are listed and restorable; diff is a

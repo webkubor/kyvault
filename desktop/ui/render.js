@@ -151,6 +151,7 @@ function renderEntry(entry) {
     btn.appendChild(el('span', 'entry-title', entryTitle(entry)));
     const meta = el('span', 'entry-meta');
     meta.appendChild(el('span', '', formatWhen(entry.created_at)));
+    if (entry.source) meta.appendChild(el('span', 'entry-source', t('entry.source', { app: entry.source })));
     if (entry.redacted) meta.appendChild(el('span', 'badge', t('badge.redacted')));
     if (entry.snippet) meta.appendChild(el('span', 'badge', `v${entry.version || 1}`));
     btn.appendChild(meta);
@@ -233,8 +234,16 @@ export function renderDetail() {
     pane.appendChild(meta);
     const body = el('div', 'detail-body', '…');
     pane.appendChild(body);
+    if (entry.redacted) {
+      // 敏感条目默认打码：不主动把原文放进 DOM。用户点"显示原文"才取。
+      const reveal = el('button', '', t('action.reveal'));
+      reveal.type = 'button';
+      reveal.dataset.action = 'reveal-entry';
+      pane.appendChild(reveal);
+      body.textContent = t('preview.masked');
+    }
     pane.appendChild(entryActions(entry));
-    loadDetailText(entry, body);
+    if (!entry.redacted) loadDetailText(entry, body);
   }
   showEl(pane, true);
 }
@@ -285,14 +294,20 @@ function entryActions(entry) {
   return actions;
 }
 
-async function loadDetailText(entry, body) {
+async function loadDetailText(entry, body, reveal = false) {
   try {
-    const res = await invoke('preview_text', { text: entry.text });
+    const res = await invoke('preview_text', { text: entry.text, reveal });
     body.textContent = res && typeof res.text === 'string' ? res.text : entry.text;
   } catch {
     body.textContent = entry.text;
     setError('err.generic');
   }
+}
+
+// 导出给 app.js 的事件委托：用户点"显示原文"时调用，取回并展示原文。
+export function revealEntry(entry) {
+  const body = document.querySelector('#detail .detail-body');
+  if (body) loadDetailText(entry, body, true);
 }
 
 export function renderNoBridge() {

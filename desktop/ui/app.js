@@ -8,7 +8,7 @@
 // copy survives anywhere.
 
 const { state, $, $$, setStatus, setError, setFormError, setConfirmText, invoke, listen, isComposing, readPref, writePref } = await import('./core.js');
-const { setView, renderList, renderDetail, renderNoBridge, relocalizeDynamic, closeDetail } = await import('./render.js');
+const { setView, renderList, renderDetail, renderNoBridge, relocalizeDynamic, closeDetail, revealEntry } = await import('./render.js');
 const { t, applyLanguage, syncLanguageFromSnapshot, currentLang, LANG_KEY, onLanguageChanged } = await import('./lang.js');
 
 let epoch = 0;
@@ -354,6 +354,12 @@ $('#detail').addEventListener('click', async (e) => {
   if (!entry || state.locked) return;
   const { id, reference } = entry;
   if (command === 'save-as-snippet' || command === 'edit-snippet') return openEditor(entry);
+  if (command === 'reveal-entry') {
+    revealEntry(entry);
+    const btn = e.target.closest('[data-action]');
+    if (btn) btn.remove();
+    return;
+  }
   if (command === 'copy-entry') return action('copy_entry', { id }, 'status.entryCopied');
   if (command === 'copy-reference') return action('copy_reference', { reference }, 'status.refCopied');
   if (command === 'copy-secret') {

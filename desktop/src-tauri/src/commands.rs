@@ -153,6 +153,7 @@ pub struct Entry {
     redacted: bool,
     snippet: Option<String>,
     version: Option<u64>,
+    source: Option<String>,
 }
 impl From<HistoryEntry> for Entry {
     fn from(e: HistoryEntry) -> Self {
@@ -163,6 +164,7 @@ impl From<HistoryEntry> for Entry {
             redacted: e.redacted,
             snippet: e.name,
             version: e.version,
+            source: e.source,
         }
     }
 }
@@ -223,13 +225,23 @@ pub fn snapshot(state: State<DesktopState>) -> Result<Snapshot> {
     read_snapshot(&state, &session)
 }
 #[tauri::command]
-pub fn preview_text(text: String, state: State<DesktopState>) -> Result<serde_json::Value> {
+pub fn preview_text(
+    text: String,
+    reveal: Option<bool>,
+    state: State<DesktopState>,
+) -> Result<serde_json::Value> {
     let _session = active(&state)?;
     if text.len() > 65_536 {
         return Err("文本不能超过 64 KiB".into());
     }
-    let safe = redact(&text);
-    Ok(serde_json::json!({"redacted":safe != text,"text":safe}))
+    let needs_mask = kyvault::desktop::needs_mask(&text);
+    // reveal=false（默认）只给打码摘要；用户显式点"显示原文"才返回原文。
+    let body = if needs_mask && !reveal.unwrap_or(false) {
+        redact(&text)
+    } else {
+        text
+    };
+    Ok(serde_json::json!({"redacted":needs_mask,"text":body,"revealed":reveal.unwrap_or(false)}))
 }
 #[tauri::command]
 pub fn capture_clipboard(state: State<DesktopState>) -> Result<Snapshot> {
@@ -242,7 +254,7 @@ pub fn capture_clipboard(state: State<DesktopState>) -> Result<Snapshot> {
     }
     state
         .history
-        .capture(&text)
+        .capture(&text, Some("Ky"))
         .map_err(|_| "无法保存：文本须为 1–65536 字节，且本地历史目录可写")?;
     read_snapshot(&state, &session)
 }
@@ -269,7 +281,7 @@ pub fn save_text(
     }
     let result = match snippet.filter(|s| !s.trim().is_empty()) {
         Some(name) => state.history.save_version(&name, &text),
-        None => state.history.capture(&text),
+        None => state.history.capture(&text, Some("Ky")),
     };
     result.map_err(|_| "保存失败，请检查文本长度、名称和本地目录权限")?;
     read_snapshot(&state, &session)
@@ -296,7 +308,7 @@ fn copy(text: String) -> Result<()> {
 }
 #[tauri::command]
 pub fn copy_entry(id: u64, state: State<DesktopState>) -> Result<()> {
-    let _session = active(&state)?;
+    let mut session = active(&state)?;
     let entry = state
         .history
         .list()
@@ -304,7 +316,16 @@ pub fn copy_entry(id: u64, state: State<DesktopState>) -> Result<()> {
         .into_iter()
         .find(|e| e.id == id)
         .ok_or("记录已过期或被删除")?;
-    copy(entry.text)
+    // 敏感条目复制的是原文，走与密钥库相同的 30s 自动清除，安全不退化。
+    if entry.redacted {
+        session.remember_secret(&entry.text)?;
+        let hash = fingerprint(&entry.text);
+        copy(entry.text)?;
+        session.clear_at = Some((Instant::now() + Duration::from_secs(30), hash));
+        Ok(())
+    } else {
+        copy(entry.text)
+    }
 }
 #[tauri::command]
 pub fn copy_reference(reference: String, state: State<DesktopState>) -> Result<()> {

@@ -160,7 +160,15 @@ fn refresh_now(app: &AppHandle) -> Result<()> {
             .list()
             .unwrap_or_default()
             .into_iter()
-            .map(|e| (e.id, e.text))
+            // 菜单栏只显示打码摘要：敏感条目的原文绝不进菜单栏。
+            .map(|e| {
+                let label = if e.redacted {
+                    kyvault::desktop::redact(&e.text)
+                } else {
+                    e.text
+                };
+                (e.id, label)
+            })
             .collect()
     };
     let plan = plan(locked, monitoring, zh, &entries);

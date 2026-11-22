@@ -106,6 +106,8 @@ fn main() {
                     let updater = match handle
                         .updater_builder()
                         .endpoints(vec![
+                            // raw.githubusercontent.com 有 5 分钟 CDN 缓存（max-age=300），
+                            // 发版后短暂延迟最终一致；对单机自动更新足够，且无需 API 鉴权/限额。
                             tauri::Url::parse(
                                 "https://raw.githubusercontent.com/webkubor/kyvault/main/updater/latest.json",
                             )
@@ -225,7 +227,8 @@ fn main() {
                                 continue;
                             }
                             previous_fingerprint = Some(fingerprint);
-                            match state.history.capture(&text) {
+                            let source = frontmost_app();
+                            match state.history.capture(&text, source.as_deref()) {
                                 Ok(_) => {
                                     drop(session);
                                     let _ = handle.emit("history-changed", ());
@@ -281,6 +284,21 @@ fn main() {
 
 // NSPasteboard has a change counter, not a public clipboard-change notification.
 // Check the cheap counter once a second; only read/decrypt when needed.
+// 复制时的来源应用名（macOS 前台 app）。抓取是秒级轮询，拿一次开销可忽略；
+// 拿不到就返回 None，前端不显示来源，不影响功能。
+#[cfg(target_os = "macos")]
+fn frontmost_app() -> Option<String> {
+    use objc2_app_kit::NSWorkspace;
+    let ws = NSWorkspace::sharedWorkspace();
+    let app = ws.frontmostApplication()?;
+    let name = app.localizedName()?;
+    let s = name.to_string();
+    if s.is_empty() { None } else { Some(s) }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn frontmost_app() -> Option<String> { None }
+
 #[cfg(target_os = "macos")]
 fn clipboard_change() -> Option<isize> {
     Some(objc2_app_kit::NSPasteboard::generalPasteboard().changeCount())

@@ -1,11 +1,11 @@
 {
-  "version": "0.2.2",
-  "notes": "界面一看就懂：统一术语、凭证录入只需选平台+粘Key，更多选项折叠；自动更新",
-  "pub_date": "2026-11-22T11:58:32Z",
+  "version": "0.2.3",
+  "notes": "剪贴板历史可用：原文加密保留、默认打码点开显示、记录来源app、菜单栏快捷入口",
+  "pub_date": "2026-11-22T12:17:02Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbXpZVVRhbWh4UkUwVGNObDM4amlHZGtCUUlqL1RheVZSQU9KT2hTelVnNWVEclNDT0J2Y001VCtPUFRHQVNJZEl2UnNhTW1PcHUzTlJ4azNubEJUTndvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MzQ4NjY2CWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMi4yClY5eW0rYmUwRDdmT2dNZ2tKWUphU2UyV1kzVXdNaWlhVkROdnpPZUF2dzkvcU1vUk5FREF2V2pQQnRVTjFrSEIxZXdsS0cvalpTMlUwYlhEdUxyUEFBPT0K",
-      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.2.2/Ky.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbXhOejhudkI4YS9KRDlEb1NzV2pQekVObGxXNnU0MTB6NU91eGZCRzFHZGxCTkhKalZIbmRGR2xpVTdTNlZCczNOQmpCbkE1aW1ZQ0MzUmZUVzFRNHd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MzQ5NzkzCWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMi4zClNlYW03NVFMNlZtSkN2aWc4RDJIWFBabzdhRXlLREh2UjNBVGpBSlBzd3FyS2dnQStLdWxZWm1wZlVvM1JOZGNIMUlBdXdTZlhUYW8xQzY0ZWVsU0FnPT0K",
+      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.2.3/Ky.app.tar.gz"
     }
   }
 }

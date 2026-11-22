@@ -22,10 +22,15 @@ pub const RETENTION_SECONDS: u64 = 30 * 24 * 60 * 60;
 pub struct HistoryEntry {
     pub id: u64,
     pub created_at: u64,
+    /// 原文。history.enc 本身已加密；敏感条目在展示层默认打码，点开才显示。
     pub text: String,
+    /// 这条是否被判定为敏感（展示时默认打码）。不再销毁原文。
     pub redacted: bool,
     pub name: Option<String>,
     pub version: Option<u64>,
+    /// 复制时前台应用名（如 "Google Chrome" / "Terminal"）。
+    #[serde(default)]
+    pub source: Option<String>,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -43,38 +48,35 @@ impl DesktopHistory {
         Self { root: root.into() }
     }
 
-    pub fn capture(&self, text: &str) -> Result<HistoryEntry> {
-        self.add(None, text)
+    pub fn capture(&self, text: &str, source: Option<&str>) -> Result<HistoryEntry> {
+        self.add(None, text, source)
     }
 
-    /// Saves a redacted configuration/snippet version. Names are also validated
+    /// Saves a configuration/snippet version. Names are also validated
     /// so a credential cannot be retained in the grouping metadata.
     pub fn save_version(&self, name: &str, text: &str) -> Result<HistoryEntry> {
         let name = name.trim();
-        if name.is_empty()
-            || name.len() > 128
-            || name.contains(['\n', '\r'])
-            || redact(name) != name
-        {
+        if name.is_empty() || name.len() > 128 || name.contains(['\n', '\r']) || needs_mask(name) {
             bail!("Use a non-sensitive name between 1 and 128 bytes");
         }
-        self.add(Some(name), text)
+        self.add(Some(name), text, None)
     }
 
-    fn add(&self, name: Option<&str>, text: &str) -> Result<HistoryEntry> {
+    fn add(&self, name: Option<&str>, text: &str, source: Option<&str>) -> Result<HistoryEntry> {
         if text.len() > MAX_TEXT_BYTES {
             bail!("Text exceeds the 64 KiB history limit");
         }
         if text.trim().is_empty() {
             bail!("Empty clipboard text is not retained");
         }
-        self.transact(|state| Self::insert(state, name, text, now()?))
+        self.transact(|state| Self::insert(state, name, text, source, now()?))
     }
 
     fn insert(
         state: &mut State,
         name: Option<&str>,
         text: &str,
+        source: Option<&str>,
         timestamp: u64,
     ) -> Result<HistoryEntry> {
         let version = name
@@ -94,14 +96,15 @@ impl DesktopHistory {
             .next_id
             .checked_add(1)
             .context("History identifier limit reached")?;
-        let safe = redact(text);
+        // 存原文（history.enc 已加密），只标记是否需要打码；不再销毁内容。
         let entry = HistoryEntry {
             id: state.next_id,
             created_at: timestamp,
-            redacted: safe != text,
-            text: safe,
+            redacted: needs_mask(text),
+            text: text.to_owned(),
             name: name.map(str::to_owned),
             version,
+            source: source.map(str::to_owned),
         };
         state.entries.push(entry.clone());
         if state.entries.len() > MAX_ENTRIES {
@@ -153,7 +156,8 @@ impl DesktopHistory {
                 .name
                 .as_deref()
                 .context("Only named versions can be restored")?;
-            let mut entry = Self::insert(state, Some(name), &old.text, now()?)?;
+            let src = old.source.as_deref();
+            let mut entry = Self::insert(state, Some(name), &old.text, src, now()?)?;
             entry.redacted |= old.redacted;
             if let Some(last) = state.entries.last_mut() {
                 last.redacted = entry.redacted;
@@ -287,6 +291,12 @@ fn atomic_write(path: &Path, data: &[u8]) -> Result<()> {
 /// authorization headers, token prefixes and PEM blocks. It intentionally
 /// sacrifices surrounding text on a sensitive line. It cannot detect arbitrary
 /// unlabelled passwords; callers must not describe it as a complete DLP filter.
+/// 这段文本是否含敏感内容（密钥/令牌/PEM 等）。只做判定，不销毁内容。
+/// 复用 redact 的判定逻辑：打码后与原文不同即视为需要打码。
+pub fn needs_mask(text: &str) -> bool {
+    redact(text) != text
+}
+
 pub fn redact(text: &str) -> String {
     let mut pem = false;
     let mut redact_all = false;
@@ -392,10 +402,25 @@ mod tests {
     }
 
     #[test]
+    fn original_text_survives_roundtrip_and_marks_mask() {
+        // 产品决策：敏感内容不再永久销毁。原文加密存盘，列出时仍能拿回，
+        // 仅以 redacted 标志告诉展示层"默认打码，点开才显示"。
+        let dir = tempfile::tempdir().unwrap();
+        let history = DesktopHistory::new(dir.path());
+        let secret = "plain clipboard text with source";
+        let e = history.capture(secret, Some("Terminal")).unwrap();
+        assert_eq!(e.text, secret);
+        assert_eq!(e.source.as_deref(), Some("Terminal"));
+        let read = history.list().unwrap().pop().unwrap();
+        assert_eq!(read.text, secret, "原文应能从加密存储读回，不再永久销毁");
+        assert_eq!(read.source.as_deref(), Some("Terminal"));
+    }
+
+    #[test]
     fn unchanged_reads_do_not_rewrite_ciphertext() {
         let dir = tempfile::tempdir().unwrap();
         let history = DesktopHistory::new(dir.path());
-        history.capture("fixture").unwrap();
+        history.capture("fixture", None).unwrap();
         let before = fs::read(dir.path().join("history.enc")).unwrap();
         history.list().unwrap();
         history.search("fixture").unwrap();
@@ -441,10 +466,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let history = DesktopHistory::new(dir.path());
         let entry = history
-            .capture("public fixture\nPASSWORD=super-sensitive-fixture")
+            .capture("public fixture\nPASSWORD=super-sensitive-fixture", None)
             .unwrap();
-        assert!(entry.redacted);
-        assert_eq!(entry.text, "public fixture\n[REDACTED]");
+        assert!(entry.redacted, "敏感内容应被标记需要打码");
+        // 原文保留在内存条目（展示层默认打码，点开才显示），不再永久销毁。
+        assert_eq!(
+            entry.text,
+            "public fixture\nPASSWORD=super-sensitive-fixture"
+        );
         assert_eq!(history.list().unwrap(), vec![entry]);
         for item in fs::read_dir(dir.path()).unwrap() {
             let data = fs::read_to_string(item.unwrap().path()).unwrap();
@@ -477,12 +506,14 @@ mod tests {
     fn limits_retention_search_and_clear() {
         let dir = tempfile::tempdir().unwrap();
         let history = DesktopHistory::new(dir.path());
-        assert!(history.capture(&"a".repeat(MAX_TEXT_BYTES + 1)).is_err());
-        assert!(history.capture("  ").is_err());
+        assert!(history
+            .capture(&"a".repeat(MAX_TEXT_BYTES + 1), None)
+            .is_err());
+        assert!(history.capture("  ", None).is_err());
         history
             .transact(|state| {
                 for n in 0..201 {
-                    DesktopHistory::insert(state, None, &format!("item {n}"), now()?)?;
+                    DesktopHistory::insert(state, None, &format!("item {n}"), None, now()?)?;
                 }
                 Ok(())
             })
@@ -523,7 +554,7 @@ mod tests {
     fn corrupted_ciphertext_and_missing_key_fail_closed() {
         let dir = tempfile::tempdir().unwrap();
         let history = DesktopHistory::new(dir.path());
-        history.capture("fixture").unwrap();
+        history.capture("fixture", None).unwrap();
         fs::write(dir.path().join("history.enc"), "corrupted").unwrap();
         assert!(history.list().is_err());
         assert_eq!(
@@ -531,7 +562,7 @@ mod tests {
             "corrupted"
         );
         fs::remove_file(dir.path().join("history.key")).unwrap();
-        assert!(history.capture("other").is_err());
+        assert!(history.capture("other", None).is_err());
         assert!(!dir.path().join("history.key").exists());
     }
 
@@ -543,7 +574,7 @@ mod tests {
                 let root = dir.path().to_path_buf();
                 std::thread::spawn(move || {
                     DesktopHistory::new(root)
-                        .capture(&format!("item {n}"))
+                        .capture(&format!("item {n}"), None)
                         .unwrap()
                 })
             })
