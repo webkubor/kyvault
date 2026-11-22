@@ -219,8 +219,10 @@ $('#secret-form').addEventListener('submit', async (e) => {
     setStatus('status.credSaved');
     $('#credential').close();
     await refresh();
-  } catch {
-    setFormError('#secret-error', 'err.generic');
+  } catch (e) {
+    // 透传后端的具体失败原因（如校验端点报错），别只给通用文案让用户猜。
+    const detail = typeof e === 'string' ? e : (e && e.message) || '';
+    setFormError('#secret-error', detail ? 'err.backend' : 'err.generic', detail ? { detail } : undefined);
   } finally { busy = false; }
 });
 
@@ -256,9 +258,10 @@ $('#agent-request-form').addEventListener('submit', async (e) => {
     $('#agent-request').close();
     agentRequest = null;
     await refresh();
-  } catch {
-    // 校验失败的信息在后端消息里，这里给通用提示；请求仍在待处理。
-    setFormError('#agent-request-error', 'req.err.invalid');
+  } catch (e) {
+    // 透传后端校验失败的具体原因；请求仍在待处理，值保留在框里供重试。
+    const detail = typeof e === 'string' ? e : (e && e.message) || '';
+    setFormError('#agent-request-error', detail ? 'err.backend' : 'req.err.invalid', detail ? { detail } : undefined);
   } finally { busy = false; }
 });
 $('#agent-request-discard').addEventListener('click', async () => {

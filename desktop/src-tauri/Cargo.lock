@@ -2239,7 +2239,7 @@ dependencies = [
 
 [[package]]
 name = "kyvault"
-version = "2.7.1"
+version = "2.8.2"
 dependencies = [
  "aes-gcm",
  "anyhow",

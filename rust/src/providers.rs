@@ -324,6 +324,51 @@ pub fn validate_key(provider_name: &str, api_key: &str) -> CheckResult {
         return CheckResult::from_status("unsupported", None);
     };
 
+    // MiniMax 有两套互不兼容的鉴权端点：
+    //   - 国际站按量 Key：`api.minimaxi.chat/v1/models`，GET + Bearer（p.url）
+    //   - 国内 M 套餐 Key（`sk-cp-` 前缀）：只认 Anthropic 兼容端点
+    //     `api.minimax.cn/anthropic/v1/messages`，POST + x-api-key。
+    // 主端点失败时回落试国内端点；任一通过即视为有效，避免套餐 Key 被误判失效
+    // 而拒绝入库（issue #14）。回落失败仍返回主端点结论，不伪造 valid。
+    let primary = validate_against(p, api_key);
+    if should_fallback_minimax(provider_name, &primary) {
+        let fallback = validate_minimax_cn_anthropic(api_key);
+        if fallback.status == "valid" {
+            return fallback;
+        }
+    }
+    primary
+}
+
+/// 是否需要对 MiniMax 主端点的失败结果尝试国内 M 套餐端点。
+/// 只有 minimax 平台、且主端点没验证通过时才回落；不重试已 valid 的结果。
+fn should_fallback_minimax(provider_name: &str, primary: &CheckResult) -> bool {
+    provider_name.eq_ignore_ascii_case("minimax") && primary.status != "valid"
+}
+
+/// MiniMax 国内 M 套餐的 Anthropic 兼容验证：发一条最小消息，200 即认证通过。
+/// 不回显任何上游响应体（可能含请求信息），只看 HTTP 状态。
+fn validate_minimax_cn_anthropic(api_key: &str) -> CheckResult {
+    const CN_ANTHROPIC: &str = "https://api.minimax.cn/anthropic/v1/messages";
+    const MIN_MSG: &str =
+        r#"{"model":"MiniMax-M2.5","max_tokens":8,"messages":[{"role":"user","content":"hi"}]}"#;
+    let resp = ureq::post(CN_ANTHROPIC)
+        .timeout(REQUEST_TIMEOUT)
+        .set("x-api-key", api_key)
+        .set("anthropic-version", "2023-06-01")
+        .set("content-type", "application/json")
+        .send_string(MIN_MSG);
+    match resp {
+        Ok(r) => CheckResult::from_status(classify_status(Some(r.status())), Some(r.status())),
+        Err(ureq::Error::Status(code, _)) => {
+            CheckResult::from_status(classify_status(Some(code)), Some(code))
+        }
+        Err(ureq::Error::Transport(_)) => CheckResult::from_status("unknown", None),
+    }
+}
+
+/// 对一个 Provider 的主端点做验证（原 validate_key 主体，抽出来供回落逻辑复用）。
+fn validate_against(p: &Provider, api_key: &str) -> CheckResult {
     let url = if p.key_pos == KeyPos::Url {
         format!("{}{}", p.url, api_key)
     } else {
@@ -517,6 +562,22 @@ mod tests {
         assert_eq!(result.status, "rate_limited");
         assert!(result.message.contains("无法判断"));
         assert!(!result.message.contains("Key 有效"));
+    }
+
+    #[test]
+    fn minimax_fallback_only_on_failed_primary() {
+        let failed = CheckResult::from_status("api_error", Some(400));
+        let valid = CheckResult::from_status("valid", Some(200));
+        assert!(should_fallback_minimax("minimax", &failed));
+        assert!(should_fallback_minimax("MiniMax", &failed), "大小写不敏感");
+        assert!(
+            !should_fallback_minimax("minimax", &valid),
+            "已通过就不回落"
+        );
+        assert!(
+            !should_fallback_minimax("openai", &failed),
+            "别的平台不触发 minimax 回落"
+        );
     }
 
     #[test]
