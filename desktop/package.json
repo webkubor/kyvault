@@ -1,6 +1,6 @@
 {
   "name": "ky-desktop",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "private": true,
   "scripts": {
     "dev": "tauri dev",

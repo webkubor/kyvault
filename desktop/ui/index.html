@@ -20,7 +20,6 @@
     <nav aria-label="Library">
       <button class="nav-item" data-view="history" aria-current="page"><span class="nav-icon" aria-hidden="true"></span><span data-i18n="nav.history"></span></button>
       <button class="nav-item" data-view="vault"><span class="nav-icon" aria-hidden="true"></span><span data-i18n="nav.vault"></span></button>
-      <button class="nav-item" data-view="snippets"><span class="nav-icon" aria-hidden="true"></span><span data-i18n="nav.snippets"></span></button>
       <button class="nav-item" data-view="settings"><span class="nav-icon" aria-hidden="true"></span><span data-i18n="nav.settings"></span></button>
     </nav>
     <div class="sidebar-bottom">
@@ -90,19 +89,6 @@
       <button id="capture" class="quiet" data-i18n="action.capture"></button>
     </footer>
   </main>
-
-  <dialog id="editor" aria-labelledby="editor-title">
-    <form id="text-form">
-      <div class="dialog-heading"><h2 id="editor-title" data-i18n="editor.title"></h2><button type="button" class="quiet close" data-i18n-aria="dialog.close" aria-label="">×</button></div>
-      <label for="snippet-name" data-i18n="editor.snippet.label"></label>
-      <input id="snippet-name" maxlength="120" autocomplete="off" data-i18n-placeholder="editor.snippet.placeholder">
-      <label for="text-value" data-i18n="editor.text.label"></label>
-      <textarea id="text-value" rows="8" required spellcheck="false" autocomplete="off"></textarea>
-      <div id="redaction-preview" hidden><span class="eyebrow" data-i18n="editor.review.eyebrow"></span><pre id="redaction-text"></pre><p id="redaction-note" class="hint"></p></div>
-      <p id="text-error" class="error" role="alert" hidden></p>
-      <div class="dialog-actions"><button type="button" class="quiet close" data-i18n="action.cancel"></button><button id="text-submit" class="primary" type="submit" data-i18n="action.review"></button></div>
-    </form>
-  </dialog>
 
   <dialog id="credential" aria-labelledby="credential-title">
     <form id="secret-form" autocomplete="off">

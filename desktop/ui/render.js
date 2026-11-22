@@ -10,7 +10,6 @@ import { t } from './lang.js';
 export const VIEW_META = {
   history: 'view.history',
   vault: 'view.vault',
-  snippets: 'view.snippets',
   settings: 'view.settings',
 };
 
@@ -23,15 +22,8 @@ export function renderViewHeading() {
 
 export function renderAddLabel() {
   const add = $('#add');
-  // 粘贴历史里「新增文本」多余：这个页面只做「点条目→复制」。
-  // 新增只在片段/凭证页需要。
-  if (state.view === 'history') {
-    add.hidden = true;
-    return;
-  }
-  add.hidden = false;
-  if (state.view === 'vault') add.textContent = t('action.add.credential');
-  else add.textContent = t('action.add.snippet');
+  add.hidden = state.view !== 'vault';
+  if (!add.hidden) add.textContent = t('action.add.credential');
 }
 
 export function renderMonitorState() {
@@ -49,13 +41,6 @@ export function relocalizeDynamic() {
   renderMonitorState();
   renderList();
   renderDetail();
-  const editor = $('#editor');
-  if (editor.open) {
-    $('#text-submit').textContent = $('#redaction-preview').hidden
-      ? t('action.review')
-      : t('action.saveReviewed');
-    $('#editor-title').textContent = t('editor.title');
-  }
   const credential = $('#credential');
   if (credential.open) $('#credential-title').textContent = t('cred.title');
 }
@@ -69,8 +54,6 @@ export function currentEntries() {
   switch (state.view) {
     case 'history':
       return state.snapshot.entries;
-    case 'snippets':
-      return state.snapshot.entries.filter((e) => e.snippet);
     case 'vault':
       return state.snapshot.secrets || [];
     default:
@@ -113,7 +96,6 @@ function matched(entries) {
 function emptyTitle() {
   switch (state.view) {
     case 'history': return t('empty.history.title');
-    case 'snippets': return t('empty.snippets.title');
     case 'vault': return t('empty.vault.title');
     default: return t('empty.nomatch.title');
   }
@@ -122,7 +104,6 @@ function emptyTitle() {
 function emptyCopy() {
   switch (state.view) {
     case 'history': return t('empty.history.copy');
-    case 'snippets': return t('empty.snippets.copy');
     case 'vault': return t('empty.vault.copy');
     default: return t('empty.nomatch.copy');
   }
@@ -327,22 +308,6 @@ function entryActions(entry) {
   copyBtn.type = 'button';
   copyBtn.dataset.action = 'copy-entry';
   actions.appendChild(copyBtn);
-
-  if (entry.snippet) {
-    const editBtn = el('button', '', t('action.editVersion'));
-    editBtn.type = 'button';
-    editBtn.dataset.action = 'edit-snippet';
-    actions.appendChild(editBtn);
-    const restoreBtn = el('button', '', t('action.restore'));
-    restoreBtn.type = 'button';
-    restoreBtn.dataset.action = 'restore-entry';
-    actions.appendChild(restoreBtn);
-  } else {
-    const saveBtn = el('button', '', t('action.saveAsSnippet'));
-    saveBtn.type = 'button';
-    saveBtn.dataset.action = 'save-as-snippet';
-    actions.appendChild(saveBtn);
-  }
   const removeBtn = el('button', 'quiet danger', t('action.remove'));
   removeBtn.type = 'button';
   removeBtn.dataset.action = 'delete-entry';

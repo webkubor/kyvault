@@ -241,12 +241,10 @@ pub async fn install_update(app: tauri::AppHandle) -> Result<()> {
     use tauri_plugin_updater::UpdaterExt;
     let updater = app
         .updater_builder()
-        .endpoints(vec![
-            tauri::Url::parse(
-                "https://raw.githubusercontent.com/webkubor/kyvault/main/updater/latest.json",
-            )
-            .map_err(|e| e.to_string())?,
-        ])
+        .endpoints(vec![tauri::Url::parse(
+            "https://raw.githubusercontent.com/webkubor/kyvault/main/updater/latest.json",
+        )
+        .map_err(|e| e.to_string())?])
         .and_then(|b| b.build())
         .map_err(|e| e.to_string())?;
     let update = updater
@@ -255,19 +253,28 @@ pub async fn install_update(app: tauri::AppHandle) -> Result<()> {
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "已经是最新版本".to_string())?;
     let version = update.version.clone();
-    let _ = app.emit("update-progress", serde_json::json!({"phase":"downloading","version":version}));
+    let _ = app.emit(
+        "update-progress",
+        serde_json::json!({"phase":"downloading","version":version}),
+    );
     update
         .download_and_install(
             |chunk, total| {
-                let _ = app.emit("update-progress", serde_json::json!({
-                    "phase":"downloading","version":version,"downloaded":chunk,"total":total
-                }));
+                let _ = app.emit(
+                    "update-progress",
+                    serde_json::json!({
+                        "phase":"downloading","version":version,"downloaded":chunk,"total":total
+                    }),
+                );
             },
             || {},
         )
         .await
         .map_err(|e| e.to_string())?;
-    let _ = app.emit("update-progress", serde_json::json!({"phase":"installed","version":version}));
+    let _ = app.emit(
+        "update-progress",
+        serde_json::json!({"phase":"installed","version":version}),
+    );
     // 给前端一点时间显示"安装完成"，再重启（重启逻辑交给前端 setTimeout 调 restart_app，
     // 或直接在这里延迟重启）。这里直接延迟重启，前端会收到 installed 事件显示提示。
     let handle = app.clone();
@@ -286,7 +293,10 @@ pub fn get_app_info() -> serde_json::Value {
     let mut notes: Vec<ReleaseNote> = Vec::new();
     if let Ok(resp) = ureq::get("https://api.github.com/repos/webkubor/kyvault/releases")
         .set("Accept", "application/vnd.github+json")
-        .set("User-Agent", concat!("ky-desktop/", env!("CARGO_PKG_VERSION")))
+        .set(
+            "User-Agent",
+            concat!("ky-desktop/", env!("CARGO_PKG_VERSION")),
+        )
         .timeout(std::time::Duration::from_secs(10))
         .call()
     {
@@ -299,8 +309,16 @@ pub fn get_app_info() -> serde_json::Value {
                     }
                     notes.push(ReleaseNote {
                         version: tag.trim_start_matches("desktop-v").to_string(),
-                        name: r.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                        body: r.get("body").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        name: r
+                            .get("name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        body: r
+                            .get("body")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
                         published_at: r
                             .get("published_at")
                             .and_then(|v| v.as_str())
@@ -410,7 +428,7 @@ pub fn capture_clipboard(state: State<DesktopState>) -> Result<Snapshot> {
         return read_snapshot(&state, &session);
     }
     // 没有文本 → 试图片（手动抓取按钮对图片同样生效）。
-    if let Some(img) = cb.get_image().ok() {
+    if let Ok(img) = cb.get_image() {
         if let Some(png) = encode_rgba_png_pub(img.width, img.height, &img.bytes) {
             let (w, h) = (img.width as u32, img.height as u32);
             state

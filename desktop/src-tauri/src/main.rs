@@ -176,7 +176,8 @@ fn main() {
                     if let Some(cb) = clipboard.as_mut() {
                         // 文本优先；剪贴板里是图片时 get_text 为空/报错 → 尝试图片。
                         let text = cb.get_text().unwrap_or_default();
-                        if !text.is_empty() && text.len() <= 65_536 && !session.is_sensitive(&text) {
+                        if !text.is_empty() && text.len() <= 65_536 && !session.is_sensitive(&text)
+                        {
                             let fingerprint = commands::fingerprint(&text);
                             if previous_fingerprint == Some(fingerprint) {
                                 continue;
@@ -200,7 +201,7 @@ fn main() {
                             }
                         } else if text.is_empty() {
                             // 图片抓取：RGBA → PNG → 加密存储。超限/编码失败静默跳过。
-                            if let Some(img) = cb.get_image().ok() {
+                            if let Ok(img) = cb.get_image() {
                                 let fp: [u8; 32] = {
                                     use sha2::{Digest, Sha256};
                                     let mut h = Sha256::new();
@@ -213,7 +214,9 @@ fn main() {
                                 if previous_fingerprint == Some(fp) {
                                     continue;
                                 }
-                                if let Some(png) = commands::encode_rgba_png_pub(img.width, img.height, &img.bytes) {
+                                if let Some(png) =
+                                    commands::encode_rgba_png_pub(img.width, img.height, &img.bytes)
+                                {
                                     previous_fingerprint = Some(fp);
                                     let source = frontmost_app();
                                     let (w, h) = (img.width as u32, img.height as u32);
@@ -281,11 +284,17 @@ fn frontmost_app() -> Option<String> {
     let app = ws.frontmostApplication()?;
     let name = app.localizedName()?;
     let s = name.to_string();
-    if s.is_empty() { None } else { Some(s) }
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
-fn frontmost_app() -> Option<String> { None }
+fn frontmost_app() -> Option<String> {
+    None
+}
 
 #[cfg(target_os = "macos")]
 fn clipboard_change() -> Option<isize> {

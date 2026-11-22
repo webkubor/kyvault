@@ -12,7 +12,6 @@ const { setView, renderList, renderDetail, renderNoBridge, relocalizeDynamic, cl
 const { t, applyLanguage, syncLanguageFromSnapshot, currentLang, LANG_KEY, onLanguageChanged } = await import('./lang.js');
 
 let epoch = 0;
-let reviewed = null;
 let busy = false;
 let captureErrorShown = false;
 // 运行时判定，而不是导入期定值：Tauri v2 的 withGlobalTauri 注入的是
@@ -23,12 +22,8 @@ let captureErrorShown = false;
 const desktop = Boolean(window.__TAURI__ && window.__TAURI__.core);
 
 function wipeForms() {
-  $('#text-form').reset();
   $('#secret-form').reset();
   $('#agent-request-form').reset();
-  $('#redaction-text').textContent = '';
-  $('#redaction-preview').hidden = true;
-  reviewed = null;
 }
 
 function lockView() {
@@ -104,51 +99,11 @@ $('#confirm-action').addEventListener('click', () => $('#confirm').close('yes'))
 $('#confirm-cancel').addEventListener('click', () => $('#confirm').close('no'));
 $('#locked').addEventListener('cancel', (e) => e.preventDefault());
 
-function openEditor(entry) {
-  wipeForms();
-  $('#snippet-name').required = state.view === 'snippets' || Boolean(entry);
-  $('#snippet-name').value = entry?.snippet || '';
-  $('#text-value').value = entry?.text || '';
-  $('#text-submit').textContent = t('action.review');
-  setFormError('#text-error', null);
-  $('#editor').showModal();
-}
 $$('.close').forEach((button) => button.addEventListener('click', () => button.closest('dialog').close()));
-for (const id of ['editor', 'credential']) $('#' + id).addEventListener('close', wipeForms);
-function resetReview() {
-  reviewed = null;
-  $('#redaction-preview').hidden = true;
-  $('#redaction-text').textContent = '';
-  $('#text-submit').textContent = t('action.review');
-}
-$('#text-value').addEventListener('input', resetReview);
-$('#snippet-name').addEventListener('input', resetReview);
-$('#text-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (busy || state.locked) return;
-  const text = $('#text-value').value;
-  const snippet = $('#snippet-name').value.trim() || null;
-  setFormError('#text-error', null);
-  if (reviewed?.source === text) {
-    if (await action('save_text', { text: reviewed.text, snippet }, 'status.textSaved', '#text-error')) $('#editor').close();
-    return;
-  }
-  busy = true;
-  const generation = epoch;
-  $('#text-submit').disabled = true;
-  try {
-    const preview = await invoke('preview_text', { text });
-    if (generation !== epoch || !$('#editor').open || $('#text-value').value !== text) return;
-    reviewed = { source: text, text: preview.text };
-    $('#redaction-text').textContent = preview.text;
-    $('#redaction-note').textContent = preview.redacted ? t('editor.note.detected') : t('editor.note.clean');
-    $('#redaction-preview').hidden = false;
-    $('#text-submit').textContent = t('action.saveReviewed');
-  } catch { setFormError('#text-error', 'editor.err.review'); }
-  finally { busy = false; $('#text-submit').disabled = false; }
-});
+$('#credential').addEventListener('close', wipeForms);
 $('#add').addEventListener('click', () => {
-  if (state.view !== 'vault') return openEditor();
+  // 添加按钮只在密钥页存在（添加凭证）。
+  if (state.view !== 'vault') return;
   wipeForms();
   setFormError('#secret-error', null);
   resetCredentialForm();
@@ -361,7 +316,6 @@ $('#detail').addEventListener('click', async (e) => {
   const entry = state.entry;
   if (!entry || state.locked) return;
   const { id, reference } = entry;
-  if (command === 'save-as-snippet' || command === 'edit-snippet') return openEditor(entry);
   if (command === 'reveal-entry') {
     revealEntry(entry);
     const btn = e.target.closest('[data-action]');
@@ -380,9 +334,6 @@ $('#detail').addEventListener('click', async (e) => {
   }
   if (command === 'delete-entry' && await confirm('confirm.deleteEntry.title', 'confirm.deleteEntry.copy', 'confirm.deleteEntry.label')) {
     await action('delete_entry', { id }, 'status.entryDeleted');
-  }
-  if (command === 'restore-entry' && await confirm('confirm.restore.title', 'confirm.restore.copy', 'confirm.restore.label')) {
-    await action('restore_entry', { id }, 'status.versionRestored');
   }
 });
 $$('.nav-item').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));

@@ -104,9 +104,7 @@ impl DesktopHistory {
                 image: Some(meta.clone()),
             };
             state.entries.push(entry.clone());
-            if state.entries.len() > MAX_ENTRIES {
-                state.entries.drain(..state.entries.len() - MAX_ENTRIES);
-            }
+            trim_history(state);
             Ok(entry)
         })?;
         // 索引写成功后再写像素文件；写失败则回滚索引里的这条。
@@ -200,9 +198,7 @@ impl DesktopHistory {
             image: None,
         };
         state.entries.push(entry.clone());
-        if state.entries.len() > MAX_ENTRIES {
-            state.entries.drain(..state.entries.len() - MAX_ENTRIES);
-        }
+        trim_history(state);
         Ok(entry)
     }
 
@@ -269,7 +265,7 @@ impl DesktopHistory {
 
     pub fn clear(&self) -> Result<()> {
         self.transact(|state| {
-            state.entries.clear();
+            state.entries.retain(|entry| entry.name.is_some());
             Ok(())
         })
     }
@@ -315,7 +311,9 @@ impl DesktopHistory {
         };
         let original = serde_json::to_string(&state)?;
         let cutoff = now()?.saturating_sub(RETENTION_SECONDS);
-        state.entries.retain(|entry| entry.created_at >= cutoff);
+        state
+            .entries
+            .retain(|entry| entry.name.is_some() || entry.created_at >= cutoff);
         let result = action(&mut state)?;
         let updated = serde_json::to_string(&state)?;
         if !data_path.exists() || updated != original {
@@ -348,6 +346,24 @@ impl DesktopHistory {
             }
         }
     }
+}
+
+// Preserve previously saved snippets while limiting ordinary clipboard history.
+fn trim_history(state: &mut State) {
+    let mut excess = state
+        .entries
+        .iter()
+        .filter(|entry| entry.name.is_none())
+        .count()
+        .saturating_sub(MAX_ENTRIES);
+    state.entries.retain(|entry| {
+        if entry.name.is_none() && excess > 0 {
+            excess -= 1;
+            false
+        } else {
+            true
+        }
+    });
 }
 
 fn now() -> Result<u64> {
@@ -563,6 +579,37 @@ mod tests {
             .join("img")
             .join(format!("{}.enc", e.id))
             .exists());
+    }
+
+    #[test]
+    fn legacy_snippets_survive_history_retention_and_clear() {
+        let dir = tempfile::tempdir().unwrap();
+        let history = DesktopHistory::new(dir.path());
+        let saved = history.save_version("saved", "keep this").unwrap();
+        history
+            .transact(|state| {
+                state
+                    .entries
+                    .iter_mut()
+                    .find(|e| e.id == saved.id)
+                    .unwrap()
+                    .created_at = 1;
+                for n in 0..=MAX_ENTRIES {
+                    DesktopHistory::insert(state, None, &format!("item {n}"), None, now()?)?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert!(history
+            .list()
+            .unwrap()
+            .iter()
+            .any(|entry| entry.id == saved.id));
+        history.clear().unwrap();
+        let entries = history.list().unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].id, saved.id);
+        assert_eq!(entries[0].text, "keep this");
     }
 
     #[test]
