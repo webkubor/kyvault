@@ -8,6 +8,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::{tray::TrayIconBuilder, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_updater::UpdaterExt;
 
 pub fn show(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -18,6 +19,9 @@ pub fn show(app: &tauri::AppHandle) {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _| {
             // Agent 通过 `ky request declare --open` 传 `--request <id>` 唤起已运行的
             // Ky.app。这里把请求 id 转给前端弹出预填的录入框。
@@ -89,6 +93,58 @@ fn main() {
                 std::thread::spawn(move || {
                     std::thread::sleep(Duration::from_millis(800));
                     let _ = handle.emit("request-credential", id);
+                });
+            }
+            // 发版闭环（issue #15）：真正的自动更新。启动后台自动检查 →
+            // 有新版则后台下载+安装 → 重启，用户全程零操作。网络失败静默。
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    // 延迟 3s：先让窗口和前端就绪，更新提示能被看到。
+                    tokio::time::sleep(Duration::from_secs(3)).await;
+                    // endpoint 用固定 raw 路径，不受 GitHub "latest release" 被 CLI 发版顶掉的影响。
+                    let updater = match handle
+                        .updater_builder()
+                        .endpoints(vec![
+                            tauri::Url::parse(
+                                "https://raw.githubusercontent.com/webkubor/kyvault/main/updater/latest.json",
+                            )
+                            .expect("硬编码的 updater endpoint URL 必须合法"),
+                        ])
+                        .and_then(|b| b.build())
+                    {
+                        Ok(u) => u,
+                        Err(_) => return,
+                    };
+                    let update = match updater.check().await {
+                        Ok(Some(u)) => u,
+                        Ok(None) => return, // 已是最新
+                        Err(_) => return,   // 网络/manifest 失败：静默，不打扰
+                    };
+                    let version = update.version.clone();
+                    let _ = handle.emit("update-progress", serde_json::json!({
+                        "phase": "downloading", "version": version
+                    }));
+                    if update
+                        .download_and_install(
+                            |chunk, total| {
+                                let _ = handle.emit("update-progress", serde_json::json!({
+                                    "phase": "downloading", "version": version,
+                                    "downloaded": chunk, "total": total
+                                }));
+                            },
+                            || {},
+                        )
+                        .await
+                        .is_ok()
+                    {
+                        let _ = handle.emit("update-progress", serde_json::json!({
+                            "phase": "installed", "version": version
+                        }));
+                        // 给前端 1s 显示"安装完成，即将重启"，再重启生效。
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        handle.restart();
+                    }
                 });
             }
             let handle = app.handle().clone();

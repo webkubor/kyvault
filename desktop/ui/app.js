@@ -311,6 +311,16 @@ if (desktop) {
     pendingRequestId = id;
     tryOpenAgentRequest();
   });
+  // 发版闭环（issue #15）：真正的自动更新 —— 后端后台下载并安装新版，
+  // 这里只负责把进度显示到状态条，用户无需任何操作，装完自动重启。
+  listen('update-progress', (event) => {
+    const { phase, version } = event.payload || {};
+    if (phase === 'downloading') {
+      setStatus('status.updateDownloading', { version: version || '' });
+    } else if (phase === 'installed') {
+      setStatus('status.updateInstalled', { version: version || '' });
+    }
+  });
   // 无条件兜底：直接问后端要 inbox 里的 pending 请求并弹框。
   // 不依赖事件、不依赖 pendingRequestId —— 事件在冷启动时可能早于监听器
   // 就发出去（single-instance 只转一次 argv），而 pendingRequestId 只在
