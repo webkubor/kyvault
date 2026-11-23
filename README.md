@@ -113,8 +113,11 @@ bash scripts/make-dock-app.sh   # 生成 ~/Applications/Kyvault GUI.app，拖进
 ## ⚡ 30 秒上手
 
 ```bash
-# 1. 一键安装（自动就绪 kyvault 与短命令 ky）
+# 1. 安装最新稳定 CLI 版本（不跟随 Ky.app 发布）
 curl -fsSL https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh | bash
+
+# 或者指定 CLI 版本（下载失败时不会改装其他版本）
+curl -fsSL https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh | bash -s -- v2.8.2
 
 # 或者用 Cargo（需要 Rust 工具链）
 cargo install kyvault
