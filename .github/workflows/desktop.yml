@@ -31,5 +31,7 @@ jobs:
         working-directory: desktop/src-tauri
       - run: cargo test --all-features
         working-directory: rust
-      - run: npm run build -- --bundles app
+      - name: Bundle app (smoke build, no updater signing)
+        run: >-
+          npm run build -- --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}'
         working-directory: desktop
