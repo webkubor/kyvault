@@ -139,7 +139,7 @@ impl DesktopHistory {
     fn file_key(&self) -> Result<[u8; 32]> {
         let key_path = self.root.join("history.key");
         let raw = fs::read_to_string(&key_path).context("Cannot read desktop history key")?;
-        Ok(derive_file_key(&raw)?)
+        derive_file_key(&raw)
     }
 
     /// Saves a configuration/snippet version. Names are also validated

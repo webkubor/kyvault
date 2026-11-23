@@ -11,6 +11,7 @@ REPO="webkubor/kyvault"
 BIN_NAME="kyvault"
 INSTALL_DIR="${KYVAULT_INSTALL_DIR:-$HOME/.local/bin}"
 DATA_DIR="$HOME/.keyring"
+CLI_TAG_RE='^v(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$'
 
 say()  { printf '%s\n' "$*"; }
 warn() { printf '⚠️  %s\n' "$*" >&2; }
@@ -27,6 +28,69 @@ detect_target() {
     Linux-aarch64) echo "aarch64-unknown-linux-gnu" ;;
     *) die "没有 $os-$arch 的预编译二进制。装好 Rust 后用 cargo install --path rust 自行编译。" ;;
   esac
+}
+
+# GitHub 的 latest 可能是 desktop-v*。只从 Release 顶层对象读取三个字段，
+# 忽略 release note 字符串和嵌套对象；不要求新装机器装 jq、Python 或 Rust。
+cli_release_page() {
+  LC_ALL=C awk -v tag_re="$CLI_TAG_RE" '
+    {
+      rest = $0
+      while (rest ~ /[^[:space:]]/) {
+        sub(/^[[:space:]]+/, "", rest)
+        if (!match(rest, /^("([^"\\]|\\.)*"|\[|\]|\{|\}|,|:|[a-zA-Z0-9.+-]+)/)) exit 1
+        tok = substr(rest, 1, RLENGTH)
+        rest = substr(rest, RLENGTH + 1)
+        if (!started) {
+          if (tok != "[") exit 1
+          started = 1
+        } else if (depth == 0) exit 1
+        if (depth == 2 && key != "") {
+          if (key == "\"tag_name\"") tag = tok ~ /^"/ ? substr(tok, 2, length(tok) - 2) : ""
+          if (key == "\"draft\"") draft = tok
+          if (key == "\"prerelease\"") prerelease = tok
+          key = ""
+        } else if (depth == 2 && tok == ":") key = prev
+        if (tok == "[" || tok == "{") {
+          if (depth == 1 && tok != "{") exit 1
+          depth++
+          if (depth == 2) { rows++; tag = draft = prerelease = key = "" }
+        }
+        if (tok == "}" || tok == "]") {
+          if (depth == 1 && tok != "]") exit 1
+          if (depth == 2 && tok == "}" && draft == "false" && prerelease == "false" && tag ~ tag_re) {
+            versions[++n] = substr(tag, 2)
+          }
+          depth--
+        }
+        prev = tok
+      }
+    }
+    END {
+      if (!started || depth != 0) exit 1
+      print rows + 0
+      for (i = 1; i <= n; i++) print versions[i]
+    }
+  '
+}
+
+latest_cli_tag() {
+  local page=1 result count version
+  local versions=""
+  while :; do
+    result=$(curl -fsSL --connect-timeout 5 --max-time 15 \
+      -H 'Accept: application/vnd.github+json' \
+      "https://api.github.com/repos/$REPO/releases?per_page=100&page=$page" | cli_release_page) || return 1
+    count=${result%%$'\n'*}
+    if [ "$result" != "$count" ]; then
+      versions="$versions${result#*$'\n'}"$'\n'
+    fi
+    [ "$count" -lt 100 ] && break
+    page=$((page + 1))
+  done
+  version=$(printf '%s' "$versions" | LC_ALL=C sort -t . -k1,1n -k2,2n -k3,3n | tail -n1)
+  [ -n "$version" ] || return 1
+  printf 'v%s\n' "$version"
 }
 
 # 清掉 Python 版的入口。只删「入口」，数据目录里的密钥文件一个都不动。
@@ -64,14 +128,25 @@ cleanup_python_version() {
   return 0
 }
 
-install_from_release() {
-  local target url tmp
-  target=$(detect_target)
-  url="https://github.com/$REPO/releases/latest/download/${BIN_NAME}-${target}.tar.gz"
-  tmp=$(mktemp -d)
-  trap 'rm -rf "$tmp"' RETURN
+activate_binary() (
+  local binary=$1 stage
+  mkdir -p "$INSTALL_DIR" || return 1
+  stage=$(mktemp -d "$INSTALL_DIR/.kyvault-install.XXXXXXXX") || return 1
+  trap 'rm -rf "$stage"' EXIT
+  install -m 0755 "$binary" "$stage/$BIN_NAME" || return 1
+  # 只有已经备好替换二进制才迁移旧入口；pipx 不应看到新装的同名入口。
+  cleanup_python_version
+  mv -f "$stage/$BIN_NAME" "$INSTALL_DIR/$BIN_NAME"
+)
 
-  say "📦 下载 $target …"
+install_from_release() (
+  local tag=$1 target url tmp found version
+  target=$(detect_target) || return 1
+  url="https://github.com/$REPO/releases/download/$tag/${BIN_NAME}-${target}.tar.gz"
+  tmp=$(mktemp -d) || return 1
+  trap 'rm -rf "$tmp"' EXIT
+
+  say "📦 下载 $tag ($target) …"
   # 先按默认（HTTP/2）下，失败就退 HTTP/1.1 重试一次。
   #
   # 2026-09-10 实测：本机默认 curl 报 `(16) Error in the HTTP2 framing layer`，
@@ -85,48 +160,45 @@ install_from_release() {
       return 1
     fi
   fi
-  tar -xzf "$tmp/pkg.tar.gz" -C "$tmp"
-  local found
-  found=$(find "$tmp" -type f -name "$BIN_NAME" -perm -u+x | head -1)
+  tar -xzf "$tmp/pkg.tar.gz" -C "$tmp" || { warn "解包失败：$url"; return 1; }
+  found=$(find "$tmp" -type f -name "$BIN_NAME" -perm -u+x | head -1) || return 1
   [ -n "$found" ] || { warn "压缩包里找不到 $BIN_NAME"; return 1; }
-  mkdir -p "$INSTALL_DIR"
-  install -m 0755 "$found" "$INSTALL_DIR/$BIN_NAME"
-  ln -sf "$INSTALL_DIR/$BIN_NAME" "$INSTALL_DIR/ky"
-  return 0
-}
+  version=$("$found" --version) || { warn "无法验证预编译二进制版本"; return 1; }
+  [ "$version" = "$BIN_NAME ${tag#v}" ] || { warn "压缩包版本与 $tag 不符"; return 1; }
+  activate_binary "$found"
+)
 
-install_from_source() {
+install_from_source() (
   command -v cargo >/dev/null 2>&1 || return 1
-  local here
-  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || here=""
-  # 脚本就在源码树里（git clone 后本地跑）
-  if [ -n "$here" ] && [ -f "$here/rust/Cargo.toml" ]; then
+  local tmp src="" script="${BASH_SOURCE[0]:-}"
+  tmp=$(mktemp -d) || return 1
+  trap 'rm -rf "$tmp"' EXIT
+  if [ -n "$script" ]; then
+    src="$(cd "$(dirname "$script")" 2>/dev/null && pwd)" || src=""
+  fi
+  if [ -n "$src" ] && [ -f "$src/rust/Cargo.toml" ]; then
     say "🔨 用本地源码编译（cargo）…"
-    cargo install --path "$here/rust" --root "${INSTALL_DIR%/bin}" --force >/dev/null
-    return 0
+  else
+    command -v git >/dev/null 2>&1 || return 1
+    src="$tmp/source"
+    say "🔨 没有本地源码，现拉一份再编译（cargo）…"
+    git clone --depth 1 "https://github.com/$REPO.git" "$src" >/dev/null 2>&1 || return 1
   fi
-  # 否则现取源码再编。README 教的是 `curl … | bash`，那种跑法下 BASH_SOURCE
-  # 指向管道/临时文件，仓库根本不在本地 —— 原来这里直接 return 1，于是错误信息
-  # 变成「本机没有 cargo + 源码可兜底」，而本机明明装着 cargo。
-  # 兜底就该自己把源码弄来，而不是怪用户没有。
-  command -v git >/dev/null 2>&1 || return 1
-  local src
-  src=$(mktemp -d) || return 1
-  say "🔨 没有本地源码，现拉一份再编译（cargo）…"
-  if ! git clone --depth 1 "https://github.com/$REPO.git" "$src" >/dev/null 2>&1; then
-    rm -rf "$src"
-    return 1
-  fi
-  cargo install --path "$src/rust" --root "${INSTALL_DIR%/bin}" --force >/dev/null
-  local rc=$?
-  rm -rf "$src"
-  return $rc
-}
+  cargo install --path "$src/rust" --root "$tmp/install" --force >/dev/null || return 1
+  activate_binary "$tmp/install/bin/$BIN_NAME"
+)
 
+[ "$#" -le 1 ] || die "用法：bash install.sh [vX.Y.Z]"
+tag=""
+if [ "$#" -eq 1 ]; then
+  tag="$1"
+  [[ "$tag" =~ $CLI_TAG_RE ]] || die "无效的 CLI 版本标签：需要 vX.Y.Z"
+fi
 say "🔐 kyvault (Rust) — 安装中…"
-cleanup_python_version
-
-if ! install_from_release; then
+if [ "$#" -eq 1 ]; then
+  install_from_release "$tag" || die "安装 $tag 失败；未改用其他版本或源码。"
+elif ! tag=$(latest_cli_tag) || ! install_from_release "$tag"; then
+  [ -n "$tag" ] || warn "无法确定最新稳定 CLI 版本"
   say "改用源码编译兜底…"
   install_from_source || die "装不上：预编译二进制下载失败，源码兜底也没成（需要 cargo + git）。手动装：git clone https://github.com/$REPO && cd kyvault/rust && cargo install --path ."
 fi
@@ -136,7 +208,7 @@ BIN="$INSTALL_DIR/$BIN_NAME"
 ln -sf "$BIN" "$INSTALL_DIR/ky"
 
 say ""
-say "✅ 安装完成：$($BIN --version)"
+say "✅ 安装完成：$("$BIN" --version)"
 say "   命令：$BIN （或快捷短命令 ky）"
 
 case ":$PATH:" in
