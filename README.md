@@ -24,6 +24,8 @@
   AES-256-GCM 加密落盘，提供本地 secret management 与 dotenv / .env 替代方案；用 `ky run` 将凭证注入子进程，避免在模型上下文中传递明文。
 </p>
 
+在 Agent 中打开 Kyvault 用法：agy / Claude Code / OpenCode 输入 `/kyvault`，Codex 输入 `$kyvault`（或从 `/skills` 选择）。见 [配置及使用说明](docs/agent-guide.md)。
+
 ---
 
 ## Ky 桌面版（macOS）

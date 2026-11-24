@@ -26,6 +26,8 @@
 
 [中文](./README.md)
 
+Open the Kyvault agent guide with `/kyvault` in agy, Claude Code, or OpenCode, and `$kyvault` (or `/skills`) in Codex. See [setup and usage](docs/agent-guide.md).
+
 ---
 
 ## Ky desktop

@@ -6,14 +6,33 @@ __pycache__/
 .DS_Store
 dist/
 build/
-.agents/
+# Only the shipped, passive Kyvault guide is tracked.
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/kyvault/
+.agents/skills/kyvault/*
+!.agents/skills/kyvault/SKILL.md
+!.agents/skills/kyvault/agents/
+.agents/skills/kyvault/agents/*
+!.agents/skills/kyvault/agents/openai.yaml
 .cursorrules
 .copilotinstructions
 .clauderules
 
 
 # agent worktree（嵌套 git 仓，不该进本仓）
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/kyvault/
+.claude/skills/kyvault/*
+!.claude/skills/kyvault/SKILL.md
+# Keep local OpenCode config private; ship only this command.
+.opencode/*
+!.opencode/commands/
+.opencode/commands/*
+!.opencode/commands/kyvault.md
 
 # workbuddy 本地运行时记忆（不入库）
 .workbuddy-ai/
