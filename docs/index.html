@@ -83,5 +83,22 @@
     <section class="final-cta"><div><div class="section-kicker">KEEP YOUR SECRETS YOURS</div><h2>从今天起，把明文留在本机。</h2><p>Kyvault v2.6.0 · MIT · Built for developers and AI agents.</p></div><a class="button primary" href="https://github.com/webkubor/kyvault/releases/latest">下载最新版本 <span aria-hidden="true">↗</span></a></section>
   </main>
   <footer><a class="brand" href="#top"><span class="brand-mark" aria-hidden="true">K</span><span>KYVAULT</span></a><p>Local-first secrets for developers and AI agents.</p><div><a href="https://github.com/webkubor/kyvault">GitHub repo</a><a href="https://github.com/webkubor/kyvault/releases">Releases</a><a href="https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh">install.sh</a><a href="https://github.com/webkubor/kyvault/blob/main/LICENSE">MIT License</a></div><small>© Kyvault contributors · MIT License</small></footer>
+  <script>
+    // Anonymous website counts; no URL, referrer, identity or credentials leave the page.
+    (() => {
+      if (location.origin !== "https://webkubor.github.io" || location.pathname !== "/kyvault/" ||
+          navigator.doNotTrack === '1' || navigator.globalPrivacyControl === true) return;
+      try {
+        if (localStorage.getItem('kyvault-analytics') === 'off') return;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        void fetch("https://api.webkubor.online/v1/analytics/events", {
+          method: 'POST', credentials: 'omit', referrerPolicy: 'no-referrer',
+          headers: { 'content-type': 'application/json' }, signal: controller.signal,
+          body: JSON.stringify({ project: 'kyvault', event_id: crypto.randomUUID(), event: 'page.view', properties: {} }),
+        }).catch(() => {}).finally(() => clearTimeout(timeout));
+      } catch { /* Measurement must never interrupt browsing. */ }
+    })();
+  </script>
 </body>
 </html>
