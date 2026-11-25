@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod inspiration;
 mod tray;
 
 use commands::{DesktopState, Session};
@@ -35,9 +36,25 @@ fn main() {
         }))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _, event| {
-                    if event.state() == ShortcutState::Pressed {
+                .with_handler(|app, shortcut, event| {
+                    if event.state() != ShortcutState::Pressed { return; }
+                    use tauri_plugin_global_shortcut::{Code, Modifiers};
+                    let modifiers = if cfg!(target_os = "macos") {
+                        Modifiers::SUPER | Modifiers::SHIFT
+                    } else { Modifiers::CONTROL | Modifiers::SHIFT };
+                    if shortcut.matches(modifiers, Code::KeyK) {
+                        // Read before activating Ky, so the source app is still available.
+                        let result = inspiration::capture(&app.state::<DesktopState>());
                         show(app);
+                        match result {
+                            Ok(idea) => { let _ = app.emit("idea-captured", idea); }
+                            Err(message) => { let _ = app.emit("idea-capture-error", message); }
+                        }
+                    } else {
+                        show(app);
+                        if shortcut.matches(modifiers, Code::KeyJ) {
+                            let _ = app.emit("new-idea", ());
+                        }
                     }
                 })
                 .build(),
@@ -71,6 +88,12 @@ fn main() {
                 .is_err()
             {
                 eprintln!("Ky: global shortcut unavailable; use the tray or Dock.");
+            }
+
+            for shortcut in ["CommandOrControl+Shift+J", "CommandOrControl+Shift+K"] {
+                if app.global_shortcut().register(shortcut).is_err() {
+                    eprintln!("Ky: idea shortcut unavailable; use the Ideas buttons.");
+                }
             }
 
             // Present the window explicitly: a hidden-title transparent window
@@ -267,7 +290,11 @@ fn main() {
             commands::get_entry_image,
             commands::list_ideas,
             commands::save_idea,
-            commands::delete_idea
+            commands::delete_idea,
+            inspiration::capture_idea_clipboard,
+            inspiration::save_idea_image,
+            inspiration::open_idea_file,
+            inspiration::open_ideas_folder
         ])
         .run(tauri::generate_context!())
         .expect("Ky desktop failed to start");

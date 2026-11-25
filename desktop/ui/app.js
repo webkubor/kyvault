@@ -583,6 +583,17 @@ if (desktop) {
   Promise.all([
     listen('history-changed', () => { if (!document.hidden) refresh(); }),
     listen('app-locked', lockView),
+    listen('new-idea', () => {
+      if (state.locked || document.querySelector('dialog[open]')) return;
+      setView('ideas');
+      openIdeaEditor();
+    }),
+    listen('idea-captured', () => {
+      if (state.locked) return;
+      setView('ideas');
+      setStatus('status.ideaCaptured');
+    }),
+    listen('idea-capture-error', (event) => setError('err.backend', { detail: event.payload || t('err.generic') })),
     listen('capture-error', () => {
       // Show a real error instead of silently pretending the capture worked.
       // The backend pauses monitoring when this fires.

@@ -41,7 +41,7 @@
 | 剪贴板历史 | 复制的内容自动记录（30 天），**点一条直接复制回剪贴板**，显示来自哪个 App。 |
 | 敏感内容保护 | 密钥/令牌类内容默认隐藏、点开才显示；复制出去 30 秒自动清除；数据加密存本机。 |
 | 片段 | 给常用文本起个名字**永久收藏**（剪贴板历史 30 天过期，片段不过期），修改自动留版本。 |
-| 灵感库 | 随手记想法，按标题、正文和标签搜索；明文存本机，CLI 与桌面共用。 |
+| 灵感库 | 快捷记录、主动收录文字和图片；标准 Markdown 存入「文稿/ky灵感库」，CLI 与桌面共用。 |
 | 密钥库 | 管理你的 API Key：存取只在本机，复制走「引用」而不是明文。 |
 | 隐私屏 | 离开工位一键遮屏，防旁人偷看。 |
 
@@ -174,22 +174,27 @@ ky run --env GITHUB_TOKEN=secret://github/pat -- git push
 
 ## 📖 使用指南
 
-### 灵感库（明文）
+### 灵感库（本地 Markdown）
 
-随手记想法，与凭据库分开保存。无需初始化密钥库，CLI 和桌面使用同一份本地数据。
+参考 [Jot](https://github.com/joeseesun/qiaomu-jot) 的快捷记录方式，在 Ky 里随手记想法、主动收录剪贴板文字和图片，直接存为标准 Markdown。默认目录是系统「文稿」下的 **ky灵感库**（macOS 为 `~/Documents/ky灵感库`），不需要安装或绑定其他笔记工具。
+
+桌面快捷键：`⌘⇧J` 打开灵感编辑器，`⌘↩` 保存；`⌘⇧K` 主动收录剪贴板文字或图片（Windows/Linux 使用 Ctrl 替代 ⌘）。可直接打开 Markdown 文件或整个灵感文件夹，用系统默认编辑器修改后，重新进入灵感页即可读回。图片粘贴或拖入编辑器时另存为一条图片灵感，当前文字草稿保留。
 
 ```sh
-ky idea add "给 Ky 加灵感库" "随时记下，随时找回" --tags 产品,Ky
-ky idea list                         # 最新修改在前
-ky idea list "关键词" --tag 产品     # 搜索标题、正文和标签
-ky idea list --json                  # 供脚本和 Agent 使用
+ky idea jot "刚刚想到的一件事" --tags 产品
+ky idea add "一篇笔记" "**Markdown 正文**" --source "浏览器"
+ky idea list
+ky idea list "关键词" --tag 产品 --json
 ky idea show <id>
-ky idea edit <id> --body "补充想法" --tags 产品,待做
-ky idea delete <id>
-ky idea path                        # 查看数据目录
+ky idea edit <id> --body "补充想法"
+ky idea path                         # 灵感文件夹
+ky idea path <id>                    # 该条 Markdown 路径
+ky idea open                         # Finder / 文件管理器
+ky idea open <id>                    # 系统默认 Markdown 编辑器
+ky idea migrate --from <旧JSON目录>   # 复制迁移，保留原件
 ```
 
-正文传 `-` 可从 stdin 读取多行文本。`ky inspiration` 与 `ky idea` 等价。内容保存在 `~/.config/kyvault/inspiration`，每条一个明文 JSON 文件；可用 `KY_INSPIRATION_DIR` 指定其他目录。不访问主密钥、凭据或凭据审计，也不进入密钥库的 Git 同步。灵感不会按剪贴板历史的期限自动清理，可自行备份该目录。**这里不加密，请勿保存密码、Token 或其他凭据。**
+每条记录是按日期和标题命名的 `.md` 文件，图片位于相邻的 `附件/` 文件夹，使用标准相对链接。记录不加密、不过期，不访问凭据或主密钥，也不进入密钥库同步。`KY_INSPIRATION_DIR` 可覆盖保存目录；默认位置会复制迁移上一版 JSON 灵感，原件保留。无需云端服务或特定编辑器。
 
 ### 账户管理
 

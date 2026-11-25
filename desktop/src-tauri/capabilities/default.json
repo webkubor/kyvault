@@ -31,6 +31,10 @@
     "allow-discard-request",
     "allow-list-ideas",
     "allow-save-idea",
-    "allow-delete-idea"
+    "allow-delete-idea",
+    "allow-capture-idea-clipboard",
+    "allow-save-idea-image",
+    "allow-open-idea-file",
+    "allow-open-ideas-folder"
   ]
 }

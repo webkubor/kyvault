@@ -124,7 +124,7 @@ impl Session {
         Ok(())
     }
 }
-fn active(state: &DesktopState) -> Result<MutexGuard<'_, Session>> {
+pub(crate) fn active(state: &DesktopState) -> Result<MutexGuard<'_, Session>> {
     let mut session = state.session.lock().map_err(|_| "会话不可用，请重启 Ky")?;
     if session.locked {
         return Err("内容已隐藏，请先返回工作台".into());
@@ -377,7 +377,7 @@ pub fn snapshot(state: State<DesktopState>) -> Result<Snapshot> {
     read_snapshot(&state, &session)
 }
 
-// —— 灵感库：明文 JSON，独立于密钥库（不读 master.key、不走 vault()）。
+// —— 灵感库：明文 Markdown，独立于密钥库（不读 master.key、不走 vault()）。
 // 仍受「隐藏屏幕内容」锁约束：锁定时不返回、不改写任何灵感。
 fn ideas() -> Result<InspirationStore> {
     InspirationStore::default_location().map_err(|_| "无法打开灵感库目录".into())

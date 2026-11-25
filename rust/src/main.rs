@@ -315,13 +315,24 @@ enum Cmd {
 
 #[derive(Subcommand)]
 enum IdeaCmd {
-    /// 记一条灵感；正文传 - 表示从 stdin 读
+    /// 记一条 Markdown 灵感；正文传 - 表示从 stdin 读
     Add {
         title: String,
         body: Option<String>,
         /// 标签，逗号分隔：--tags ky,产品
         #[arg(long, default_value = "")]
         tags: String,
+        /// 来源链接或应用名称（原样保存，不联网获取）
+        #[arg(long)]
+        source: Option<String>,
+    },
+    /// 闪记：直接写正文，自动用第一行作为标题；传 - 从 stdin 读
+    Jot {
+        text: Option<String>,
+        #[arg(long, default_value = "")]
+        tags: String,
+        #[arg(long)]
+        source: Option<String>,
     },
     /// 列出灵感（最新在前），可按关键词/标签筛选
     #[command(alias = "ls")]
@@ -354,8 +365,15 @@ enum IdeaCmd {
     /// 删除灵感
     #[command(alias = "rm")]
     Delete { id: String },
-    /// 打印灵感库目录
-    Path,
+    /// 打印灵感库目录，或指定灵感的 Markdown 路径
+    Path { id: Option<String> },
+    /// 用系统默认应用打开 Markdown；不给 ID 则打开灵感库文件夹
+    Open { id: Option<String> },
+    /// 将旧 JSON 灵感复制为 Markdown，保留原件；重复执行不会重复导入
+    Migrate {
+        #[arg(long)]
+        from: std::path::PathBuf,
+    },
 }
 
 fn idea_body(v: Option<String>) -> Result<Option<String>> {
@@ -363,10 +381,28 @@ fn idea_body(v: Option<String>) -> Result<Option<String>> {
         Some("-") => {
             let mut s = String::new();
             std::io::stdin().read_to_string(&mut s)?;
-            Ok(Some(s.trim_end().to_string()))
+            Ok(Some(s))
         }
         _ => Ok(v),
     }
+}
+
+fn open_idea_path(path: &std::path::Path) -> Result<()> {
+    // 只接收库内解析出的路径；直接传参数，不经过 shell。
+    #[cfg(target_os = "macos")]
+    let mut command = Command::new("open");
+    #[cfg(target_os = "windows")]
+    let mut command = Command::new("explorer");
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let mut command = Command::new("xdg-open");
+    let status = command
+        .arg(path)
+        .status()
+        .context("无法用系统默认应用打开灵感")?;
+    if !status.success() {
+        return Err(anyhow!("系统未能打开：{}", path.display()));
+    }
+    Ok(())
 }
 
 fn print_idea_line(i: &kyvault::inspiration::Idea) {
@@ -2378,10 +2414,37 @@ fn run() -> Result<()> {
             use kyvault::inspiration::{parse_tags, InspirationStore};
             let s = InspirationStore::default_location()?;
             match action {
-                IdeaCmd::Add { title, body, tags } => {
+                IdeaCmd::Add {
+                    title,
+                    body,
+                    tags,
+                    source,
+                } => {
                     let body = idea_body(body)?.unwrap_or_default();
-                    let i = s.add(&title, &body, parse_tags(&tags))?;
-                    println!("✓ 已记下 {}（明文：{}）", i.id, s.dir().display());
+                    let i =
+                        s.add_with_source(&title, &body, parse_tags(&tags), source.as_deref())?;
+                    println!("✓ 已记下 {}\n{}", i.id, s.file_path(&i.id)?.display());
+                }
+                IdeaCmd::Jot { text, tags, source } => {
+                    use std::io::IsTerminal;
+                    let text = match text {
+                        Some(text) => idea_body(Some(text))?.unwrap_or_default(),
+                        None if !std::io::stdin().is_terminal() => {
+                            idea_body(Some("-".into()))?.unwrap_or_default()
+                        }
+                        None => return Err(anyhow!("写一点内容：ky idea jot \"想到的一件事\"")),
+                    };
+                    let title: String = text
+                        .lines()
+                        .map(str::trim)
+                        .find(|line| !line.is_empty())
+                        .unwrap_or("")
+                        .chars()
+                        .take(60)
+                        .collect();
+                    let i =
+                        s.add_with_source(&title, &text, parse_tags(&tags), source.as_deref())?;
+                    println!("✓ 已记下 {}\n{}", i.id, s.file_path(&i.id)?.display());
                 }
                 IdeaCmd::List { query, tag, json } => {
                     let items: Vec<_> = s
@@ -2430,7 +2493,30 @@ fn run() -> Result<()> {
                     s.delete(&id)?;
                     println!("✓ 已删除 {id}");
                 }
-                IdeaCmd::Path => println!("{}", s.dir().display()),
+                IdeaCmd::Path { id } => {
+                    let path = match id {
+                        Some(id) => s.file_path(&id)?,
+                        None => s.dir().to_path_buf(),
+                    };
+                    println!("{}", path.display());
+                }
+                IdeaCmd::Open { id } => {
+                    let path = match id {
+                        Some(id) => s.file_path(&id)?,
+                        None => {
+                            std::fs::create_dir_all(s.dir())?;
+                            s.dir().to_path_buf()
+                        }
+                    };
+                    open_idea_path(&path)?;
+                }
+                IdeaCmd::Migrate { from } => {
+                    let count = s.migrate_from(&from)?;
+                    println!(
+                        "✓ 已复制迁移 {count} 条灵感，JSON 原件保留。\n{}",
+                        s.dir().display()
+                    );
+                }
             }
         }
     }

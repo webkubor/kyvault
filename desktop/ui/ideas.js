@@ -1,4 +1,4 @@
-// 灵感库视图。灵感以明文 JSON 存在本机（后端 InspirationStore），
+// 灵感库视图。灵感以明文 Markdown 存在本机（后端 InspirationStore），
 // 与密钥库、剪贴板历史完全分开；前端只缓存当前列表，不写 localStorage。
 // 记录要低摩擦：正文在前，标题可省（后端取正文首行）。
 
@@ -119,6 +119,10 @@ export function renderIdeaDetail() {
   edit.type = 'button';
   edit.dataset.action = 'edit-idea';
   actions.appendChild(edit);
+  const open = el('button', '', t('idea.open'));
+  open.type = 'button';
+  open.addEventListener('click', () => invoke('open_idea_file', { id: idea.id }).catch(() => setError('err.generic')));
+  actions.appendChild(open);
   const remove = el('button', 'quiet danger', t('action.remove'));
   remove.type = 'button';
   remove.dataset.action = 'delete-idea';
@@ -195,4 +199,56 @@ $('#idea-form').addEventListener('keydown', (e) => {
     e.preventDefault();
     $('#idea-form').requestSubmit();
   }
+});
+
+$('#open-ideas-folder').addEventListener('click', () => {
+  invoke('open_ideas_folder').catch(() => setError('err.generic'));
+});
+$('#capture-idea').addEventListener('click', async () => {
+  try {
+    await invoke('capture_idea_clipboard');
+    setStatus('status.ideaCaptured');
+    await loadIdeas();
+  } catch (err) {
+    setError('err.backend', { detail: typeof err === 'string' ? err : t('err.generic') });
+  }
+});
+async function savePastedImage(file) {
+  if (!file || !file.type.startsWith('image/') || state.locked) return;
+  try {
+    if (file.size > 8 * 1024 * 1024) throw new Error('image too large');
+    // Normalize browser-supported image formats to PNG before sending to Rust.
+    const bitmap = await createImageBitmap(file);
+    if (bitmap.width > 12000 || bitmap.height > 12000 || bitmap.width * bitmap.height > 16000000) {
+      bitmap.close();
+      throw new Error('image too large');
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const png = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!png || png.size > 8 * 1024 * 1024) throw new Error('image too large');
+    const data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(png);
+    });
+    await invoke('save_idea_image', { data });
+    setStatus('status.ideaCaptured');
+    await loadIdeas();
+  } catch (err) {
+    setFormError('#idea-error', 'err.backend', { detail: typeof err === 'string' ? err : t('err.generic') });
+  }
+}
+$('#idea-body').addEventListener('paste', (event) => {
+  const image = [...event.clipboardData.files].find((file) => file.type.startsWith('image/'));
+  if (image) { event.preventDefault(); savePastedImage(image); }
+});
+$('#idea-body').addEventListener('dragover', (event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); });
+$('#idea-body').addEventListener('drop', (event) => {
+  const image = [...event.dataTransfer.files].find((file) => file.type.startsWith('image/'));
+  if (image) { event.preventDefault(); savePastedImage(image); }
 });

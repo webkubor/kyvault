@@ -160,22 +160,26 @@ kyvault run --env GITHUB_TOKEN=secret://github/personal-pat -- git push
 
 ## 📖 Usage guide
 
-### Inspiration library (plaintext)
+### Inspiration library (local Markdown)
 
-Capture ideas separately from credentials. No vault initialization is required; the CLI and desktop share the same local files.
+Inspired by [Jot](https://github.com/joeseesun/qiaomu-jot), capture a thought or explicitly save clipboard text and images as ordinary Markdown. The default folder is **ky灵感库** inside your system Documents directory (`~/Documents/ky灵感库` on macOS). No other note-taking app or account is required.
+
+On desktop, `⌘⇧J` opens a quick note, `⌘↩` saves, and `⌘⇧K` explicitly captures clipboard text or an image. Windows/Linux use Ctrl instead of ⌘. Open a note or its folder in the system default app; edits made elsewhere are picked up when returning to Ideas. Pasting or dropping an image into the editor saves it as a separate image idea while preserving the text draft.
 
 ```sh
-ky idea add "An idea for Ky" "Capture now, find it later" --tags product,Ky
-ky idea list
-ky idea list "keyword" --tag product
-ky idea list --json
+ky idea jot "A thought worth keeping" --tags product
+ky idea add "A note" "**Markdown body**" --source "Browser"
+ky idea list "keyword" --tag product --json
 ky idea show <id>
-ky idea edit <id> --body "More detail" --tags product,todo
-ky idea delete <id>
+ky idea edit <id> --body "More detail"
 ky idea path
+ky idea path <id>
+ky idea open
+ky idea open <id>
+ky idea migrate --from <legacy-json-directory>
 ```
 
-Pass `-` as the body to read multiple lines from stdin. `ky inspiration` is an alias for `ky idea`. Each idea is a plaintext JSON file in `~/.config/kyvault/inspiration`; override this with `KY_INSPIRATION_DIR`. The library does not access master keys, credentials, or credential audit logs, and is excluded from vault Git synchronization. Ideas do not expire with clipboard history. Back up this directory yourself. **This library is unencrypted: do not store passwords, tokens, or other credentials here.**
+Each note is a readable date-and-title `.md` file; images live in the adjacent `附件/` folder with standard relative links. Notes are unencrypted, do not expire, and never access credentials or master keys or enter vault synchronization. Override the directory with `KY_INSPIRATION_DIR`. The default location copies legacy JSON ideas into Markdown while retaining the originals. Cloud services and proprietary editors are not required.
 
 ### Account management
 

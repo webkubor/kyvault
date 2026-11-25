@@ -292,6 +292,8 @@ ul { margin: 0; padding: 0; list-style: none; }
   border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface);
 }
 
+.ideas-tools { display: flex; gap: var(--s2); flex-wrap: wrap; margin: var(--s3); }
+.ideas-tools button { font-size: var(--t-sm); }
 .library .ideas-note { margin: var(--s3) var(--s3) var(--s1); }
 .empty { padding: var(--s10) var(--s6); max-width: 42ch; }
 .empty h2 { margin-bottom: var(--s2); }

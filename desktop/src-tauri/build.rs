@@ -28,6 +28,10 @@ fn main() {
             "list_ideas",
             "save_idea",
             "delete_idea",
+            "capture_idea_clipboard",
+            "save_idea_image",
+            "open_idea_file",
+            "open_ideas_folder",
         ]),
     ))
     .expect("Ky build configuration");

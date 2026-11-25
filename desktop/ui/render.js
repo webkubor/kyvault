@@ -237,6 +237,7 @@ export function setView(view) {
   showEl($('#library'), view !== 'settings');
   showEl($('#settings'), view === 'settings');
   showEl($('#ideas-note'), view === 'ideas');
+  showEl($('#ideas-tools'), view === 'ideas');
   // 每次进入灵感库都重读：CLI 可能在桌面开着时改过灵感文件。
   if (view === 'ideas' && !state.locked) loadIdeas();
   $$('.nav-item').forEach((b) =>
