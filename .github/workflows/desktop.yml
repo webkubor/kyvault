@@ -7,6 +7,9 @@ on:
     paths: ['desktop/**', 'rust/**', '.github/workflows/desktop.yml']
 permissions:
   contents: read
+env:
+  KYVAULT_NO_TELEMETRY: "1"
+
 jobs:
   macos:
     runs-on: macos-latest

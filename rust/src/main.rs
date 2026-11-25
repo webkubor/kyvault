@@ -750,10 +750,17 @@ fn print_list(
 }
 
 fn main() {
+    // Private one-shot sender never parses commands or opens the credential store.
+    let args: Vec<_> = std::env::args_os().collect();
+    if args.len() == 2 && args[1] == kyvault::analytics::HELPER_ARG {
+        kyvault::analytics::cli_helper();
+        return;
+    }
     if let Err(e) = run() {
         eprintln!("错误: {e:#}");
         std::process::exit(1);
     }
+    kyvault::analytics::cli_success();
     // 发版闭环：交互式命令结束后，24h 一次顺带检查新版并提示（stderr，非 TTY 跳过）。
     // 失败静默，绝不影响命令本身的退出码与明文纪律。
     kyvault::update::notify_if_due();

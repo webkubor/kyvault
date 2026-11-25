@@ -235,6 +235,7 @@ fn main() {
                     }
                 }
             });
+            kyvault::analytics::app_open();
             Ok(())
         })
         .on_window_event(|window, event| {
