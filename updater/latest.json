@@ -1,11 +1,11 @@
 {
-  "version": "0.2.6",
-  "notes": "简化侧栏，移除片段入口并保护已有片段。",
-  "pub_date": "2026-11-22T15:11:00Z",
+  "version": "0.2.7",
+  "notes": "匿名操作统计：仅固定启动/CLI成功事件与一次性ID，不含密钥、路径或身份；支持DNT/显式关闭，后台发送不阻塞。",
+  "pub_date": "2026-11-25T11:36:59.583Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbTc0aXgrQlFYNkpTWURib0VkbkJPazdrTStWa3pyQjN1Q0RvVVYreTFNZWp0NFVDeGNYT2x0MUxlcldSN0dSeE9GUUZaaVpDK3BQdlNHVHNXYWpOQndNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MzYwMjAzCWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMi42CjhZMFloNm9CeG5DNXBaTUFhelM1R1g0MXRELy9BSWFqNjB5TmFYR1FPaktZbEREWGdkUXZFWHdTQ0V0cDJONFl5WE5YYi8zS1JVaGZ4eGFma2Erd0RBPT0K",
-      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.2.6/Ky.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbThBRFJ6a2ZvT2tMMzB6YzI2ZjExc2dRNlNhN1JiSmFYUjNwc2lBSGVVTUhYT1laaitMV2VLVE9uNmdDMU1vQjVhT1l2VjV0RmhOcEVxclRrSnFOR2djPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NjA2NTYxCWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMi43CnUzS3ZOak9oMTZRTVMrWmtMMkxPZElydXFFWlQ4MHpEWUhqSHVHRmdySEhEWlhDeWVDMEVyMzl5MUZhRkxoTlZzNWxzNHpmWDdaeHRvc3FRbmtLa0RnPT0K",
+      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.2.7/Ky.app.tar.gz"
     }
   }
 }
