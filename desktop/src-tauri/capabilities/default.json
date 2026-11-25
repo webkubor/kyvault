@@ -28,6 +28,9 @@
     "allow-set-ui-language",
     "allow-pending-requests",
     "allow-fulfill-request",
-    "allow-discard-request"
+    "allow-discard-request",
+    "allow-list-ideas",
+    "allow-save-idea",
+    "allow-delete-idea"
   ]
 }

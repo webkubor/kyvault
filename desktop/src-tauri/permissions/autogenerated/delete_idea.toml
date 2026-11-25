@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-delete-idea"
+description = "Enables the delete_idea command without any pre-configured scope."
+commands.allow = ["delete_idea"]
+
+[[permission]]
+identifier = "deny-delete-idea"
+description = "Denies the delete_idea command without any pre-configured scope."
+commands.deny = ["delete_idea"]

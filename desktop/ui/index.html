@@ -21,6 +21,7 @@
       <button class="nav-item" data-view="history" aria-current="page"><span class="nav-icon" aria-hidden="true"></span><span data-i18n="nav.history"></span></button>
       <button class="nav-item" data-view="vault"><span class="nav-icon" aria-hidden="true"></span><span data-i18n="nav.vault"></span></button>
       <button class="nav-item" data-view="snippets"><span class="nav-icon" aria-hidden="true"></span><span data-i18n="nav.snippets"></span></button>
+      <button class="nav-item" data-view="ideas"><span class="nav-icon" aria-hidden="true"></span><span data-i18n="nav.ideas"></span></button>
       <button class="nav-item" data-view="settings"><span class="nav-icon" aria-hidden="true"></span><span data-i18n="nav.settings"></span></button>
     </nav>
     <div class="sidebar-bottom">
@@ -50,6 +51,7 @@
     <div id="error" class="error" role="alert" hidden></div>
 
     <section id="library" class="library">
+      <p id="ideas-note" class="hint ideas-note" hidden data-i18n="ideas.plain.note"></p>
       <ul id="entries" role="list"></ul>
       <div id="empty" class="empty"><h2 id="empty-title"></h2><p id="empty-copy"></p></div>
     </section>
@@ -101,6 +103,21 @@
       <div id="redaction-preview" hidden><span class="eyebrow" data-i18n="editor.review.eyebrow"></span><pre id="redaction-text"></pre><p id="redaction-note" class="hint"></p></div>
       <p id="text-error" class="error" role="alert" hidden></p>
       <div class="dialog-actions"><button type="button" class="quiet close" data-i18n="action.cancel"></button><button id="text-submit" class="primary" type="submit" data-i18n="action.review"></button></div>
+    </form>
+  </dialog>
+
+  <dialog id="idea-editor" aria-labelledby="idea-editor-title">
+    <form id="idea-form" autocomplete="off">
+      <div class="dialog-heading"><h2 id="idea-editor-title"></h2><button type="button" class="quiet close" data-i18n-aria="dialog.close" aria-label="">×</button></div>
+      <p class="hint" data-i18n="idea.plain.warn"></p>
+      <label for="idea-body" data-i18n="idea.body.label"></label>
+      <textarea id="idea-body" rows="7" spellcheck="false" autocomplete="off"></textarea>
+      <label for="idea-title" data-i18n="idea.title.label"></label>
+      <input id="idea-title" maxlength="200" autocomplete="off" spellcheck="false" data-i18n-placeholder="idea.title.placeholder">
+      <label for="idea-tags" data-i18n="idea.tags.label"></label>
+      <input id="idea-tags" maxlength="400" autocomplete="off" spellcheck="false" data-i18n-placeholder="idea.tags.placeholder">
+      <p id="idea-error" class="error" role="alert" hidden></p>
+      <div class="dialog-actions"><button type="button" class="quiet close" data-i18n="action.cancel"></button><button class="primary" type="submit" data-i18n="action.saveIdea"></button></div>
     </form>
   </dialog>
 

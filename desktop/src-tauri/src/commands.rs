@@ -1,5 +1,6 @@
 use kyvault::{
     desktop::{redact, DesktopHistory, HistoryEntry},
+    inspiration::{parse_tags, Idea, InspirationStore},
     store::Store,
 };
 use serde::{Deserialize, Serialize};
@@ -374,6 +375,59 @@ fn read_snapshot(state: &DesktopState, session: &Session) -> Result<Snapshot> {
 pub fn snapshot(state: State<DesktopState>) -> Result<Snapshot> {
     let session = state.session.lock().map_err(|_| "会话不可用")?;
     read_snapshot(&state, &session)
+}
+
+// —— 灵感库：明文 JSON，独立于密钥库（不读 master.key、不走 vault()）。
+// 仍受「隐藏屏幕内容」锁约束：锁定时不返回、不改写任何灵感。
+fn ideas() -> Result<InspirationStore> {
+    InspirationStore::default_location().map_err(|_| "无法打开灵感库目录".into())
+}
+/// 标题可省：留空时取正文第一行非空文本（最多 60 字符），记灵感不必先想标题。
+fn idea_title(title: &str, body: &str) -> String {
+    let title = title.trim();
+    if !title.is_empty() {
+        return title.to_string();
+    }
+    let line = body
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("");
+    line.chars().take(60).collect()
+}
+#[tauri::command]
+pub fn list_ideas(state: State<DesktopState>) -> Result<Vec<Idea>> {
+    let _session = active(&state)?;
+    ideas()?.list().map_err(|e| format!("读取灵感库失败：{e}"))
+}
+#[tauri::command]
+pub fn save_idea(
+    id: Option<String>,
+    title: String,
+    body: String,
+    tags: String,
+    state: State<DesktopState>,
+) -> Result<Idea> {
+    let _session = active(&state)?;
+    if body.len() > 65_536 || title.len() > 1_024 {
+        return Err("灵感内容不能超过 64 KiB".into());
+    }
+    let title = idea_title(&title, &body);
+    if title.is_empty() {
+        return Err("写点内容再保存".into());
+    }
+    let store = ideas()?;
+    let tags = parse_tags(&tags);
+    match id.filter(|i| !i.is_empty()) {
+        Some(id) => store.update(&id, Some(title), Some(body), Some(tags)),
+        None => store.add(&title, &body, tags),
+    }
+    .map_err(|e| e.to_string())
+}
+#[tauri::command]
+pub fn delete_idea(id: String, state: State<DesktopState>) -> Result<()> {
+    let _session = active(&state)?;
+    ideas()?.delete(&id).map_err(|e| e.to_string())
 }
 #[tauri::command]
 pub fn preview_text(

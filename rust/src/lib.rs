@@ -19,6 +19,7 @@ pub mod glab;
 pub mod health;
 pub mod import_env;
 pub mod inspect;
+pub mod inspiration;
 pub mod mailcred;
 pub mod model;
 pub mod panel;

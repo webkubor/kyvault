@@ -48,6 +48,7 @@ flowchart LR
 | `desktop/ui/lang.js` | i18n glue (apply / sync / persist) | 76 |
 | `desktop/ui/render.js` | List + preview rendering | 297 |
 | `desktop/ui/app.js` | Wiring, commands, dialogs, shortcuts | 295 |
+| `desktop/ui/ideas.js` | Ideas view: plain-text list/detail/editor (`list_ideas` / `save_idea` / `delete_idea`), never touches the vault | 200 |
 | `desktop/ui/logo.png` | Brand mark (parent-provided) | — |
 
 `app.js` uses **top-level await**; `index.html` loads it as

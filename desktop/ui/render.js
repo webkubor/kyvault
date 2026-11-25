@@ -6,11 +6,13 @@
 
 import { state, $, $$, el, showEl, invoke, formatWhen, firstLine, setError, setStatus, relocalizeMessages } from './core.js';
 import { t } from './lang.js';
+import { renderIdeaList, renderIdeaDetail, relocalizeIdeas, loadIdeas } from './ideas.js';
 
 export const VIEW_META = {
   history: 'view.history',
   vault: 'view.vault',
   snippets: 'view.snippets',
+  ideas: 'view.ideas',
   settings: 'view.settings',
 };
 
@@ -19,6 +21,7 @@ export const VIEW_META = {
 export function renderViewHeading() {
   const key = VIEW_META[state.view] || 'view.history';
   $('#view-title').textContent = t(`${key}.title`);
+  $('#search').placeholder = t(state.view === 'ideas' ? 'search.ideas.placeholder' : 'search.placeholder');
 }
 
 export function renderAddLabel() {
@@ -31,6 +34,7 @@ export function renderAddLabel() {
   }
   add.hidden = false;
   if (state.view === 'vault') add.textContent = t('action.add.credential');
+  else if (state.view === 'ideas') add.textContent = t('action.add.idea');
   else add.textContent = t('action.add.snippet');
 }
 
@@ -58,6 +62,7 @@ export function relocalizeDynamic() {
   }
   const credential = $('#credential');
   if (credential.open) $('#credential-title').textContent = t('cred.title');
+  relocalizeIdeas();
 }
 
 export function isSecretView() {
@@ -129,6 +134,7 @@ function emptyCopy() {
 }
 
 export function renderList() {
+  if (state.view === 'ideas') return renderIdeaList();
   const list = $('#entries');
   const entries = currentEntries();
   const filtered = matched(entries);
@@ -230,6 +236,9 @@ export function setView(view) {
   showEl($('#search-row'), view !== 'settings');
   showEl($('#library'), view !== 'settings');
   showEl($('#settings'), view === 'settings');
+  showEl($('#ideas-note'), view === 'ideas');
+  // 每次进入灵感库都重读：CLI 可能在桌面开着时改过灵感文件。
+  if (view === 'ideas' && !state.locked) loadIdeas();
   $$('.nav-item').forEach((b) =>
     b.setAttribute('aria-current', b.dataset.view === view ? 'page' : 'false')
   );
@@ -262,6 +271,7 @@ export function closeDetail() {
 /* ---------- detail sheet ---------- */
 
 export function renderDetail() {
+  if (state.view === 'ideas') return renderIdeaDetail();
   const pane = $('#detail');
   const entry = selectedEntry();
   if (state.view === 'settings' || !entry) {

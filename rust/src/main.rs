@@ -3,7 +3,7 @@
 //! 后端由 KYVAULT_BACKEND 选：默认本地 store（~/.config/kyvault/store）。
 //! 确保数据真源统一，支持本地离线解密与团队密文同步。
 //!
-//! 输出纪律：**除了 get，任何命令都不打印明文**。list 只出元信息，
+//! 凭据输出纪律：**除了 get，任何命令都不打印凭据明文**。list 只出元信息，
 //! run 把密钥注进子进程环境变量、不落盘不回显 —— 这是这个工具存在的理由，
 //! 为了调试方便打一行明文就等于把它作废。
 
@@ -305,6 +305,77 @@ enum Cmd {
         #[arg(long, default_value = "kyvault-panel.html")]
         out: std::path::PathBuf,
     },
+    /// 灵感库：随手记想法，明文存放（不加密，不要记密钥）
+    #[command(alias = "inspiration")]
+    Idea {
+        #[command(subcommand)]
+        action: IdeaCmd,
+    },
+}
+
+#[derive(Subcommand)]
+enum IdeaCmd {
+    /// 记一条灵感；正文传 - 表示从 stdin 读
+    Add {
+        title: String,
+        body: Option<String>,
+        /// 标签，逗号分隔：--tags ky,产品
+        #[arg(long, default_value = "")]
+        tags: String,
+    },
+    /// 列出灵感（最新在前），可按关键词/标签筛选
+    #[command(alias = "ls")]
+    List {
+        /// 关键词，匹配标题/正文/标签
+        query: Option<String>,
+        #[arg(long)]
+        tag: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// 查看一条灵感全文
+    Show {
+        id: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// 修改灵感；只改给出的字段
+    Edit {
+        id: String,
+        #[arg(long)]
+        title: Option<String>,
+        /// 新正文；传 - 从 stdin 读
+        #[arg(long)]
+        body: Option<String>,
+        /// 覆盖标签，逗号分隔；传空串清空
+        #[arg(long)]
+        tags: Option<String>,
+    },
+    /// 删除灵感
+    #[command(alias = "rm")]
+    Delete { id: String },
+    /// 打印灵感库目录
+    Path,
+}
+
+fn idea_body(v: Option<String>) -> Result<Option<String>> {
+    match v.as_deref() {
+        Some("-") => {
+            let mut s = String::new();
+            std::io::stdin().read_to_string(&mut s)?;
+            Ok(Some(s.trim_end().to_string()))
+        }
+        _ => Ok(v),
+    }
+}
+
+fn print_idea_line(i: &kyvault::inspiration::Idea) {
+    let tags = if i.tags.is_empty() {
+        String::new()
+    } else {
+        format!("  #{}", i.tags.join(" #"))
+    };
+    println!("{}  {}{}  {}", i.id, i.title, tags, i.updated_at);
 }
 
 #[derive(Subcommand)]
@@ -762,7 +833,12 @@ fn main() {
 fn run() -> Result<()> {
     let Cli { actor: who, cmd } = Cli::parse();
     // 解析一次，全流程共用：同一条命令里的所有事件必须记同一个人
-    let who = audit::actor(who.as_deref());
+    // 灵感不属于凭据操作，也不需要为解析审计身份而探测密钥库。
+    let who = if matches!(&cmd, Cmd::Idea { .. }) {
+        String::new()
+    } else {
+        audit::actor(who.as_deref())
+    };
     match cmd {
         Cmd::Init { remote, no_git } => {
             let store = Store::default_location()?;
@@ -2297,6 +2373,65 @@ fn run() -> Result<()> {
             println!("  内容：账号 / 密钥条目 / 操作计数 / 最近审计 —— 只有元信息。");
             println!("  不含凭据值/密文/尾号；账号、IP、设备和审计仍敏感，请在受限站点托管（noindex 不是鉴权）。");
             println!("  本地可视化编辑才是 ky ui（仅 127.0.0.1）。");
+        }
+        Cmd::Idea { action } => {
+            use kyvault::inspiration::{parse_tags, InspirationStore};
+            let s = InspirationStore::default_location()?;
+            match action {
+                IdeaCmd::Add { title, body, tags } => {
+                    let body = idea_body(body)?.unwrap_or_default();
+                    let i = s.add(&title, &body, parse_tags(&tags))?;
+                    println!("✓ 已记下 {}（明文：{}）", i.id, s.dir().display());
+                }
+                IdeaCmd::List { query, tag, json } => {
+                    let items: Vec<_> = s
+                        .list()?
+                        .into_iter()
+                        .filter(|i| query.as_deref().map_or(true, |q| i.matches(q)))
+                        .filter(|i| {
+                            tag.as_deref()
+                                .map_or(true, |t| i.tags.iter().any(|x| x == t))
+                        })
+                        .collect();
+                    if json {
+                        println!("{}", serde_json::to_string_pretty(&items)?);
+                    } else if items.is_empty() {
+                        println!("灵感库是空的（或没有匹配项）。用 ky idea add \"标题\" 记一条。");
+                    } else {
+                        items.iter().for_each(print_idea_line);
+                    }
+                }
+                IdeaCmd::Show { id, json } => {
+                    let i = s.get(&id)?;
+                    if json {
+                        println!("{}", serde_json::to_string_pretty(&i)?);
+                    } else {
+                        print_idea_line(&i);
+                        if !i.body.is_empty() {
+                            println!("\n{}", i.body);
+                        }
+                    }
+                }
+                IdeaCmd::Edit {
+                    id,
+                    title,
+                    body,
+                    tags,
+                } => {
+                    let i = s.update(
+                        &id,
+                        title,
+                        idea_body(body)?,
+                        tags.as_deref().map(parse_tags),
+                    )?;
+                    println!("✓ 已更新 {}", i.id);
+                }
+                IdeaCmd::Delete { id } => {
+                    s.delete(&id)?;
+                    println!("✓ 已删除 {id}");
+                }
+                IdeaCmd::Path => println!("{}", s.dir().display()),
+            }
         }
     }
     Ok(())

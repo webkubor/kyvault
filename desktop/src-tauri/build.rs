@@ -25,6 +25,9 @@ fn main() {
             "get_app_info",
             "install_update",
             "get_entry_image",
+            "list_ideas",
+            "save_idea",
+            "delete_idea",
         ]),
     ))
     .expect("Ky build configuration");

@@ -67,6 +67,7 @@
   --icon-history: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8a5 5 0 1 0 1.6-3.7'/%3E%3Cpath d='M2.5 3v2.5H5'/%3E%3Cpath d='M8 5.2V8l2 1.6'/%3E%3C/svg%3E");
   --icon-vault: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'%3E%3Crect x='2.5' y='3' width='11' height='10' rx='2'/%3E%3Ccircle cx='8' cy='8' r='2'/%3E%3Cpath d='M8 10v1.5'/%3E%3C/svg%3E");
   --icon-snippets: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M3 4.5h10M3 8h10M3 11.5h6'/%3E%3C/svg%3E");
+  --icon-ideas: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5.5 10.5a4.5 4.5 0 1 1 5 0V12h-5z'/%3E%3Cpath d='M6.5 14h3'/%3E%3C/svg%3E");
   --icon-settings: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='8' cy='8' r='2.1'/%3E%3Cpath d='M8 2.2v1.4M8 12.4v1.4M2.2 8h1.4M12.4 8h1.4M4 4l1 1M11 11l1 1M12 4l-1 1M5 11l-1 1'/%3E%3C/svg%3E");
   --icon-search: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='4.2'/%3E%3Cpath d='M10.2 10.2 13.5 13.5'/%3E%3C/svg%3E");
   --icon-back: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 3.5 5.5 8l4.5 4.5'/%3E%3C/svg%3E");
@@ -200,6 +201,7 @@ nav { display: grid; gap: 2px; }
 .nav-item[data-view="history"] .nav-icon { -webkit-mask: var(--icon-history) center/contain no-repeat; mask: var(--icon-history) center/contain no-repeat; }
 .nav-item[data-view="vault"] .nav-icon { -webkit-mask: var(--icon-vault) center/contain no-repeat; mask: var(--icon-vault) center/contain no-repeat; }
 .nav-item[data-view="snippets"] .nav-icon { -webkit-mask: var(--icon-snippets) center/contain no-repeat; mask: var(--icon-snippets) center/contain no-repeat; }
+.nav-item[data-view="ideas"] .nav-icon { -webkit-mask: var(--icon-ideas) center/contain no-repeat; mask: var(--icon-ideas) center/contain no-repeat; }
 .nav-item[data-view="settings"] .nav-icon { -webkit-mask: var(--icon-settings) center/contain no-repeat; mask: var(--icon-settings) center/contain no-repeat; }
 
 .sidebar-bottom { margin-top: auto; display: grid; gap: var(--s1); }
@@ -290,6 +292,7 @@ ul { margin: 0; padding: 0; list-style: none; }
   border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface);
 }
 
+.library .ideas-note { margin: var(--s3) var(--s3) var(--s1); }
 .empty { padding: var(--s10) var(--s6); max-width: 42ch; }
 .empty h2 { margin-bottom: var(--s2); }
 .empty p { line-height: 1.7; font-size: var(--t-sm); color: var(--muted); }

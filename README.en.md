@@ -30,7 +30,7 @@
 
 ## Ky desktop
 
-A standalone Tauri 2 app for local text clipboard history, versioned snippets, and the existing vault. The CLI remains available for agents and scripts. See [desktop build and storage notes](desktop/README.md). This is a local-build preview, not a published desktop release.
+A standalone Tauri 2 app for local text clipboard history, versioned snippets, a plaintext inspiration library, and the existing vault. The CLI remains available for agents and scripts. See [desktop build and storage notes](desktop/README.md). This is a local-build preview, not a published desktop release.
 
 
 ## 🎬 30-second demo
@@ -159,6 +159,23 @@ kyvault run --env GITHUB_TOKEN=secret://github/personal-pat -- git push
 ---
 
 ## 📖 Usage guide
+
+### Inspiration library (plaintext)
+
+Capture ideas separately from credentials. No vault initialization is required; the CLI and desktop share the same local files.
+
+```sh
+ky idea add "An idea for Ky" "Capture now, find it later" --tags product,Ky
+ky idea list
+ky idea list "keyword" --tag product
+ky idea list --json
+ky idea show <id>
+ky idea edit <id> --body "More detail" --tags product,todo
+ky idea delete <id>
+ky idea path
+```
+
+Pass `-` as the body to read multiple lines from stdin. `ky inspiration` is an alias for `ky idea`. Each idea is a plaintext JSON file in `~/.config/kyvault/inspiration`; override this with `KY_INSPIRATION_DIR`. The library does not access master keys, credentials, or credential audit logs, and is excluded from vault Git synchronization. Ideas do not expire with clipboard history. Back up this directory yourself. **This library is unencrypted: do not store passwords, tokens, or other credentials here.**
 
 ### Account management
 

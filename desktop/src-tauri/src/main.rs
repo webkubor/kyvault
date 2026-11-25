@@ -264,7 +264,10 @@ fn main() {
             commands::set_ui_language,
             commands::get_app_info,
             commands::install_update,
-            commands::get_entry_image
+            commands::get_entry_image,
+            commands::list_ideas,
+            commands::save_idea,
+            commands::delete_idea
         ])
         .run(tauri::generate_context!())
         .expect("Ky desktop failed to start");

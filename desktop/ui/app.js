@@ -10,6 +10,7 @@
 const { state, $, $$, setStatus, setError, setFormError, setConfirmText, invoke, listen, isComposing, readPref, writePref } = await import('./core.js');
 const { setView, renderList, renderDetail, renderNoBridge, relocalizeDynamic, closeDetail, revealEntry } = await import('./render.js');
 const { t, applyLanguage, syncLanguageFromSnapshot, currentLang, LANG_KEY, onLanguageChanged } = await import('./lang.js');
+const { openIdeaEditor, deleteIdea, resetIdeas, loadIdeas } = await import('./ideas.js');
 
 let epoch = 0;
 let reviewed = null;
@@ -39,6 +40,7 @@ function lockView() {
   state.selectedId = null;
   state.filter = '';
   $('#search').value = '';
+  resetIdeas();
   $('#entries').replaceChildren();
   $('#detail').replaceChildren();
   $('#detail').hidden = true;
@@ -148,6 +150,7 @@ $('#text-form').addEventListener('submit', async (e) => {
   finally { busy = false; $('#text-submit').disabled = false; }
 });
 $('#add').addEventListener('click', () => {
+  if (state.view === 'ideas') return openIdeaEditor();
   if (state.view !== 'vault') return openEditor();
   wipeForms();
   setFormError('#secret-error', null);
@@ -361,6 +364,11 @@ $('#detail').addEventListener('click', async (e) => {
   const entry = state.entry;
   if (!entry || state.locked) return;
   const { id, reference } = entry;
+  if (command === 'edit-idea') return openIdeaEditor(entry);
+  if (command === 'delete-idea') {
+    if (await confirm('confirm.deleteIdea.title', 'confirm.deleteIdea.copy', 'confirm.deleteIdea.label')) await deleteIdea(id);
+    return;
+  }
   if (command === 'save-as-snippet' || command === 'edit-snippet') return openEditor(entry);
   if (command === 'reveal-entry') {
     revealEntry(entry);
@@ -582,7 +590,11 @@ if (desktop) {
       refresh().then(() => setError('err.capture'));
     })
   ]).catch(() => setError('err.live'));
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && !state.locked) refresh(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || state.locked) return;
+    refresh();
+    if (state.view === 'ideas') loadIdeas();
+  });
   refresh().then(async () => {
     if (state.locked) return;
     const snapshot = await invoke('snapshot').catch(() => null);

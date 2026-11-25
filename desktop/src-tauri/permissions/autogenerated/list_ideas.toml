@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-ideas"
+description = "Enables the list_ideas command without any pre-configured scope."
+commands.allow = ["list_ideas"]
+
+[[permission]]
+identifier = "deny-list-ideas"
+description = "Denies the list_ideas command without any pre-configured scope."
+commands.deny = ["list_ideas"]
