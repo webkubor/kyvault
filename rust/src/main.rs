@@ -217,11 +217,14 @@ enum Cmd {
     },
     /// 把密钥使用规则/技能包写进本地各家 AI 助手
     Connect,
-    /// 检查并升级到最新版（走 GitHub Release + install.sh）
+    /// 检查并升级当前 CLI（GitHub 稳定 Release）
     Update {
         /// 不问直接升（脚本/CI 用）
         #[arg(long = "yes", short = 'y')]
         assume_yes: bool,
+        /// 只检查版本，不下载或安装
+        #[arg(long, conflicts_with = "assume_yes")]
+        check: bool,
     },
     /// 从 .env 批量导入密钥
     Import {
@@ -870,7 +873,7 @@ fn run() -> Result<()> {
     let Cli { actor: who, cmd } = Cli::parse();
     // 解析一次，全流程共用：同一条命令里的所有事件必须记同一个人
     // 灵感不属于凭据操作，也不需要为解析审计身份而探测密钥库。
-    let who = if matches!(&cmd, Cmd::Idea { .. }) {
+    let who = if matches!(&cmd, Cmd::Idea { .. } | Cmd::Update { .. }) {
         String::new()
     } else {
         audit::actor(who.as_deref())
@@ -1614,7 +1617,7 @@ fn run() -> Result<()> {
             }
         }
         Cmd::Connect => kyvault::connect::run()?,
-        Cmd::Update { assume_yes } => kyvault::update::run(assume_yes)?,
+        Cmd::Update { assume_yes, check } => kyvault::update::run_with_options(assume_yes, check)?,
         Cmd::Doctor => kyvault::doctor::run()?,
         Cmd::Import {
             file,

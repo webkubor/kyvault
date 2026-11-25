@@ -43,6 +43,28 @@ open src-tauri/target/release/bundle/macos/Ky.app
 
 系统剪贴板可被其他应用读取或跨设备同步，定时清理无法撤回其他应用已经保存的副本。自动捕获默认开启（剪贴板历史是本产品的核心）；macOS 每秒检查轻量变更计数，仅在变化时读取文本。纯文本首版不包含 OCR、图片历史、云同步、本地大模型、Git 仓库界面或密钥版本回滚。
 
+## 签名更新与发布
+
+「关于」里的「检查更新」会等待更新服务返回结果。新版本可直接下载安装；下载/安装失败会显示失败状态，并可重试。成功后点击「立即重启」，更新器不会自动关闭正在写的草稿。安装过程由 Tauri updater 验证签名，公钥与端点统一配置在 `src-tauri/tauri.conf.json`。更新器只分发已发布的 App，CLI 通过 `ky update` 单独更新。
+
+发布者需要先准备一个比线上更高的桌面版本，并同步 `desktop/package.json`、`desktop/package-lock.json`、`desktop/src-tauri/Cargo.toml`、`desktop/src-tauri/Cargo.lock` 和 `desktop/src-tauri/tauri.conf.json`。CLI 使用 `vX.Y.Z` 标签，桌面使用 `desktop-vX.Y.Z`，互不覆盖更新判断。
+
+1. 通过授权凭据工具向构建子进程注入与现有公钥配对的 `TAURI_SIGNING_PRIVATE_KEY`（需要时同时注入密码）；执行 `cd desktop && npm run build`。私钥不进入仓库或命令输出。Tauri 更新签名与 Apple Developer ID 签名/公证是独立步骤。
+2. 检查 `src-tauri/target/release/bundle/macos/Ky.app.tar.gz` 及 `.sig` 均存在。debug 本地预览、关闭 `createUpdaterArtifacts` 的构建不能用于签名更新发布。
+3. 在仓库根目录生成待评审清单：
+
+   ```sh
+   node scripts/desktop-update-manifest.mjs \
+     --bundle desktop/src-tauri/target/release/bundle/macos/Ky.app.tar.gz \
+     --notes-file <本次发布说明.md> > <待发布清单.json>
+   ```
+
+   生成器校验版本一致性和签名文件结构，不替代客户端的密码学验签。生成器仅支持当前发布目标 Apple Silicon（`darwin-aarch64`）；Intel 尚未配置独立更新包与清单，不会生成指向错误架构的清单。
+4. 经发布授权后，将 `Ky.app.tar.gz`、`.sig` 和 DMG 上传到同一 `desktop-vX.Y.Z` Release。确认清单中的下载地址可访问，再将清单通过仓库评审流程更新到 `updater/latest.json` 的 main 分支。客户端只有在清单发布后才会提示新版本。不要先更新清单再上传包。
+5. 用安装了上一正式版本的隔离机器检查、下载安装、重启并验证版本。离线、损坏包或签名不匹配时，应保持旧版本可用。
+
+本地开发只需验证 App bundle 时，可执行 `npm run build -- --debug --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}'`，不需要签名私钥。它不构成正式更新发布。
+
 ## 开发验证
 
 ```sh

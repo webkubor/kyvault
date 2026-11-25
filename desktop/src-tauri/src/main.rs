@@ -3,6 +3,7 @@
 mod commands;
 mod inspiration;
 mod tray;
+mod updater;
 
 use commands::{DesktopState, Session};
 use std::sync::Mutex;
@@ -124,7 +125,7 @@ fn main() {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(Duration::from_secs(3)).await;
-                    if let Err(e) = commands::install_update_check_only(&handle).await {
+                    if let Err(e) = updater::check_in_background(&handle).await {
                         let _ = e;
                     }
                 });
@@ -286,7 +287,9 @@ fn main() {
             commands::clear_history,
             commands::set_ui_language,
             commands::get_app_info,
-            commands::install_update,
+            updater::install_update,
+            updater::check_update,
+            updater::restart_after_update,
             commands::get_entry_image,
             commands::list_ideas,
             commands::save_idea,

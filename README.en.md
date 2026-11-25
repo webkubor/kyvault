@@ -33,6 +33,12 @@
 A standalone Tauri 2 app for local text clipboard history, versioned snippets, a plaintext inspiration library, and the existing vault. The CLI remains available for agents and scripts. See [desktop build and storage notes](desktop/README.md). This is a local-build preview, not a published desktop release.
 
 
+## Updates
+
+Run `ky update --check` to check the CLI without installing, `ky update` to confirm and update, or `ky update -y` to install directly. The updater replaces the current installation only after checking the downloaded version. Homebrew installations use `brew upgrade kyvault`.
+
+In the app, open About, check for updates, and install the signed bundle. Restart explicitly after saving your work. CLI and desktop follow separate stable releases; unpublished local changes are not distributed by the updater. See [desktop update publishing](desktop/README.md#签名更新与发布).
+
 ## 🎬 30-second demo
 
 <p align="center">

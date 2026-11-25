@@ -6,8 +6,7 @@
 //!
 //! Rust 版只有一条真路径：GitHub Release 上的静态二进制，由 install.sh 按平台挑。
 //! 所以这里做的是「查 tag → 比版本 → 交给 install.sh」，不自己下载解包 ——
-//! install.sh 还顺手清理旧 Python 版（pipx 包 / usr-local shim / 数据目录模块副本），
-//! 那些清理逻辑不该在两处各写一遍。
+//! 自更新锁定同一发布标签，更新当前可执行文件所在目录；安装器负责原子替换。
 
 use std::io::{self, Write};
 use std::process::Command;
@@ -16,7 +15,7 @@ use anyhow::{anyhow, Result};
 use serde_json::Value;
 
 const RELEASES_API: &str = "https://api.github.com/repos/webkubor/kyvault/releases";
-const INSTALL_SH: &str = "https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh";
+const INSTALL_ROOT: &str = "https://raw.githubusercontent.com/webkubor/kyvault";
 
 /// 产品线的发布标签前缀。CLI 用 `v`（v2.8.2），桌面 App 用 `desktop-v`（desktop-v0.2.0）。
 /// 必须分开：桌面 v0.2.0 比 CLI v2.8.2 数字小，若共用一个 latest 会把 CLI 判成"需降级"。
@@ -26,24 +25,58 @@ const DESKTOP_TAG_PREFIX: &str = "desktop-v";
 /// 取指定产品线的最新版本（去掉前缀），按 tag 前缀过滤而非依赖"latest"——
 /// GitHub 的 latest 只有一条，CLI 与桌面各自发版时会互相顶掉（issue #15）。
 fn latest_version_for(prefix: &str) -> Result<String> {
-    let body: Value = ureq::get(RELEASES_API)
+    let body: Value = ureq::get(&format!("{RELEASES_API}?per_page=100"))
         .set("Accept", "application/vnd.github+json")
         .set("User-Agent", concat!("kyvault/", env!("CARGO_PKG_VERSION")))
         .timeout(std::time::Duration::from_secs(8))
         .call()
-        .map_err(|e| anyhow!("查 GitHub Release 失败：{e}"))?
+        .map_err(|e| match e {
+            ureq::Error::Status(403, response)
+                if response.header("X-RateLimit-Remaining") == Some("0") =>
+            {
+                anyhow!("GitHub 更新检查额度已用尽，请稍后重试；当前版本未改动。")
+            }
+            other => anyhow!("查 GitHub Release 失败：{other}"),
+        })?
         .into_json()
         .map_err(|e| anyhow!("GitHub 返回的不是 JSON：{e}"))?;
+    select_release(&body, prefix)
+}
+
+// 只选择正式发布的稳定版本，CLI 与 App 分别筛选；不依赖 GitHub 的全局 latest。
+fn select_release(body: &Value, prefix: &str) -> Result<String> {
     let releases = body
         .as_array()
         .ok_or_else(|| anyhow!("GitHub Release 返回的不是数组"))?;
-    // GitHub 按发布时间倒序，取第一条匹配该产品线前缀的 tag 即可。
-    let tag = releases
-        .iter()
-        .filter_map(|r| r.get("tag_name").and_then(Value::as_str))
-        .find(|t| t.starts_with(prefix))
-        .ok_or_else(|| anyhow!("没有找到 {} 前缀的 Release", prefix))?;
-    Ok(tag.trim().trim_start_matches(prefix).to_string())
+    let mut latest: Option<&str> = None;
+    for release in releases {
+        if release.get("draft").and_then(Value::as_bool) == Some(true)
+            || release.get("prerelease").and_then(Value::as_bool) == Some(true)
+        {
+            continue;
+        }
+        let Some(version) = release
+            .get("tag_name")
+            .and_then(Value::as_str)
+            .and_then(|tag| tag.strip_prefix(prefix))
+        else {
+            continue;
+        };
+        let parts: Vec<_> = version.split('.').collect();
+        if parts.len() != 3
+            || parts.iter().any(|p| {
+                p.is_empty() || !p.bytes().all(|c| c.is_ascii_digit()) || p.parse::<u32>().is_err()
+            })
+        {
+            continue;
+        }
+        if latest.map_or(true, |current| is_newer(version, current)) {
+            latest = Some(version);
+        }
+    }
+    latest
+        .map(str::to_owned)
+        .ok_or_else(|| anyhow!("没有找到 {prefix} 前缀的稳定 Release"))
 }
 
 /// CLI 线的最新版本（供 `kyvault update` 与后台提示用）。
@@ -101,6 +134,10 @@ pub fn is_newer(latest: &str, current: &str) -> bool {
 }
 
 pub fn run(assume_yes: bool) -> Result<()> {
+    run_with_options(assume_yes, false)
+}
+
+pub fn run_with_options(assume_yes: bool, check_only: bool) -> Result<()> {
     let current = env!("CARGO_PKG_VERSION");
     println!("🔄 检查最新版本…");
     let latest = latest_version()?;
@@ -110,6 +147,10 @@ pub fn run(assume_yes: bool) -> Result<()> {
         return Ok(());
     }
     println!("🔥 发现新版本：v{current} → v{latest}");
+    if check_only {
+        println!("运行 `ky update` 安装更新。");
+        return Ok(());
+    }
 
     if !assume_yes {
         print!("升级吗？[y/N]: ");
@@ -123,28 +164,54 @@ pub fn run(assume_yes: bool) -> Result<()> {
         }
     }
 
-    println!("🚀 交给 install.sh（它会按平台挑二进制，并清理旧 Python 版）…");
-    // 不用 curl | bash 一条管道：那样 install.sh 的失败会被管道吃掉退出码。
-    // 先下载到临时文件，再显式跑，出错能看见。
-    let script = ureq::get(INSTALL_SH)
+    if cfg!(windows) {
+        return Err(anyhow!(
+            "Windows 请从 GitHub Release 下载新版 kyvault.exe 并替换当前程序。"
+        ));
+    }
+    let executable = std::env::current_exe()?.canonicalize()?;
+    if executable.components().any(|c| c.as_os_str() == "Cellar") {
+        return Err(anyhow!(
+            "当前由 Homebrew 管理，请运行 `brew upgrade kyvault`。"
+        ));
+    }
+    let install_dir = executable
+        .parent()
+        .ok_or_else(|| anyhow!("无法确定安装目录"))?;
+    let url = format!("{INSTALL_ROOT}/v{latest}/install.sh");
+    println!("🚀 安装 v{latest} 到 {}…", install_dir.display());
+    let script = ureq::get(&url)
         .timeout(std::time::Duration::from_secs(15))
         .call()
-        .map_err(|e| anyhow!("下载 install.sh 失败：{e}"))?
+        .map_err(|e| anyhow!("下载发布版安装器失败：{e}"))?
         .into_string()?;
-    let tmp = std::env::temp_dir().join("kyvault-install.sh");
-    std::fs::write(&tmp, script)?;
-
-    let status = Command::new("bash").arg(&tmp).status()?;
-    let _ = std::fs::remove_file(&tmp);
-    if status.success() {
-        println!("🎉 已升级到 v{latest}（新开一个 shell 或 hash -r 让 PATH 生效）");
-        Ok(())
-    } else {
-        Err(anyhow!(
-            "install.sh 退出码 {:?} —— 手动重试：curl -fsSL {INSTALL_SH} | bash",
+    // 独占临时文件，避免多个更新进程互相覆盖或跟随预置符号链接。
+    let mut tmp = tempfile::NamedTempFile::new()?;
+    tmp.write_all(script.as_bytes())?;
+    tmp.flush()?;
+    let status = Command::new("bash")
+        .arg(tmp.path())
+        .env("KYVAULT_VERSION", format!("v{latest}"))
+        .env("KYVAULT_INSTALL_DIR", install_dir)
+        .env("KYVAULT_UPDATE_ONLY", "1")
+        .status()?;
+    if !status.success() {
+        return Err(anyhow!(
+            "更新失败（安装器退出码 {:?}）；原程序保留，请稍后重试。",
             status.code()
-        ))
+        ));
     }
+    let installed = Command::new(&executable).arg("--version").output()?;
+    let expected = format!("kyvault {latest}");
+    if !installed.status.success() || String::from_utf8_lossy(&installed.stdout).trim() != expected
+    {
+        return Err(anyhow!(
+            "安装后版本核验未通过，请检查 {}。",
+            executable.display()
+        ));
+    }
+    println!("🎉 已升级到 v{latest}");
+    Ok(())
 }
 
 /// 交互式 CLI 的"后台"更新提示：每次命令结束顺带轻量检查，24 小时一次，
@@ -206,6 +273,26 @@ fn update_state_path() -> std::path::PathBuf {
 #[cfg(test)]
 mod tests {
     use super::is_newer;
+
+    #[test]
+    fn stable_release_selection() {
+        let releases = serde_json::json!([
+            {"tag_name":"desktop-v0.3.0"},
+            {"tag_name":"v9.0.0", "draft":true},
+            {"tag_name":"v8.0.0", "prerelease":true},
+            {"tag_name":"v7.0.0-rc1"},
+            {"tag_name":"v2.9.0"},
+            {"tag_name":"v2.10.0"},
+            {"tag_name":"v../../unsafe"}
+        ]);
+        assert_eq!(super::select_release(&releases, "v").unwrap(), "2.10.0");
+        assert_eq!(
+            super::select_release(&releases, "desktop-v").unwrap(),
+            "0.3.0"
+        );
+        assert!(super::select_release(&serde_json::json!([]), "v").is_err());
+        assert!(super::select_release(&serde_json::json!({}), "v").is_err());
+    }
 
     #[test]
     fn version_compare() {

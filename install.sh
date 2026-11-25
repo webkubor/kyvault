@@ -11,6 +11,8 @@ REPO="webkubor/kyvault"
 BIN_NAME="kyvault"
 INSTALL_DIR="${KYVAULT_INSTALL_DIR:-$HOME/.local/bin}"
 DATA_DIR="$HOME/.keyring"
+VERSION="${KYVAULT_VERSION:-}"
+UPDATE_ONLY="${KYVAULT_UPDATE_ONLY:-0}"
 
 say()  { printf '%s\n' "$*"; }
 warn() { printf '⚠️  %s\n' "$*" >&2; }
@@ -64,20 +66,29 @@ cleanup_python_version() {
   return 0
 }
 
-install_from_release() {
-  local target url tmp
-  target=$(detect_target)
-  url="https://github.com/$REPO/releases/latest/download/${BIN_NAME}-${target}.tar.gz"
-  tmp=$(mktemp -d)
-  trap 'rm -rf "$tmp"' RETURN
+resolve_version() {
+  if [ -z "$VERSION" ]; then
+    [ "$UPDATE_ONLY" != 1 ] || die "更新必须指定 KYVAULT_VERSION"
+    local releases
+    releases=$(curl -fsSL --retry 2 "https://api.github.com/repos/$REPO/releases?per_page=100") || return 1
+    # CLI tags are vX.Y.Z; desktop releases have a separate tag prefix.
+    VERSION=$(printf '%s' "$releases" | sed 's/"tag_name"/\
+"tag_name"/g' |
+      sed -n 's/^"tag_name"[[:space:]]*:[[:space:]]*"\(v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' |
+      head -n 1)
+  fi
+  [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "无效的 CLI release 版本：$VERSION"
+}
 
-  say "📦 下载 $target …"
-  # 先按默认（HTTP/2）下，失败就退 HTTP/1.1 重试一次。
-  #
-  # 2026-09-10 实测：本机默认 curl 报 `(16) Error in the HTTP2 framing layer`，
-  # 同一个 URL 加 --http1.1 立刻成功 —— 这类故障常见于中间有代理/企业网关，
-  # 用户看到的现象却是「安装脚本说下载失败」，完全看不出是协议协商的问题。
-  # 重试一次几乎零成本，能救掉相当一部分装不上的情况。
+install_from_release() (
+  local target url tmp found actual staged
+  target=$(detect_target) || return 1
+  url="https://github.com/$REPO/releases/download/$VERSION/${BIN_NAME}-${target}.tar.gz"
+  tmp=$(mktemp -d) || return 1
+  staged=""
+  trap 'rm -rf "$tmp"; [ -z "$staged" ] || rm -f "$staged"' EXIT
+
+  say "📦 下载 $VERSION ($target) …"
   if ! curl -fsSL --retry 2 --retry-delay 1 "$url" -o "$tmp/pkg.tar.gz"; then
     warn "HTTP/2 下载失败，退 HTTP/1.1 重试…"
     if ! curl -fsSL --http1.1 --retry 2 --retry-delay 1 "$url" -o "$tmp/pkg.tar.gz"; then
@@ -85,15 +96,20 @@ install_from_release() {
       return 1
     fi
   fi
-  tar -xzf "$tmp/pkg.tar.gz" -C "$tmp"
-  local found
+  tar -xzf "$tmp/pkg.tar.gz" -C "$tmp" || return 1
   found=$(find "$tmp" -type f -name "$BIN_NAME" -perm -u+x | head -1)
   [ -n "$found" ] || { warn "压缩包里找不到 $BIN_NAME"; return 1; }
-  mkdir -p "$INSTALL_DIR"
-  install -m 0755 "$found" "$INSTALL_DIR/$BIN_NAME"
-  ln -sf "$INSTALL_DIR/$BIN_NAME" "$INSTALL_DIR/ky"
-  return 0
-}
+  mkdir -p "$INSTALL_DIR" || return 1
+  staged=$(mktemp "$INSTALL_DIR/.kyvault-update.XXXXXX") || return 1
+  install -m 0755 "$found" "$staged" || return 1
+  actual=$("$staged" --version) || return 1
+  [ "$actual" = "$BIN_NAME ${VERSION#v}" ] || {
+    warn "下载版本不匹配：期望 $BIN_NAME ${VERSION#v}，实际 $actual"
+    return 1
+  }
+  # Same-directory rename keeps the old executable intact until validation succeeds.
+  mv -f "$staged" "$INSTALL_DIR/$BIN_NAME" || return 1
+)
 
 install_from_source() {
   command -v cargo >/dev/null 2>&1 || return 1
@@ -124,16 +140,23 @@ install_from_source() {
 }
 
 say "🔐 kyvault (Rust) — 安装中…"
-cleanup_python_version
+[ "$UPDATE_ONLY" = 0 ] || [ "$UPDATE_ONLY" = 1 ] || die "KYVAULT_UPDATE_ONLY 必须是 0 或 1"
+resolve_version || die "无法确定 CLI release 版本"
+if [ "$UPDATE_ONLY" != 1 ]; then
+  cleanup_python_version
+fi
 
 if ! install_from_release; then
+  [ "$UPDATE_ONLY" != 1 ] || die "更新失败，原有二进制保持不变"
   say "改用源码编译兜底…"
   install_from_source || die "装不上：预编译二进制下载失败，源码兜底也没成（需要 cargo + git）。手动装：git clone https://github.com/$REPO && cd kyvault/rust && cargo install --path ."
 fi
 
 BIN="$INSTALL_DIR/$BIN_NAME"
 [ -x "$BIN" ] || die "装完却找不到可执行文件：$BIN"
-ln -sf "$BIN" "$INSTALL_DIR/ky"
+if [ "$UPDATE_ONLY" != 1 ]; then
+  ln -sf "$BIN" "$INSTALL_DIR/ky"
+fi
 
 say ""
 say "✅ 安装完成：$($BIN --version)"

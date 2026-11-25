@@ -42,7 +42,6 @@ hmac = "0.12"
 sha-1 = "0.10"
 data-encoding = "2"
 
-[dev-dependencies]
 tempfile = "3"
 
 [profile.release]

@@ -7,7 +7,7 @@
 // as finished text. On a language switch the keys are re-rendered, so no stale
 // copy survives anywhere.
 
-const { state, $, $$, setStatus, setError, setFormError, setConfirmText, invoke, listen, isComposing, readPref, writePref } = await import('./core.js');
+const { state, $, $$, el, setStatus, setError, setFormError, setConfirmText, invoke, listen, isComposing, readPref, writePref } = await import('./core.js');
 const { setView, renderList, renderDetail, renderNoBridge, relocalizeDynamic, closeDetail, revealEntry } = await import('./render.js');
 const { t, applyLanguage, syncLanguageFromSnapshot, currentLang, LANG_KEY, onLanguageChanged } = await import('./lang.js');
 const { openIdeaEditor, deleteIdea, resetIdeas, loadIdeas } = await import('./ideas.js');
@@ -315,19 +315,23 @@ if (desktop) {
   listen('update-available', (event) => {
     const { version } = event.payload || {};
     if (!version) return;
+    if (updateChecking || updateInstalling) return;
     availableVersion = version;
-    setUpdateDot(true);
-    const label = $('#version-label');
-    if (label) label.textContent = t('about.hasUpdate');
+    renderUpdateState();
   });
   // 用户点"更新"后的下载/安装进度显示到状态条。
   listen('update-progress', (event) => {
     const { phase, version } = event.payload || {};
-    if (phase === 'downloading') {
+    if (!updateInstalling) return;
+    if (phase === 'downloading' || phase === 'installing') {
+      updateMessage = phase === 'installing' ? 'about.installing' : 'about.downloading';
       setStatus('status.updateDownloading', { version: version || '' });
     } else if (phase === 'installed') {
+      updateMessage = 'about.installed';
+      updateInstalled = true;
       setStatus('status.updateInstalled', { version: version || '' });
     }
+    renderUpdateState();
   });
   // 无条件兜底：直接问后端要 inbox 里的 pending 请求并弹框。
   // 不依赖事件、不依赖 pendingRequestId —— 事件在冷启动时可能早于监听器
@@ -430,64 +434,80 @@ function renderReleaseNotes(notes) {
   }
 }
 
+let updateChecking = false;
+let updateInstalling = false;
+let updateInstalled = false;
+let updateMessage = null;
+
+function renderUpdateState() {
+  $('#check-update').disabled = updateChecking || updateInstalling;
+  $('#check-update').classList.toggle('loading', updateChecking);
+  $('#do-update').disabled = updateChecking || (updateInstalling && !updateInstalled);
+  $('#do-update').classList.toggle('loading', updateInstalling && !updateInstalled);
+  $('#do-update').textContent = t(updateInstalled ? 'about.restart' : 'about.update');
+  $('#update-detail').hidden = !availableVersion;
+  $('#update-available-text').textContent = availableVersion ? t(updateInstalled ? 'about.installedVersion' : 'about.newAvailable', { version: availableVersion }) : '';
+  $('#update-status').textContent = updateMessage ? t(updateMessage) : '';
+  setUpdateDot(Boolean(availableVersion));
+  $('#version-label').textContent = availableVersion ? t('about.hasUpdate') : 'Ky';
+}
+
 async function loadAbout() {
-  const verLabel = $('#about-version');
-  const status = $('#update-status');
-  const detail = $('#update-detail');
-  if (verLabel) verLabel.textContent = '…';
-  if (status) status.textContent = t('about.loading');
-  if (detail) detail.hidden = true;
+  $('#about-version').textContent = '…';
+  renderUpdateState();
   try {
     const info = await invoke('get_app_info');
-    if (verLabel) verLabel.textContent = `v${info.current}`;
+    $('#about-version').textContent = `v${info.current}`;
     renderReleaseNotes(info.notes);
-    if (status) status.textContent = '';
-    if (availableVersion) {
-      if (detail) detail.hidden = false;
-      const txt = $('#update-available-text');
-      if (txt) txt.textContent = t('about.newAvailable', { version: availableVersion });
-    }
   } catch {
-    if (status) status.textContent = t('about.loadFailed');
+    $('#release-notes').replaceChildren(el('p', 'hint', t('about.loadFailed')));
   }
 }
 
 $('#about').addEventListener('click', () => {
-  const dialog = document.querySelector('dialog#about-dialog');
-  if (dialog) dialog.showModal();
+  $('#about-dialog').showModal();
   loadAbout();
 });
 
-// 检查更新按钮：主动拉一次检测（后台也在跑，这里即时反馈），带加载动画。
+// This result comes from the updater endpoint, independent of release-note history.
 $('#check-update').addEventListener('click', async () => {
-  const btn = $('#check-update');
-  const status = $('#update-status');
-  if (btn) { btn.disabled = true; btn.classList.add('loading'); }
-  if (status) status.textContent = t('about.checking');
+  if (updateChecking || updateInstalling) return;
+  updateChecking = true;
+  updateMessage = 'about.checking';
+  renderUpdateState();
   try {
-    // get_app_info 会重新拉 releases；版本检测仍由后台 check-only 事件给出。
-    await invoke('get_app_info');
-    if (status) status.textContent = availableVersion
-      ? t('about.newAvailable', { version: availableVersion })
-      : t('about.upToDate');
+    const result = await invoke('check_update');
+    availableVersion = result.version || null;
+    $('#about-version').textContent = `v${result.current}`;
+    updateMessage = availableVersion ? null : 'about.upToDate';
   } catch {
-    if (status) status.textContent = t('about.checkFailed');
+    availableVersion = null;
+    updateMessage = 'about.checkFailed';
   } finally {
-    if (btn) { btn.disabled = false; btn.classList.remove('loading'); }
+    updateChecking = false;
+    renderUpdateState();
   }
 });
 
-// 更新按钮：用户主动触发下载安装，显示加载。
 $('#do-update').addEventListener('click', async () => {
-  const btn = $('#do-update');
-  const status = $('#update-status');
-  if (btn) { btn.disabled = true; btn.classList.add('loading'); }
-  if (status) status.textContent = t('about.downloading');
+  if (updateInstalled) {
+    try { await invoke('restart_after_update'); }
+    catch { updateMessage = 'about.restartFailed'; renderUpdateState(); }
+    return;
+  }
+  if (updateChecking || updateInstalling || !availableVersion) return;
+  updateInstalling = true;
+  updateMessage = 'about.downloading';
+  renderUpdateState();
   try {
     await invoke('install_update');
-  } catch (e) {
-    if (status) status.textContent = typeof e === 'string' ? e : t('about.updateFailed');
-    if (btn) { btn.disabled = false; btn.classList.remove('loading'); }
+    updateMessage = 'about.installed';
+    updateInstalled = true;
+    renderUpdateState();
+  } catch {
+    updateInstalling = false;
+    updateMessage = 'about.updateFailed';
+    renderUpdateState();
   }
 });
 $('#search').addEventListener('input', (e) => { state.filter = e.target.value; renderList(); });
@@ -543,6 +563,7 @@ $('#language').addEventListener('change', (e) => {
 
 onLanguageChanged(() => {
   relocalizeDynamic();
+  renderUpdateState();
   $('#collapse-toolbar').setAttribute(
     'aria-label',
     t($('main').classList.contains('collapsed') ? 'toolbar.expand' : 'toolbar.collapse')

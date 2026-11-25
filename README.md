@@ -36,6 +36,8 @@
 
 **下载**：[Releases](https://github.com/webkubor/kyvault/releases) 取 `Ky_*.dmg`（Apple Silicon）。装一次之后有新版会自动提示，点一下更新即可，不用再下载安装。
 
+**自更新**：CLI 运行 `ky update --check` 只检查，`ky update` 确认后更新，`ky update -y` 直接更新当前安装位置。App 在「关于」中检查、下载并安装签名更新，安装完成后点击「立即重启」。CLI 和 App 各自跟随正式发布版本；未发布的本地源码不会出现在更新列表。
+
 | 功能 | 说明 |
 |------|------|
 | 剪贴板历史 | 复制的内容自动记录（30 天），**点一条直接复制回剪贴板**，显示来自哪个 App。 |
