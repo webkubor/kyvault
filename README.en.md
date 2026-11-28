@@ -2,7 +2,7 @@
 
 Ky is a local encrypted workspace for passwords, quick notes and private images. Developer tools can use stored credentials by alias. No account required.
 
-[Download for Apple Silicon Mac](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.3/Ky_0.3.3_aarch64.dmg) · [Website](https://webkubor.github.io/kyvault/) · [中文](README.md)
+[Download for Apple Silicon Mac](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.4/Ky_0.3.4_aarch64.dmg) · [Website](https://webkubor.github.io/kyvault/) · [中文](README.md)
 
 ![Ky desktop workspace](docs/assets/desktop/home.png)
 

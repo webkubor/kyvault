@@ -26,3 +26,7 @@ for (const [entry, symbol] of [
   [{platform:'bitiful'},'bitiful'], [{platform:'blog'},'website'],
   [{platform:'apple',name:'cmb-card'},'apple'],
 ]) assert.equal(credentialSymbol(entry),symbol);
+
+for (const [name,expected] of [['cmbc-card','cmbc'],['农业银行','abc'],['建行杭州支行','ccb'],['ICBC-password','icbc'],['银行账户','bank']]) {
+  assert.equal(credentialSymbol({platform:'bank',name}),expected);
+}

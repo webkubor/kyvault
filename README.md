@@ -2,7 +2,7 @@
 
 Ky 是一个本地加密工作台。你可以在 Mac 上查密码、随手记想法、收藏图文，也可以让开发工具通过别名使用密钥。无需注册账号。
 
-[下载 Mac 版（Apple Silicon）](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.3/Ky_0.3.3_aarch64.dmg) · [官网](https://webkubor.github.io/kyvault/) · [English](README.en.md)
+[下载 Mac 版（Apple Silicon）](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.4/Ky_0.3.4_aarch64.dmg) · [官网](https://webkubor.github.io/kyvault/) · [English](README.en.md)
 
 ![Ky 桌面工作台](docs/assets/desktop/home.png)
 
