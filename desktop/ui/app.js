@@ -398,7 +398,7 @@ $('#detail').addEventListener('click', async (e) => {
     await action('delete_entry', { id }, 'status.entryDeleted');
   }
 });
-async function navigate(view, id) {
+async function navigate(view, id, privateSourceId) {
   if (state.locked || state.view === view) return;
   if (workspaceViews.has(state.view) && !(await canLeaveWorkspace())) return;
   if (state.locked) return;
@@ -409,7 +409,7 @@ async function navigate(view, id) {
   if (view === 'home') renderHome(state.snapshot);
   if (view === 'account') renderAccount();
   if (view === "settings") await loadFlashSources();
-  if (workspaceViews.has(view)) await openWorkspace(view, id);
+  if (workspaceViews.has(view)) await openWorkspace(view, id, privateSourceId);
 }
 $$('.nav-item').forEach(button => button.addEventListener('click', () => navigate(button.dataset.view)));
 window.addEventListener('ky-navigate', event => {
@@ -417,7 +417,7 @@ window.addEventListener('ky-navigate', event => {
   if ($$('.nav-item').some(button => button.dataset.view === view)) navigate(view);
 });
 window.addEventListener('workspace-navigate', event => {
-  if (workspaceViews.has(event.detail?.view)) navigate(event.detail.view, event.detail.id);
+  if (workspaceViews.has(event.detail?.view)) navigate(event.detail.view, event.detail.id, event.detail.privateSourceId);
 });
 
 // ---- 版本与更新日志（关于对话框）----
