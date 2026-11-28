@@ -492,3 +492,10 @@ main[data-view=vault] .entry-meta { color: var(--muted); }
 .release-description { white-space: pre-wrap; line-height: 1.6; overflow-wrap: anywhere; }
 .release-notes { max-height: none; overflow: visible; }
 #update-progress { width: 100%; accent-color: var(--accent); }
+.about-dialog > .dialog-heading {
+  position: sticky; top: calc(0px - var(--s5)); z-index: 1;
+  margin: calc(0px - var(--s5)) calc(0px - var(--s5)) var(--s3);
+  padding: var(--s3) var(--s5);
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.release-row[open] { padding-bottom: var(--s3); }
