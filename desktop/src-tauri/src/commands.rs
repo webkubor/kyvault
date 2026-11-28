@@ -215,9 +215,17 @@ pub struct ReleaseNote {
     pub url: String,
 }
 
+#[derive(Serialize)]
+pub struct UpdatePreview {
+    version: String,
+    notes: Option<String>,
+}
+
 /// Fetch the configured manifest on every request. None means a successful check.
 #[tauri::command]
-pub async fn check_update<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<Option<String>> {
+pub async fn check_update<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<Option<UpdatePreview>> {
     let updater = app
         .updater_builder()
         .timeout(Duration::from_secs(15))
@@ -226,7 +234,12 @@ pub async fn check_update<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result
     updater
         .check()
         .await
-        .map(|update| update.map(|u| u.version))
+        .map(|update| {
+            update.map(|u| UpdatePreview {
+                version: u.version,
+                notes: u.body,
+            })
+        })
         .map_err(|e| e.to_string())
 }
 
@@ -899,6 +912,20 @@ pub fn clear_history(state: State<DesktopState>) -> Result<Snapshot> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn update_preview_serializes_version_and_optional_manifest_notes() {
+        for notes in [None, Some("Fixture release notes".to_owned())] {
+            let preview = UpdatePreview {
+                version: "0.4.0".to_owned(),
+                notes: notes.clone(),
+            };
+            assert_eq!(
+                serde_json::to_value(preview).unwrap(),
+                serde_json::json!({"version": "0.4.0", "notes": notes})
+            );
+        }
+    }
+
     #[test]
     fn copied_secrets_stay_suppressed_after_replacement_and_lock() {
         let mut session = Session::default();

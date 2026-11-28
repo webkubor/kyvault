@@ -63,6 +63,7 @@
       </div>
     </header>
 
+    <button type="button" id="update-notice" class="quiet" aria-haspopup="dialog" aria-controls="about-dialog" hidden></button>
     <div class="search-row" id="search-row">
       <span class="search-icon" aria-hidden="true"></span>
       <input id="search" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="search.placeholder" data-i18n-aria="search.aria">
@@ -171,23 +172,24 @@
 
   <dialog id="about-dialog" class="about-dialog" aria-labelledby="about-title">
     <div class="dialog-heading"><h2 id="about-title" data-i18n="about.title"></h2><button type="button" class="quiet close" data-i18n-aria="dialog.close" aria-label="">×</button></div>
+    <div id="update-detail" class="update-detail" hidden>
+      <strong id="update-available-text" tabindex="-1"></strong>
+      <p id="update-notes" class="release-description"></p>
+      <button id="do-update" class="primary" data-i18n="about.restart"></button>
+    </div>
+    <progress id="update-progress" hidden max="100" data-i18n-aria="about.downloading"></progress>
     <div class="about-current">
       <span data-i18n="about.current"></span>
-      <strong id="about-version">v0.3.5</strong>
+      <strong id="about-version">v0.3.6</strong>
     </div>
     <ul class="current-notes">
-      <li data-i18n="about.card"></li>
-      <li data-i18n="about.forms"></li>
+      <li data-i18n="about.previewNotes"></li>
+      <li data-i18n="about.inAppInstall"></li>
     </ul>
     <div class="about-actions">
       <button id="check-update" class="primary" data-i18n="about.check"></button>
       <span id="update-status" class="hint" role="status"></span>
     </div>
-    <div id="update-detail" class="update-detail" hidden>
-      <p id="update-available-text"></p>
-      <button id="do-update" class="primary" data-i18n="about.update"></button>
-    </div>
-    <progress id="update-progress" hidden max="100" data-i18n-aria="about.downloading"></progress>
     <h3 data-i18n="about.history"></h3>
     <div id="release-notes" class="release-notes"><p class="hint" data-i18n="about.loading"></p></div>
   </dialog>

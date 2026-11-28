@@ -327,17 +327,10 @@ if (desktop) {
     pendingRequestId = id;
     tryOpenAgentRequest();
   });
-  // 后端后台检测到新版 → 侧栏版本按钮显示小红点 + 记住版本号。
-  listen('update-available', (event) => {
-    const { version } = event.payload || {};
-    if (!version || manualCheck) return;
-    availableVersion = version;
-    paintUpdate();
-  });
   // 用户点"更新"后的下载/安装进度显示到状态条。
   listen('update-progress', (event) => {
     const { phase, version, downloaded, total } = event.payload || {};
-    if (!installing || version !== availableVersion) return;
+    if (!installing || version !== availableUpdate?.version) return;
     if (phase === 'downloading') {
       progress = total > 0 ? Math.min(100, Math.floor(downloaded / total * 100)) : null;
     } else {
@@ -428,8 +421,11 @@ window.addEventListener('workspace-navigate', event => {
 });
 
 // ---- 版本与更新日志（关于对话框）----
-let availableVersion = null;
-let manualCheck = false;
+let availableUpdate = null;
+const resumeCheckIntervalMs = 15 * 60 * 1000;
+let lastCheckAt = -Infinity;
+let checking = false;
+let confirmingInstall = false;
 let checkMessage = '';
 let releaseNotes = [];
 let historyRequest = 0;
@@ -438,6 +434,10 @@ let installing = false;
 let progress = null;
 
 function paintUpdate() {
+  const availableVersion = availableUpdate?.version;
+  const notice = $('#update-notice');
+  notice.hidden = !availableVersion;
+  notice.textContent = availableVersion ? t('about.previewAction', {version:availableVersion}) : '';
   const dot = $('#update-dot');
   dot.hidden = !availableVersion;
   if (availableVersion) $('#about').setAttribute('aria-describedby', 'update-dot');
@@ -445,14 +445,21 @@ function paintUpdate() {
   $('#update-detail').hidden = !availableVersion;
   $('#update-available-text').textContent = availableVersion
     ? t('about.newAvailable', {version:availableVersion}) : '';
+  const historyBody = releaseNotes?.find(note => note.version === availableVersion)?.body;
+  $('#update-notes').textContent = releaseText(availableUpdate?.notes) || releaseText(historyBody) || t('about.noDetail');
   const meter = $('#update-progress');
   meter.hidden = !installing || checkMessage !== 'about.downloading';
   if (progress === null) meter.removeAttribute('value');
   else meter.value = progress;
-  $('#check-update').disabled = installing || checkMessage === 'about.checking';
+  $('#check-update').disabled = installing || checking || confirmingInstall;
   $('#about-dialog .close').disabled = installing;
-  $('#do-update').disabled = installing || checkMessage === 'about.checking';
+  $('#do-update').disabled = installing || checking || confirmingInstall;
   $('#update-status').textContent = checkMessage ? t(checkMessage) : '';
+}
+
+function releaseText(body) {
+  return (body || '').replace(/!\[[^\]]*\]\([^\n]*?\)/g,'')
+    .replace(/\[([^\]]+)\]\([^\n]*?\)/g,'$1').replace(/^#{1,6}\s+/gm,'').replace(/\*\*|`/g,'').trim();
 }
 
 function renderReleaseNotes() {
@@ -472,8 +479,7 @@ function renderReleaseNotes() {
     const date = (note.published_at || '').slice(0, 10);
     if (date) summary.append(el('time', '', date));
     row.append(summary);
-    const body = (note.body || '').replace(/!\[[^\]]*\]\([^\n]*?\)/g,'')
-      .replace(/\[([^\]]+)\]\([^\n]*?\)/g,'$1').replace(/^#{1,6}\s+/gm,'').replace(/\*\*|`/g,'').trim();
+    const body = releaseText(note.body);
     row.append(el('p', 'release-description', body || t('about.noDetail')));
     const link = el('a', 'release-link', t('about.openRelease'));
     link.href = 'https://github.com/webkubor/kyvault/releases/tag/desktop-v' + note.version;
@@ -512,44 +518,53 @@ async function loadHistory() {
     historyFailed = true;
   }
   renderReleaseNotes();
+  paintUpdate();
 }
 $('#about-dialog').addEventListener('cancel', event => { if (installing) event.preventDefault(); });
-$('#about').onclick = () => {
+$('#update-notice').onclick = $('#about').onclick = () => {
   $('#about-dialog').showModal();
   paintUpdate();
   loadHistory();
+  if (availableUpdate) $('#update-available-text').focus();
 };
 
-$('#check-update').addEventListener('click', async () => {
-  const button = $('#check-update');
-  if (button.disabled) return;
-  button.disabled = true;
-  manualCheck = true;
-  availableVersion = null;
-  checkMessage = 'about.checking';
+async function checkUpdate(manual) {
+  if (checking || installing || confirmingInstall) return;
+  const now = performance.now();
+  if (!manual && now - lastCheckAt < resumeCheckIntervalMs) return;
+  lastCheckAt = now;
+  checking = true;
+  if (manual) checkMessage = 'about.checking';
   paintUpdate();
   try {
-    const version = await invoke('check_update');
-    if (version === null) checkMessage = 'about.upToDate';
-    else if (typeof version === 'string' && version.length) {
-      availableVersion = version;
-      checkMessage = 'about.hasUpdate';
-    } else checkMessage = 'about.checkFailed';
+    const result = await invoke('check_update');
+    if (result !== null && !result?.version) throw new Error('invalid_update');
+    availableUpdate = result;
+    checkMessage = result ? 'about.hasUpdate' : (manual ? 'about.upToDate' : '');
   } catch {
-    checkMessage = 'about.checkFailed';
+    if (manual) checkMessage = 'about.checkFailed';
   } finally {
-    button.disabled = false;
+    checking = false;
     paintUpdate();
   }
-});
+}
+$('#check-update').onclick = () => checkUpdate(true);
 $('#do-update').addEventListener('click', async () => {
-  if (installing || !availableVersion) return;
+  if (checking || confirmingInstall || installing || !availableUpdate) return;
   if (workspaceHasPendingWork()) {
     checkMessage = 'about.unsaved';
     return paintUpdate();
   }
-  const target = availableVersion;
-  if (!await confirm('about.restart','about.restartHint','about.restart')) return;
+  const target = availableUpdate.version;
+  confirmingInstall = true;
+  paintUpdate();
+  const confirmed = await confirm('about.restart','about.restartHint','about.restart');
+  confirmingInstall = false;
+  if (!confirmed) return paintUpdate();
+  if (workspaceHasPendingWork()) {
+    checkMessage = 'about.unsaved';
+    return paintUpdate();
+  }
   installing = true;
   progress = null;
   checkMessage = 'about.downloading';
@@ -560,7 +575,7 @@ $('#do-update').addEventListener('click', async () => {
     installing = false;
     checkMessage = 'about.updateFailed';
     if (String(error) === 'version_changed') {
-      availableVersion = null;
+      availableUpdate = null;
       checkMessage = 'about.changed';
     }
     paintUpdate();
@@ -628,7 +643,8 @@ $('#language').addEventListener('change', (e) => {
 
 onLanguageChanged(() => {
   relocalizeDynamic();
-  if ($('#about-dialog').open) { paintUpdate(); renderReleaseNotes(); }
+  paintUpdate();
+  if ($('#about-dialog').open) renderReleaseNotes();
   if ($('#credential').open) updateCredentialHint();
   $('#collapse-toolbar').setAttribute(
     'aria-label',
@@ -659,6 +675,11 @@ setView('home');
 renderHome(state.snapshot);
 
 if (desktop) {
+  const checkOnResume = () => { if (!document.hidden) void checkUpdate(false); };
+  window.addEventListener('focus', checkOnResume);
+  document.addEventListener('visibilitychange', checkOnResume);
+  listen('tauri://focus', checkOnResume).catch(() => {});
+  void checkUpdate(false);
   const installed = readPref('ky.installedVersion', '');
   if (installed && 'v' + installed === $('#about-version').textContent) {
     const { notifyToast } = await import('./toast.js');

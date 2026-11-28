@@ -386,6 +386,8 @@ dialog textarea { resize: vertical; max-height: 30vh; font-family: var(--mono); 
 }
 
 /* About / update dialog */
+#update-notice { flex: none; margin: var(--s2) var(--s3); padding: var(--s2) var(--s3); color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); }
+#update-notes { max-height: 28vh; overflow: auto; }
 .about-dialog { width: min(520px, calc(100% - var(--s8))); }
 .about-current { display: flex; align-items: baseline; gap: var(--s2); padding: var(--s3) 0; font-size: var(--t-sm); color: var(--muted); }
 .about-current strong { font-size: var(--t-md); color: var(--text); font-family: var(--mono); }

@@ -121,19 +121,6 @@ fn main() {
                     let _ = handle.emit("request-credential", id);
                 });
             }
-            // 发版闭环（issue #15）：启动后台只检查新版，发现新版发事件让前端显示
-            // "有新版本"提示；实际下载/安装由用户点"更新"触发（install_update），
-            // 带加载动画。不后台偷偷下载，尊重用户控制权。网络失败静默。
-            {
-                let handle = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    tokio::time::sleep(Duration::from_secs(3)).await;
-                    if let Ok(Some(version)) = commands::check_update(handle.clone()).await {
-                        let _ = handle
-                            .emit("update-available", serde_json::json!({"version": version}));
-                    }
-                });
-            }
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 let mut clipboard = arboard::Clipboard::new().ok();
