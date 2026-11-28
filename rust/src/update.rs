@@ -1,22 +1,16 @@
-//! `kyvault update` —— 在线检查新版并升级。
-//!
-//! **语义与 Python 版不同，是刻意的。** Python 版跑 `pip install --upgrade kyvault`
-//! 或 `uv tool upgrade`，还先查 PyPI 再退回 GitHub —— 而 PyPI 从来没成功发布过
-//! （见 0952a6d「移除从未成功过的 PyPI 发布」），那条路径一直是死的。
-//!
-//! Rust 版只有一条真路径：GitHub Release 上的静态二进制，由 install.sh 按平台挑。
-//! 所以这里做的是「查 tag → 比版本 → 交给 install.sh」，不自己下载解包 ——
-//! install.sh 还顺手清理旧 Python 版（pipx 包 / usr-local shim / 数据目录模块副本），
-//! 那些清理逻辑不该在两处各写一遍。
+//! CLI 原地更新只替换当前可执行文件。新装与旧 Python 入口迁移由 install.sh 处理。
 
 use std::io::{self, Write};
-use std::process::{Command, ExitStatus, Stdio};
+#[cfg(unix)]
+use std::path::Path;
+#[cfg(unix)]
+use std::process::Command;
 
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 
 const RELEASES_API: &str = "https://api.github.com/repos/webkubor/kyvault/releases";
-const INSTALL_SH: &str = "https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh";
+
 const CLI_RELEASES_PER_PAGE: usize = 100;
 
 /// 产品线的发布标签前缀。CLI 用 `v`（v2.8.2），桌面 App 用 `desktop-v`（desktop-v0.2.0）。
@@ -175,22 +169,92 @@ fn is_newer_cli(latest: &str, current: &str) -> bool {
     }
 }
 
-fn run_installer(script: &str, tag: &str) -> Result<ExitStatus> {
-    // 版本作为单独的参数传递；直接写 stdin 避免使用可预测的共享临时文件。
-    let mut child = Command::new("bash")
-        .args(["-s", "--", tag])
-        .stdin(Stdio::piped())
-        .spawn()?;
-    let write = child
-        .stdin
-        .take()
-        .ok_or_else(|| anyhow!("无法打开 install.sh 的 stdin"))?
-        .write_all(script.as_bytes());
-    let status = child.wait()?;
-    if status.success() {
-        write?;
-    }
-    Ok(status)
+#[cfg(unix)]
+fn managed_path(exe: &Path) -> bool {
+    [
+        "/usr",
+        "/opt",
+        "/bin",
+        "/sbin",
+        "/System",
+        "/nix",
+        "/snap",
+        "/home/linuxbrew",
+    ]
+    .iter()
+    .any(|prefix| exe.starts_with(prefix))
+        || exe
+            .ancestors()
+            .any(|p| p.ends_with("Cellar") || p.ends_with(".cargo/bin"))
+        || ["HOMEBREW_CELLAR", "CARGO_HOME", "CARGO_INSTALL_ROOT"]
+            .iter()
+            .filter_map(std::env::var_os)
+            .filter_map(|p| std::fs::canonicalize(p).ok())
+            .any(|root| exe.starts_with(root))
+}
+
+#[cfg(unix)]
+fn replace_from_archive(exe: &Path, archive: &Path, latest: &str) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let file = tempfile::NamedTempFile::new_in(exe.parent().unwrap())?;
+    let unpack = Command::new("tar")
+        .arg("-xzOf")
+        .arg(archive)
+        .arg("kyvault")
+        .stdout(file.reopen()?)
+        .status()?;
+    anyhow::ensure!(unpack.success(), "CLI Release 解包失败");
+    let stage = file.into_temp_path();
+    std::fs::set_permissions(
+        &stage,
+        std::fs::Permissions::from_mode(std::fs::metadata(exe)?.permissions().mode() & 0o777),
+    )?;
+    let check = Command::new(&stage).arg("--version").output()?;
+    anyhow::ensure!(
+        check.status.success() && check.stdout == format!("kyvault {latest}\n").as_bytes(),
+        "下载的 CLI 版本与 v{latest} 不符"
+    );
+    stage.persist(exe)?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn upgrade(latest: &str) -> Result<()> {
+    use anyhow::Context;
+    use std::os::unix::fs::MetadataExt;
+    let exe = std::env::current_exe()?.canonicalize()?;
+    anyhow::ensure!(
+        !managed_path(&exe),
+        "当前 CLI 位于系统或包管理器目录，请通过原安装渠道升级"
+    );
+    anyhow::ensure!(
+        exe.metadata()?.nlink() == 1,
+        "当前 CLI 有多个硬链接，请通过原安装渠道升级"
+    );
+    let target = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos", "aarch64") => "aarch64-apple-darwin",
+        ("macos", "x86_64") => "x86_64-apple-darwin",
+        ("linux", "aarch64") if cfg!(target_env = "gnu") => "aarch64-unknown-linux-gnu",
+        ("linux", "x86_64") if cfg!(target_env = "gnu") => "x86_64-unknown-linux-gnu",
+        _ => return Err(anyhow!("当前平台请使用原安装渠道升级")),
+    };
+    let archive = tempfile::NamedTempFile::new_in(exe.parent().unwrap())
+        .context("无法在 CLI 所在目录创建临时文件，请通过原安装渠道升级")?;
+    let url = format!(
+        "https://github.com/webkubor/kyvault/releases/download/v{latest}/kyvault-{target}.tar.gz"
+    );
+    let status = Command::new("curl")
+        .args(["-fsSL", "--retry", "2", "-o"])
+        .arg(archive.path())
+        .arg(url)
+        .status()?;
+    anyhow::ensure!(status.success(), "下载 v{latest} 失败");
+    replace_from_archive(&exe, archive.path(), latest)
+}
+
+#[cfg(not(unix))]
+fn upgrade(latest: &str) -> Result<()> {
+    Err(anyhow!("当前平台请通过原安装渠道升级，Windows 可退出 CLI 后解压 v{latest} 的官方 ZIP 并替换 kyvault.exe"))
 }
 
 pub fn run(assume_yes: bool) -> Result<()> {
@@ -216,24 +280,9 @@ pub fn run(assume_yes: bool) -> Result<()> {
         }
     }
 
-    println!("🚀 交给 install.sh（它会按平台挑二进制，并清理旧 Python 版）…");
-    // 下载成功后显式运行 Bash，并分别检查写入与安装的结果。
-    let script = ureq::get(INSTALL_SH)
-        .timeout(std::time::Duration::from_secs(15))
-        .call()
-        .map_err(|e| anyhow!("下载 install.sh 失败：{e}"))?
-        .into_string()?;
-    let tag = format!("v{latest}");
-    let status = run_installer(&script, &tag)?;
-    if status.success() {
-        println!("🎉 已升级到 v{latest}（新开一个 shell 或 hash -r 让 PATH 生效）");
-        Ok(())
-    } else {
-        Err(anyhow!(
-            "install.sh 退出码 {:?} —— 手动重试：curl -fsSL {INSTALL_SH} | bash -s -- {tag}",
-            status.code()
-        ))
-    }
+    upgrade(&latest)?;
+    println!("🎉 当前 CLI 已原地升级到 v{latest}");
+    Ok(())
 }
 
 /// 交互式 CLI 的"后台"更新提示：每次命令结束顺带轻量检查，24 小时一次，
@@ -323,11 +372,64 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn installer_receives_exact_selected_tag_and_its_failure_is_preserved() {
-        use super::run_installer;
-        let script = r#"test "$#" -eq 1 && test "$1" = v2.10.0 || exit 10; exit 23"#;
-        let status = run_installer(script, "v2.10.0").unwrap();
-        assert_eq!(status.code(), Some(23));
+    fn package_manager_paths_are_protected() {
+        use std::path::Path;
+        for path in [
+            "/opt/homebrew/bin/kyvault",
+            "/usr/bin/kyvault",
+            "/custom/Cellar/kyvault/2/bin/kyvault",
+            "/nix/store/pkg/bin/kyvault",
+            "/home/user/.cargo/bin/kyvault",
+        ] {
+            assert!(super::managed_path(Path::new(path)));
+        }
+        assert!(!super::managed_path(Path::new(
+            "/home/user/.local/bin/kyvault"
+        )));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn update_verifies_version_and_preserves_alias() {
+        use std::{
+            fs,
+            os::unix::fs::{symlink, PermissionsExt},
+            process::Command,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("custom cli");
+        let alias = dir.path().join("ky");
+        fs::write(&exe, "original").unwrap();
+        fs::set_permissions(&exe, fs::Permissions::from_mode(0o750)).unwrap();
+        symlink(&exe, &alias).unwrap();
+        fs::write(
+            dir.path().join("kyvault"),
+            "#!/bin/sh\necho kyvault 2.10.0\n",
+        )
+        .unwrap();
+        let archive = dir.path().join("test.tgz");
+        assert!(Command::new("tar")
+            .current_dir(dir.path())
+            .args(["-czf", "test.tgz", "kyvault"])
+            .status()
+            .unwrap()
+            .success());
+        assert!(super::replace_from_archive(&exe, &archive, "2.11.0").is_err());
+        assert_eq!(fs::read(&exe).unwrap(), b"original");
+        super::replace_from_archive(&exe, &archive, "2.10.0").unwrap();
+        assert_eq!(fs::read_link(&alias).unwrap(), exe);
+        assert_eq!(
+            Command::new(alias)
+                .arg("--version")
+                .output()
+                .unwrap()
+                .stdout,
+            b"kyvault 2.10.0\n"
+        );
+        assert_eq!(
+            fs::metadata(exe).unwrap().permissions().mode() & 0o777,
+            0o750
+        );
     }
 
     #[test]

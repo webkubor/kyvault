@@ -401,7 +401,9 @@ Broker 使用 OpenSSH forced command，不是公网服务。必须由管理员�
 | - | `kyvault wizard` | 交互式分类引导向导 (规范URI) | `kyvault wizard` (或 `ky wizard`) |
 | **自检与更新** | | | |
 | - | `kyvault doctor` | 工具自检修复 | `kyvault doctor` |
-| - | `kyvault update` | 在线升级工具 | `kyvault update` |
+| - | `kyvault update` | 从稳定版 CLI Release 原地更新当前可执行文件（`-y` 跳过确认） | `kyvault update` |
+
+独立安装的 macOS 或 GNU/Linux CLI 可运行 `ky update`，也可用 `kyvault update -y` 跳过确认。2.8.4 起，更新会沿符号链接找到当前程序，核对版本后原地替换，不运行安装器的旧 Python 清理。目录不可写、硬链接或包管理器安装请使用原安装渠道。Windows x64 请退出 CLI 后解压官方 ZIP，替换 `kyvault.exe`。
 
 ---
 

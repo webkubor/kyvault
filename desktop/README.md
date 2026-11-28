@@ -2,6 +2,12 @@
 
 Ky 是基于 Tauri 2 的本地桌面工作台：文本剪贴板历史、配置片段版本和既有 kyvault 密钥库在同一窗口操作。界面使用原生 HTML/CSS/JavaScript 与系统 WebView，没有前端运行时依赖，也不运行本地 HTTP 服务。
 
+## 更新已安装的 Ky
+
+在侧栏打开「更新日志」，点「检查更新」。找到新版后可以直接安装并重启。0.3.6 起，点新版提示即可先读该版本的改动。正在编辑的草稿或收藏请先保存。
+
+终端里的 Kyvault 单独发布。在 macOS 或 Linux 运行 `kyvault update` 检查并确认升级；自动化环境可用 `kyvault update --yes`。
+
 ## 在 macOS 构建与使用
 
 需要 Rust stable、Node.js 22+ 和 Xcode Command Line Tools。

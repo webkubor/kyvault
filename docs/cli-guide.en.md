@@ -263,7 +263,9 @@ kyvault get secret://cli/studio-cli/test-user   # output: jwt_token_test
 | - | `kyvault gitlab setup`| Clone team repo | `kyvault gitlab setup git@gitlab.com:org/vault.git` |
 | **Self-check & update** | | | |
 | - | `kyvault doctor` | Tool self-check + repair | `kyvault doctor` |
-| - | `kyvault update` | Online tool upgrade | `kyvault update` |
+| - | `kyvault update` | Replace the running executable with the stable CLI release (`-y` skips confirmation) | `kyvault update` |
+
+For standalone macOS and GNU/Linux installs, run `ky update` or use `kyvault update -y` to skip confirmation. Starting with 2.8.4, the updater follows symlinks, checks the downloaded version and replaces the running executable. It skips the installer’s legacy Python cleanup. For read-only directories, hard links and package-managed installations, use the original installation channel. On Windows x64, exit the CLI, extract the release ZIP and replace `kyvault.exe`.
 
 ---
 
