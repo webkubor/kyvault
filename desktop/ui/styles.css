@@ -186,8 +186,6 @@ h3 { font-size: var(--t-base); font-weight: 600; }
 }
 .brand { padding: 0 var(--s2) var(--s6); display: flex; gap: var(--s2); align-items: center; }
 .brand-mark img { display: block; border-radius: 6px; }
-.wordmark { font-size: var(--t-lg); font-weight: 650; letter-spacing: -.03em; line-height: 1; }
-.brand-dot { color: var(--accent); }
 
 nav { display: grid; gap: 2px; }
 .nav-item, .sidebar-action {
@@ -379,7 +377,6 @@ dialog textarea { resize: vertical; max-height: 30vh; font-family: var(--mono); 
   :root { --sidebar-width: 52px; }
   .sidebar { padding-inline: var(--s2); align-items: stretch; }
   .brand { justify-content: center; padding-inline: 0; }
-  .wordmark { display: none; }
   .nav-item, .sidebar-action { justify-content: center; padding-inline: 0; }
   .nav-item > span:last-child, .action-caption { display: none; }
   .update-dot { position: absolute; inset-block-start: var(--s1); inset-inline-end: var(--s1); }
