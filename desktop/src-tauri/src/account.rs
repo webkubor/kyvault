@@ -902,3 +902,17 @@ else: sys.exit(81)
         assert_eq!(hub_sync(), Err("checkout"));
     }
 }
+
+#[cfg(test)]
+pub(super) fn live_checkout_bind(store: &Store, dir: &Path, description: &Value) -> Result<()> {
+    let expected = serde_json::from_value(description.clone()).map_err(|_| "target")?;
+    let username = description["username"].as_str().ok_or("username")?;
+    bind(store, dir, expected, username).map(|_| ())
+}
+
+#[cfg(test)]
+pub(super) fn live_sync(store: &Store, dir: &Path, description: &Value) -> Result<&'static str> {
+    let expected = serde_json::from_value(description.clone()).map_err(|_| "target")?;
+    let username = description["username"].as_str().ok_or("username")?;
+    sync(store, dir, &expected, username)
+}
