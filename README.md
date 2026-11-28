@@ -12,13 +12,13 @@
 | 选哪个 | 可以做什么 | 下载 |
 | --- | --- | --- |
 | **Ky 桌面版** | 按平台查密码，按 ⌥⌘N 记下想法，把选中的图文复制为分享卡片。 | [Mac 0.3.6 · Apple Silicon（arm64）](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.6/Ky_0.3.6_aarch64.dmg) |
-| **Kyvault 命令行** | 通过别名把 API Key 或 Token 传给子进程，命令里只写别名。 | [CLI 2.8.3 · macOS、Linux、Windows](https://github.com/webkubor/kyvault/releases/tag/v2.8.3) |
+| **Kyvault 命令行** | 通过别名把 API Key 或 Token 传给子进程，命令里只写别名。 | [CLI 2.8.4 · macOS、Linux、Windows](https://github.com/webkubor/kyvault/releases/tag/v2.8.4) |
 
 [官网](https://webkubor.github.io/kyvault/) · [English](README.en.md)
 
-[![Ky 0.3.5 桌面版首页实拍](docs/assets/desktop/home-motion.png)](docs/assets/desktop/home-motion.mp4)
+[![Ky 0.3.6 显示测试更新的版本号和说明](docs/assets/desktop/0.3.6/update-preview-zh.png)](docs/assets/desktop/0.3.6/update-preview-zh.mp4)
 
-https://github.com/user-attachments/assets/e23302a4-63e8-4180-a989-88c326ff67f4
+点击截图播放演示：打开新版本提示，阅读更新说明，再取消重启。画面使用测试更新数据。
 
 ## 在 Mac 上开始
 

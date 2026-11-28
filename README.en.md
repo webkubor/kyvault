@@ -12,13 +12,13 @@
 | Choose your tool | What you can do | Download |
 | --- | --- | --- |
 | **Ky for Mac** | Find a password, capture a thought with ⌥⌘N, or share selected text and images as a card. | [Mac 0.3.6 · Apple Silicon (arm64)](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.6/Ky_0.3.6_aarch64.dmg) |
-| **Kyvault CLI** | Pass an API key or token to a child process by alias. Your command contains only the alias. | [CLI 2.8.3 · macOS, Linux, Windows](https://github.com/webkubor/kyvault/releases/tag/v2.8.3) |
+| **Kyvault CLI** | Pass an API key or token to a child process by alias. Your command contains only the alias. | [CLI 2.8.4 · macOS, Linux, Windows](https://github.com/webkubor/kyvault/releases/tag/v2.8.4) |
 
 [Website](https://webkubor.github.io/kyvault/) · [中文](README.md)
 
-[![Ky 0.3.5 desktop home screen](docs/assets/desktop/home-motion.png)](docs/assets/desktop/home-motion.mp4)
+[![Ky 0.3.6 showing release notes for a test update](docs/assets/desktop/0.3.6/update-preview-en.png)](docs/assets/desktop/0.3.6/update-preview-en.mp4)
 
-https://github.com/user-attachments/assets/e23302a4-63e8-4180-a989-88c326ff67f4
+Play the demo to see how to read the release notes and cancel before restarting. The available update uses test data.
 
 ## On your Mac
 
