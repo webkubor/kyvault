@@ -16,11 +16,20 @@
 
 [Website](https://webkubor.github.io/kyvault/) · [中文](README.md)
 
+Click Ky in the Mac menu bar to type a note, dictate, or paste text or an image. Press ⌘↩ to save it to Private collection. Choose “Use as idea draft” to edit a copy and select paragraphs to share.
+
+![Quick Capture panel with a sample book club note](docs/assets/desktop/0.3.7/tray-en.png)
+
+<details>
+<summary>Watch the in-app update demo (0.3.6)</summary>
+
 [![Ky 0.3.6 showing release notes for a test update](docs/assets/desktop/0.3.6/update-preview-en.png)](docs/assets/desktop/0.3.6/update-preview-en.mp4)
 
 Play the demo to see how to read the release notes and cancel before restarting. The available update uses test data.
 
 https://github.com/user-attachments/assets/c8fd26bf-28c0-4fac-bd11-6e6d0042f6e2
+
+</details>
 
 ## On your Mac
 
