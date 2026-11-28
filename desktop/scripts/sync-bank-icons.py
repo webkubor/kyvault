@@ -1,4 +1,4 @@
-"""Refresh Ky's offline bank icons from a local free-imgbed checkout."""
+"""Refresh offline bank artwork from a local checkout of free-imgbed."""
 import json
 from pathlib import Path
 import re
