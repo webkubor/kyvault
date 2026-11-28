@@ -6,6 +6,7 @@ typedef void (^KyVoiceStatus)(NSString *, BOOL);
 
 @interface KyDictation ()
 @property(nonatomic, readwrite) BOOL active;
+@property(nonatomic, readwrite) BOOL awaitingAuthorization;
 @property(nonatomic) NSUInteger generation;
 @property(nonatomic) BOOL tapped;
 @property(nonatomic) BOOL english;
@@ -22,6 +23,7 @@ typedef void (^KyVoiceStatus)(NSString *, BOOL);
 - (void)finish:(NSString *)message {
     if (!self.active) return;
     self.active = NO;
+    self.awaitingAuthorization = NO;
     self.generation++;
     [self.engine stop];
     if (self.tapped) [self.engine.inputNode removeTapOnBus:0];
@@ -110,6 +112,7 @@ typedef void (^KyVoiceStatus)(NSString *, BOOL);
                              : @"请在系统设置的「键盘 → 听写」中启用本机听写语言。"];
         return;
     }
+    self.awaitingAuthorization = YES;
     status(english ? @"Checking microphone and speech permissions…" : @"正在检查麦克风与语音识别权限…", YES);
     [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus auth) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -125,6 +128,12 @@ typedef void (^KyVoiceStatus)(NSString *, BOOL);
                     if (!granted) {
                         [self finish:english ? @"Allow Ky in Privacy & Security → Microphone."
                                              : @"请在「隐私与安全性 → 麦克风」中允许 Ky。"];
+                        return;
+                    }
+                    self.awaitingAuthorization = NO;
+                    if (!self.editor.window.isKeyWindow) {
+                        [self finish:english ? @"Microphone ready. Click Dictate to start."
+                                             : @"麦克风已就绪，点「听写」开始。"];
                         return;
                     }
                     [self listen:generation];
