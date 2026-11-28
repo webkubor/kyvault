@@ -15,3 +15,14 @@ for (const query of ['Apple 密码', '苹果 密码', 'work@example.test', 'team
 }
 assert.equal(credentialTitle({ platform: 'custom', name: 'prod/db-user' }, 'zh-CN'), 'custom · prod db user');
 console.log('旧引用、中英文名称、混合搜索、账号、别名及自定义平台验证通过');
+
+const {credentialSymbol} = await import('../ui/platform-icon.js');
+for (const [entry, symbol] of [
+  [{platform:'bank', reference:'secret://bank/citic-card'},'citic'],
+  [{platform:'bank', name:'cmb-card'},'cmb'],
+  [{platform:'bank', name:'日常使用',aliases:['招商银行']},'cmb'],
+  [{platform:'bank', name:'stripe-password'},'stripe'],
+  [{platform:'bank', name:'uncmbrelated'},'bank'],
+  [{platform:'bitiful'},'bitiful'], [{platform:'blog'},'website'],
+  [{platform:'apple',name:'cmb-card'},'apple'],
+]) assert.equal(credentialSymbol(entry),symbol);

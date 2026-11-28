@@ -6,7 +6,7 @@
 import { state, $, $$, el, showEl, invoke, formatWhen, firstLine, setError, setStatus, relocalizeMessages } from './core.js';
 import { t } from './lang.js';
 
-import { platformMark } from './platform-icon.js';
+import { credentialSymbol, platformMark } from './platform-icon.js';
 import { credentialTitle, matchesCredential, platformLabel } from './vault.js';
 
 export const VIEW_META = {
@@ -161,7 +161,7 @@ function renderEntry(entry) {
   const btn = el('button', 'entry');
   btn.type = 'button';
   if (isSecretView()) {
-    btn.appendChild(platformMark(entry.platform));
+    btn.appendChild(platformMark(credentialSymbol(entry)));
     btn.appendChild(el('span', 'entry-title', credentialTitle(entry, state.lang)));
     const meta = el('span', 'entry-meta');
     meta.appendChild(el('span', '', [entry.account, ...(entry.aliases || []), entry.name].filter(Boolean).join(' · ')));
@@ -306,7 +306,7 @@ export function renderDetail() {
   back.appendChild(el('span', 'back-icon', ''));
   head.appendChild(back);
   const title = el('h2', null, isSecretView() ? credentialTitle(entry, state.lang) : entryTitle(entry));
-  if (isSecretView()) head.appendChild(platformMark(entry.platform));
+  if (isSecretView()) head.appendChild(platformMark(credentialSymbol(entry)));
   head.appendChild(title);
   pane.appendChild(head);
 
