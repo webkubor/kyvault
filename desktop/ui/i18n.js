@@ -5,6 +5,16 @@
 export const DEFAULT_LANG = 'zh-CN';
 
 const zh = {
+  'flash.browser': '连接浏览器…',
+  'flash.install': '在浏览器的扩展管理页开启开发者模式，点「加载已解压的扩展程序」，选择 Finder 中的 extension 文件夹。',
+
+  'flash.sources': '自动收进闪记',
+  'flash.desc': '记录剪贴板时，自动收藏所选应用标明来源的文字。网页可在浏览器扩展里按网站开启。',
+  'flash.choose': '选择应用…',
+  'flash.remove': '停止从该应用收藏',
+  'flash.collect': '收进闪记',
+  'flash.saved': '已存到私密收藏',
+
   'nav.home': '首页',
   'nav.account': '仓库连接',
   'cred.type': '凭证类型',
@@ -200,8 +210,8 @@ const zh = {
   'about.retry': '重新加载',
   'about.historyFailed': '历史版本暂时无法加载，本版说明仍可阅读。',
   'about.title': '更新日志',
-  'about.card': '点开历史版本，即可在 Ky 阅读变更内容。',
-  'about.forms': '下载和安装会显示进度，失败后可以重试。',
+  'about.card': '按 ⌥⌘N 写闪记，⌘↩ 保存到私密收藏。',
+  'about.forms': '网页选区和剪贴板条目均可收藏。设置中可连接浏览器、选择自动收藏的来源应用。',
   'about.sync': '同步会分别提示上传、下载、两端一致或冲突。复制、保存和导出也有操作提示。',
   'about.current': '当前版本',
   'about.check': '检查更新',
@@ -229,6 +239,16 @@ const zh = {
 };
 
 const en = {
+  'flash.browser': 'Connect browser…',
+  'flash.install': 'In the browser extensions page, turn on Developer mode and load the extension folder selected in Finder.',
+
+  'flash.sources': 'Automatic quick notes',
+  'flash.desc': 'While clipboard history is on, save attributed text from selected apps. Enable individual sites in the browser extension.',
+  'flash.choose': 'Choose app…',
+  'flash.remove': 'Remove app',
+  'flash.collect': 'Save to notes',
+  'flash.saved': 'Saved to private notes',
+
   'nav.home': 'Home',
   'nav.account': 'Repository',
   'cred.type': 'Credential type',
@@ -424,8 +444,8 @@ const en = {
   'about.retry': 'Retry',
   'about.historyFailed': 'Release history is unavailable. The current notes are still available offline.',
   'about.title': 'Release notes',
-  'about.card': 'Expand a previous release to read its changes in Ky.',
-  'about.forms': 'Follow the download and installation, and retry if an update fails.',
+  'about.card': 'Open Ky quick notes with ⌥⌘N and save with ⌘↩.',
+  'about.forms': 'Save a selection or clipboard entry. Connect a browser or choose source apps in Settings.',
   'about.sync': 'Sync reports uploads, downloads, matching copies and conflicts. Copy, save and export actions also show feedback.',
   'about.current': 'Current version',
   'about.check': 'Check for updates',

@@ -77,6 +77,22 @@ pub fn plan(locked: bool, monitoring: bool, zh: bool, entries: &[(u64, String)])
         },
     ];
 
+    #[cfg(target_os = "macos")]
+    if !locked {
+        items.insert(
+            0,
+            PlanItem::Action {
+                id: "flash".into(),
+                label: if zh {
+                    "记一条闪记　⌥⌘N"
+                } else {
+                    "Quick Note　⌥⌘N"
+                }
+                .into(),
+            },
+        );
+    }
+
     // A locked workspace must not leak any recent content through the menu.
     let recent: Vec<PlanItem> = if locked {
         Vec::new()
@@ -222,6 +238,8 @@ fn refresh_now(app: &AppHandle) -> Result<()> {
 /// Handle a tray menu click without plumbing into the main closure.
 pub fn on_menu_event(app: &AppHandle, id: &str) {
     match id {
+        #[cfg(target_os = "macos")]
+        "flash" => crate::flash::native::open(app),
         "open" => crate::show(app),
         "toggle-monitor" => {
             let state = app.state::<DesktopState>();
@@ -311,6 +329,11 @@ mod tests {
         assert_eq!(
             items,
             vec![
+                #[cfg(target_os = "macos")]
+                PlanItem::Action {
+                    id: "flash".into(),
+                    label: "记一条闪记　⌥⌘N".into()
+                },
                 PlanItem::Action {
                     id: "open".into(),
                     label: "打开 Ky".into()
@@ -354,6 +377,8 @@ mod tests {
         assert_eq!(
             labels,
             vec![
+                #[cfg(target_os = "macos")]
+                "Quick Note　⌥⌘N",
                 "Open Ky",
                 "Capture clipboard",
                 "Recent",

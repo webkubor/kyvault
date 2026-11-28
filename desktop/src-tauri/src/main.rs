@@ -3,6 +3,9 @@
 mod account;
 mod commands;
 mod export;
+mod flash;
+#[cfg(target_os = "macos")]
+mod flash_socket;
 mod repo_create;
 mod share_png;
 mod tray;
@@ -22,6 +25,14 @@ pub fn show(app: &tauri::AppHandle) {
 }
 
 fn main() {
+    #[cfg(target_os = "macos")]
+    if std::env::args()
+        .nth(1)
+        .is_some_and(|arg| arg == "chrome-extension://fkgfhoglncnijiadgohpgnjllphjcibg/")
+    {
+        flash::native::browser();
+        return;
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -38,15 +49,7 @@ fn main() {
             }
             show(app)
         }))
-        .plugin(
-            tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _, event| {
-                    if event.state() == ShortcutState::Pressed {
-                        show(app);
-                    }
-                })
-                .build(),
-        )
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             let data_root = std::env::var_os("KY_DESKTOP_DATA_DIR")
                 .map(std::path::PathBuf::from)
@@ -59,6 +62,21 @@ fn main() {
                 data_root,
             });
 
+            #[cfg(target_os = "macos")]
+            {
+                flash::native::setup(app.handle());
+                if app
+                    .global_shortcut()
+                    .on_shortcut("Command+Option+N", |app, _, event| {
+                        if event.state() == ShortcutState::Pressed {
+                            flash::native::open(app);
+                        }
+                    })
+                    .is_err()
+                {
+                    eprintln!("Ky: quick note shortcut unavailable");
+                }
+            }
             let mut tray = TrayIconBuilder::with_id("main")
                 .tooltip("Ky · 本地工作台")
                 .on_menu_event(|app, event| tray::on_menu_event(app, event.id.as_ref()));
@@ -72,7 +90,11 @@ fn main() {
             // A conflicting global shortcut must not prevent users opening their vault.
             if app
                 .global_shortcut()
-                .register("CommandOrControl+Shift+Space")
+                .on_shortcut("CommandOrControl+Shift+Space", |app, _, event| {
+                    if event.state() == ShortcutState::Pressed {
+                        show(app);
+                    }
+                })
                 .is_err()
             {
                 eprintln!("Ky: global shortcut unavailable; use the tray or Dock.");
@@ -150,6 +172,8 @@ fn main() {
                         // the user's choice survives in prefs.json.
                         session.locked = true;
                         drop(session);
+                        #[cfg(target_os = "macos")]
+                        flash::native::lock(&handle);
                         let _ = handle.emit("app-locked", ());
                         let _ = tray::refresh(&handle);
                         continue;
@@ -197,6 +221,10 @@ fn main() {
                             match state.history.capture(&text, source.as_deref()) {
                                 Ok(_) => {
                                     drop(session);
+                                    #[cfg(target_os = "macos")]
+                                    if let Some(generation) = change {
+                                        flash::automatic(&state, generation, &text);
+                                    }
                                     let _ = handle.emit("history-changed", ());
                                     let _ = tray::refresh(&handle);
                                     continue;
@@ -255,6 +283,11 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            flash::flash_browser_setup,
+            flash::flash_choose_app,
+            flash::flash_apps,
+            flash::flash_app_rule,
+            flash::flash_history,
             account::account_status,
             account::account_login,
             repo_create::account_create,

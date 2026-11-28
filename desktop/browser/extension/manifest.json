@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Ky 闪记",
+  "version": "1.0.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArgOOs/fV29GO3tbiunki+ruAxXspU3hXv4VVRAp4FoXnMZQ+645BQGMTN+LCU9RlIlV4y09LhFnstroo1fh8k3jPahDjiGfGSGFbhp0OnRrFh+QJLW/utPuE13iRM1aZsgtRP46+5mLytnbZkdIAY6IoieglRAeLDuwgpdsouSVhzq0yH/o7apvAzNmlV6zkQMcasXyhnAc2V+gwoAbYxq91eIRTNsZZL6wW6y1ExYvyTC38e7WwHOkcPRmlJ+CvCvX9DkwtokyeA63yLS/icg3poh2rF8p9I82+EyQHL1TBLO41mQayWJz68WcPCE090QZ+lx3erqppUcQSZbEuaQIDAQAB",
+  "incognito": "not_allowed",
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "nativeMessaging",
+    "scripting",
+    "storage"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "worker.mjs",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Ky 闪记"
+  }
+}

@@ -30,9 +30,13 @@ Open the Kyvault agent guide with `/kyvault` in agy, Claude Code, or OpenCode, a
 
 ---
 
-## Ky desktop 0.3.2 for macOS
+## Ky desktop 0.3.3 for macOS
 
-Ky brings your clipboard history, vault, and private notes into one local workspace. You can use it without an account. [Download the Apple Silicon Mac installer (DMG)](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.2/Ky_0.3.2_aarch64.dmg) · [Project website](https://webkubor.github.io/kyvault/)
+Press ⌥⌘N to capture a thought and ⌘↩ to save it privately. Use the macOS selection service or enable automatic capture for individual sites in the browser extension.
+
+![Ky quick note](docs/assets/desktop/quick-note.png)
+
+Ky brings your clipboard history, vault, and private notes into one local workspace. You can use it without an account. [Download the Apple Silicon Mac installer (DMG)](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.3/Ky_0.3.3_aarch64.dmg) · [Project website](https://webkubor.github.io/kyvault/)
 
 ![Ky 0.3.1 workspace home screen](docs/assets/desktop/home.png)
 
