@@ -18,7 +18,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: center;
   min-height: clamp(180px, 32cqw, 300px);
   padding: clamp(var(--s5), 4cqw, 44px);
   border: 1px solid var(--line);
@@ -26,10 +26,9 @@
   background: radial-gradient(ellipse at 88% 78%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 65%),
     linear-gradient(118deg, var(--raised), var(--accent-soft));
 }
-.ky-home-brand { font: 700 28px/1 var(--font); letter-spacing: -.075em; }
 .ky-home-hero h1 {
   max-width: 62%;
-  margin: var(--s6) 0 0;
+  margin: 0;
   font-size: clamp(26px, 5.3cqw, 54px);
   line-height: 1.16;
   letter-spacing: -.045em;
@@ -103,3 +102,30 @@
 :where(html[data-theme="dark"]) .ky-home-hero { background: linear-gradient(115deg, var(--raised), var(--sidebar)); }
 
 :where(html[data-theme="dark"]) .ky-home-art i { background: linear-gradient(140deg, var(--raised), var(--bg)); }
+
+@media (prefers-reduced-motion: no-preference) {
+  html:not(.ky-window-hidden) .ky-home-art i {
+    animation: ky-deal 620ms var(--deal-delay, 0ms) cubic-bezier(.2,.75,.25,1) backwards;
+  }
+  .ky-home-art i:nth-child(2) { --deal-delay: 55ms; }
+  .ky-home-art .ky-home-mark { --deal-delay: 95ms; overflow: hidden; }
+  html:not(.ky-window-hidden) .ky-home-mark::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(115deg, transparent 42%, color-mix(in srgb, var(--text) 22%, transparent) 49%, var(--accent) 50%, transparent 51%);
+    animation: ky-glint 540ms 160ms ease-out both;
+    pointer-events: none;
+  }
+  #home .ky-home-arrow { transition: transform 160ms ease-out; }
+  #home .ky-home-card:is(:hover,:focus-visible) .ky-home-arrow { transform: translate(2px,-2px); }
+  #home .ky-home-card:active .ky-home-arrow { transform: none; }
+}
+@keyframes ky-deal {
+  from { transform: translate(-5%, -8%) rotate(-6deg); }
+}
+@keyframes ky-glint {
+  from { opacity: 0; transform: translateX(-70%); }
+  38% { opacity: .75; }
+  to { opacity: 0; transform: translateX(70%); }
+}

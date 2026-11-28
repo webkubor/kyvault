@@ -57,11 +57,10 @@ function button(view, cls) {
 function mount(root) {
   const panel = el('div', 'ky-home-panel');
   const hero = el('header', 'ky-home-hero');
-  const brand = el('span', 'ky-home-brand', 'Ky');
   const art = el('span', 'ky-home-art');
   art.setAttribute('aria-hidden', 'true');
   art.append(el('i'), el('i'), el('i', 'ky-home-mark'));
-  hero.append(brand, label('h1', '', 'title'), art);
+  hero.append(label('h1', '', 'title'), art);
   const grid = el('div', 'ky-home-grid');
   const counts = {};
   for (const [view, metric] of cards) {
@@ -144,3 +143,8 @@ export function clearHome() {
   }
   page = undefined;
 }
+
+// WKWebView can keep the page mounted while the main window is hidden.
+document.addEventListener('visibilitychange', () => {
+  document.documentElement.classList.toggle('ky-window-hidden', document.hidden);
+});
