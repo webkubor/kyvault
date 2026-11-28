@@ -1,11 +1,11 @@
 {
-  "version": "0.3.2",
-  "notes": "历史版本可在 Ky 内阅读。安装更新前确认重启，下载显示实际进度。",
-  "pub_date": "2026-11-28T08:29:19Z",
+  "version": "0.3.3",
+  "notes": "从菜单栏、网页选区和剪贴板直接保存闪记。",
+  "pub_date": "2026-11-28T09:07:54Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbTZOQm5kc0gyQWdYQ0FibWp2ZFZCMnVnL3JiQm5zT0svb3d4TVR6WFB5SnRZK3UzeEZ1b2VkamJmTUUxekcxL0tWT2JoL0NrRWZDcVBsakhMWkZvMEEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODU0NDY2CWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4yClVKUktWOGdnenpBRHdaNW5kajdIcWFzdTFJdjMrWmw1Zm9SWWhZUDdJR3QvcitpdFcycG93WTdIcmFTeHFXMHJHVjBkb1Y1Y0pac3NSd0ZOWDFKV0N3PT0K",
-      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.2/Ky.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbTdXM2l3VmJ3SWVuRklBNG0vTjFrdVVqd0hHS3M5TzUzR2F2bDFDYzVnME9SbnhKUW1ZbldxQm53QUJTMCs3QWlvdVNSTnlPU25MTzd4MDJVUktHYXdVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODU2ODM0CWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4zCmt4a0lmakdkR3pyV1krclNyTSs4QklIMndabVRFMkRhVjF6dlhBWWpDSGE2UGZqN1Eyei9NUFBqdDdhVU1NdUswR2d4b2srN1ZzWW53OGNHeXFDUEJBPT0K",
+      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.3/Ky.app.tar.gz"
     }
   }
 }
