@@ -7,7 +7,7 @@
 // as finished text. On a language switch the keys are re-rendered, so no stale
 // copy survives anywhere.
 
-const { state, $, $$, setStatus, setError, setFormError, setConfirmText, invoke, listen, isComposing, readPref, writePref } = await import('./core.js');
+const { messages, state, $, $$, setStatus, snapshotReady, setError, setFormError, setConfirmText, invoke, listen, isComposing, readPref, writePref } = await import('./core.js');
 const { setView, renderList, renderDetail, renderNoBridge, relocalizeDynamic, closeDetail, revealEntry } = await import('./render.js');
 const { t, applyLanguage, syncLanguageFromSnapshot, currentLang, LANG_KEY, onLanguageChanged } = await import('./lang.js');
 
@@ -15,6 +15,8 @@ const workspaceViews = new Set(['private', 'drafts', 'shares', 'feedback']);
 const { openWorkspace, closeWorkspace, canLeaveWorkspace } = await import('./workspace.js');
 const { renderHome, clearHome } = await import('./home.js');
 const { renderAccount, clearAccount } = await import('./account.js');
+const { installControls } = await import('./controls.js');
+installControls();
 let epoch = 0;
 let busy = false;
 let captureErrorShown = false;
@@ -59,9 +61,11 @@ async function refresh() {
     if (generation !== epoch) return;
     if (snapshot.locked) return lockView();
     if (state.locked) return;
+    if (messages.error === 'err.load') setError(null);
     renderResult(snapshot);
   } catch {
-    setError('err.load');
+    if (generation !== epoch || state.locked) return;
+    setError('err.load', null, refresh);
     setStatus('status.unavailable');
   }
 }
@@ -72,7 +76,7 @@ function renderResult(snapshot) {
   $('#language').value = currentLang();
   renderList();
   renderDetail();
-  if (!state.locked) setStatus('status.ready');
+  if (!state.locked) snapshotReady();
 }
 async function action(command, args, messageKey, errorTarget) {
   if (busy || state.locked) return false;
@@ -166,8 +170,13 @@ $('#secret-form').addEventListener('submit', async (e) => {
   const alias = $('#secret-alias').value.trim().toLowerCase();
   const value = $('#secret-value').value;
   setFormError('#secret-error', null);
-  if (!/^[\p{L}\p{N}][\p{L}\p{N}._-]*$/u.test(platform) || !/^[a-z0-9][a-z0-9._-]*$/.test(name)) {
-    return setFormError('#secret-error', 'cred.err.name');
+  const platformValid = /^[\p{L}\p{N}][\p{L}\p{N}._-]*$/u.test(platform);
+  if (!platformValid || !/^[a-z0-9][a-z0-9._-]*$/.test(name)) {
+    const field = $(platformValid ? '#secret-name' : '#secret-platform');
+    if (field.closest('details')) field.closest('details').open = true;
+    setFormError('#secret-error', 'cred.err.name', undefined, field);
+    field.focus();
+    return;
   }
   const reference = `secret://${platform}/${name}`;
   try {

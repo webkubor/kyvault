@@ -1,6 +1,6 @@
 # DESIGN.md — Ky desktop UI
 
-Status: desktop 0.3.0 (2026-11-28) · Owner: `desktop/ui/`
+Status: desktop 0.3.1 (2026-11-28) · Owner: `desktop/ui/`
 Source of truth: this file + the shipped assets in `desktop/ui/`.
 
 ## 1. Scope
@@ -381,3 +381,11 @@ and a usable history are not a binary trade-off.
 - The macOS app was launched locally with an isolated test store by the parent.
   Menu-bar interaction, vibrancy rendering and actual memory totals remain to be
   verified on the final build.
+
+## Shared desktop controls
+
+Use `platformMark(id)` for credentials, platform choices, repository providers and social destinations. Marks resolve to bundled assets; custom names use initials. Keep an adjacent text label. The platform label does not imply a publishing integration.
+
+Use the shared field and picker for static and dynamic forms. Editable platform suggestions keep custom input and IME composition. Use inline errors for field correction, a persistent state for repository conflicts, and transient feedback after explicit actions. Announce each result once, preserve keyboard focus and clear notifications when the workspace locks.
+
+The sharing preview works from a selected snapshot. Copying or saving a card renders only its title, chosen paragraphs and chosen image into PNG. Offline HTML carries the version identifier for feedback.

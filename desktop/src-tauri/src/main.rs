@@ -4,6 +4,7 @@ mod account;
 mod commands;
 mod export;
 mod repo_create;
+mod share_png;
 mod tray;
 mod workspace;
 
@@ -171,7 +172,11 @@ fn main() {
                     let change = clipboard_change();
                     let changed = change.is_none() || change != previous_change;
                     previous_change = change;
-                    if !session.monitoring || session.locked || !changed {
+                    if !session.monitoring
+                        || session.locked
+                        || !changed
+                        || share_png::clipboard_is_share()
+                    {
                         continue;
                     }
                     if clipboard.is_none() {
@@ -260,6 +265,8 @@ fn main() {
             workspace::workspace_save,
             workspace::workspace_delete,
             export::export_workspace_file,
+            share_png::copy_share_png,
+            share_png::export_share_png,
             commands::touch_activity,
             commands::snapshot,
             commands::capture_clipboard,

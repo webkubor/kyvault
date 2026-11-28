@@ -1,7 +1,9 @@
 import { $, el, formField, invoke, state } from './core.js';
 import { onLanguageChanged } from './lang.js';
+import { notifyToast } from './toast.js';
+import { writeShareCard, pasteDestinations } from './workspace-card-actions.js';
 import { w } from './workspace-copy.js';
-import { offlinePage, parseFeedback, originalFromFile, sharePng, validOriginal } from './workspace-files.js';
+import { offlinePage, parseFeedback, originalFromFile, sharePng, validImage, validOriginal } from './workspace-files.js';
 
 const views = ['private', 'drafts', 'shares', 'feedback'];
 let current;
@@ -125,6 +127,25 @@ function content(parent, record) {
     parent.append(img);
   }
 }
+function shareCard(record, heading) {
+  const article = el('article', 'wk-share');
+  const copy = el('div', 'wk-share-copy');
+  copy.append(heading);
+  if (record.body) copy.append(el('p', 'wk-body', record.body));
+  article.append(copy);
+  if (validImage(record.image)) {
+    const photo = el('img', 'wk-share-photo');
+    photo.src = record.image;
+    photo.alt = w('image');
+    article.append(photo);
+  }
+  return article;
+}
+function shareSurface(record, heading, page, getSaved, note) {
+  const section = el('section', 'wk-share-surface');
+  section.append(shareActions(page, getSaved), label('p', note, 'wk-muted'), shareCard(record, heading));
+  return section;
+}
 function read(kind, id) { return invoke('workspace_read', {kind, id}); }
 function save(kind, record) {
   return invoke('workspace_save', {kind, id: record.id ?? null, title: record.title, body: record.body, image: record.image || ''});
@@ -141,7 +162,7 @@ async function list(pickDraft = false) {
   query.type = 'search';
   const searchKey = pickDraft ? 'pickDraft' : kind;
   query.value = searches.get(searchKey) || '';
-  const rows = el('div', 'wk-list');
+  const rows = el('div', kind === 'shares' ? 'wk-list wk-share-list' : 'wk-list');
   page.panel.append(toolbar, field('search', query), rows);
   message(page, 'loading');
   try {
@@ -171,12 +192,46 @@ async function list(pickDraft = false) {
   }
 }
 
+function toast(key, kind = 'success') {
+  notifyToast(() => w(key), {kind, id: 'workspace-' + key});
+}
+
+function shareActions(page, getSaved) {
+  function action(key, perform) {
+    return button(key, () => run(page, async () => {
+      try {
+        const snapshot = await getSaved();
+        if (live(page)) await perform(snapshot);
+      } catch (err) {
+        if (!live(page)) return;
+        message(page);
+        toast(err?.message === 'cardTooLong' || err === 'cardTooLong' ? 'cardTooLong' : 'shareFailed', 'error');
+      }
+    }), key === 'copyCard');
+  }
+  async function png(snapshot, copy) {
+    message(page, 'drawing');
+    const done = await writeShareCard(snapshot, copy, () => live(page));
+    if (!live(page)) return;
+    message(page);
+    if (done) toast(copy ? 'cardCopied' : 'cardSaved');
+  }
+  const controls = el('div', 'wk-share-actions');
+  const html = action('export', async snapshot => {
+    const saved = await invoke('export_workspace_file', {name: 'ky-share.html', content: offlinePage(snapshot)});
+    if (live(page) && saved) toast('exported');
+  });
+  html.classList.add('quiet');
+  controls.append(bar(action('copyCard', snapshot => png(snapshot, true)), action('savePng', snapshot => png(snapshot, false)), html), pasteDestinations(label));
+  return controls;
+}
+
 function detail(kind, record) {
   const page = screen();
   const actions = bar(button('hide', () => list()));
   const heading = el('h2', '', record.title);
   heading.tabIndex = -1;
-  page.panel.append(actions, heading);
+  page.panel.append(actions, kind === 'shares' ? shareSurface(record, heading, page, () => record, 'plain') : heading);
   heading.focus();
   if (kind === 'feedback') {
     try {
@@ -189,21 +244,14 @@ function detail(kind, record) {
     } catch { message(page, 'invalidFeedback'); }
     return;
   }
+  if (kind === 'shares') return;
   content(page.panel, record);
-  if (kind === 'shares') {
-    actions.append(button('export', () => run(page, async () => {
-      const saved = await invoke('export_workspace_file', {name: 'ky-share.html', content: offlinePage(record)});
-      message(page, saved ? 'exported' : 'cancelled');
-    }), true));
-    page.panel.append(label('p', 'plain', 'wk-muted'));
-  } else {
-    actions.append(button('edit', () => editor(kind, record)), button('delete', () => run(page, async () => {
-      if (!await confirmAction('deleteQuestion', 'delete') || !live(page)) return;
-      await invoke('workspace_delete', {kind, id: record.id});
-      if (live(page)) await list();
-    })));
-    if (kind === 'drafts') actions.append(button('choose', () => selectContent(record), true));
-  }
+  actions.append(button('edit', () => editor(kind, record)), button('delete', () => run(page, async () => {
+    if (!await confirmAction('deleteQuestion', 'delete') || !live(page)) return;
+    await invoke('workspace_delete', {kind, id: record.id});
+    if (live(page)) await list();
+  })));
+  if (kind === 'drafts') actions.append(button('choose', () => selectContent(record), true));
 }
 
 function editor(kind, existing) {
@@ -281,17 +329,21 @@ function selectContent(draft, selected = new Set()) {
       image: selected.has('image') ? await sharePng(draft.image) : ''};
     if (!live(page)) return;
     const preview = screen();
-    preview.panel.append(el('h2', '', snapshot.title));
-    content(preview.panel, snapshot);
-    preview.panel.append(label('p', 'plain', 'wk-muted'), bar(button('back', () => selectContent(draft, selected)),
-      button('snapshot', () => run(preview, async () => {
-        const id = await save('shares', snapshot);
+    let id;
+    async function savedSnapshot() {
+      // Preserve the version id on cancellation or retry after a successful save.
+      if (!id) id = await save('shares', snapshot);
+      if (live(preview)) return read('shares', id);
+    }
+    preview.panel.append(shareSurface(snapshot, el('h2', '', snapshot.title), preview, savedSnapshot, 'autoSnapshot'),
+      bar(button('back', () => selectContent(draft, selected)), button('snapshot', () => run(preview, async () => {
+        const saved = await savedSnapshot();
         if (!live(preview)) return;
-        detail('shares', {...snapshot, id});
+        detail('shares', saved);
         if (view !== 'shares') $('#workspace').dispatchEvent(new CustomEvent('workspace-navigate', {
           bubbles: true, cancelable: true, detail: {view: 'shares', id}
         }));
-      }), true)));
+      }))));
   }, 'badImage'), true)));
 }
 
@@ -314,7 +366,7 @@ function importControl(page) {
       if (!share) return message(page, 'missingShare');
       const record = {title: share.title, body: JSON.stringify(feedback), image: null};
       record.id = await save('feedback', record);
-      if (live(page)) detail('feedback', record);
+      if (live(page)) { detail('feedback', record); toast('feedbackImported'); }
     });
   };
   return field('import', file);

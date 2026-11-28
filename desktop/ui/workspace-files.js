@@ -96,10 +96,29 @@ export function offlinePage(share) {
   return `<!doctype html><html lang="${getLang()}"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(share.title)}</title>
-<style nonce="${nonce}">:root{color-scheme:light dark}body{max-width:42rem;margin:3rem auto;padding:0 1rem;font:1rem/1.6 system-ui;overflow-wrap:anywhere}article{white-space:pre-wrap}img,textarea{max-width:100%}textarea{display:block;width:100%;box-sizing:border-box;margin:.5rem 0}form{margin:2rem 0}button{padding:.5rem 1rem}</style>
-</head><body data-share="${escape(share.id)}"><main><h1>${escape(share.title)}</h1><article>${escape(share.body)}</article>
-${validImage(share.image) ? '<img alt="' + w('image') + '" src="' + share.image + '">' : ''}
-<form><h2>${w('feedback')}</h2><label>${w('send')}<textarea required rows="6" maxlength="12000"></textarea></label><button>${w('download')}</button></form>
+<style nonce="${nonce}">
+:root {color-scheme:light dark;--paper:#f7faf8;--bg:#eef4ef;--ink:#1b2d24;--muted:#52655a;--line:#d4e0d8;--accent:#086744;--on-accent:white}
+@media(prefers-color-scheme:dark){:root{--paper:#182219;--bg:#0d1410;--ink:#e6efe9;--muted:#a0b0a6;--line:#354338;--accent:#66f0b5;--on-accent:#06281a}}
+* {box-sizing:border-box}
+body {margin:0;background:var(--bg);color:var(--ink);font:1rem/1.65 system-ui,sans-serif;overflow-wrap:anywhere}
+main {width:min(100%,44rem);padding:clamp(.875rem,4vw,2rem);margin:clamp(.5rem,4vh,3rem) auto}
+article {background:var(--paper);border:1px solid var(--line);border-radius:1rem}
+article img {display:block;width:auto;height:auto;max-width:100%;max-height:65vh;object-fit:contain;margin:0 auto 1.25rem;max-width:calc(100% - 2.5rem)}
+.share-copy {padding:clamp(1.25rem,5vw,2.5rem)}
+.share-copy::before {content:'';display:block;width:2rem;height:3px;background:var(--accent);margin-bottom:1rem}
+h1 {margin:0;font-size:clamp(1.5rem,4vw,2.1rem);line-height:1.25;letter-spacing:-.025em}
+.share-body {white-space:pre-wrap;margin:1rem 0 0;line-height:1.75}
+form {margin:2rem 0 0;padding-inline:clamp(.25rem,3vw,1rem)}
+h2 {margin:0 0 .375rem;font-size:1.12rem}
+label {color:var(--muted);font-size:.92rem}
+textarea {display:block;width:100%;resize:vertical;margin:.75rem 0;padding:.75rem;background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:.5rem;font:inherit}
+button {border:0;border-radius:.5rem;padding:.65rem 1rem;background:var(--accent);color:var(--on-accent);font:600 .94rem system-ui;cursor:pointer}
+:focus-visible {outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head><body data-share="${escape(share.id)}"><main><article>
+<div class="share-copy"><h1>${escape(share.title)}</h1>${share.body ? '<p class="share-body">' + escape(share.body) + '</p>' : ''}</div>
+${validImage(share.image) ? '<img alt="' + w('image') + '" src="' + share.image + '">' : ''}</article>
+<form><h2>${w('feedback')}</h2><label>${w('send')}<textarea required rows="4" maxlength="12000"></textarea></label><button>${w('download')}</button></form>
 </main><script nonce="${nonce}">(${recipient.toString()})();</script></body></html>`;
 }
 
@@ -110,4 +129,19 @@ export async function parseFeedback(file) {
   if (data?.format !== 'ky-feedback-1' || typeof data.shareId !== 'string' || !data.shareId || data.shareId.length > 256
     || typeof data.comment !== 'string' || !data.comment.trim() || data.comment.length > 12000) throw Error('invalidFeedback');
   return {shareId: data.shareId, comment: data.comment.trim()};
+}
+
+export async function writeCardBlob(blob, copy, active, invoke) {
+  if (!active()) return false;
+  if (!(blob instanceof Blob) || !blob.size || blob.type !== 'image/png') throw Error('invalidCard');
+  const data = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reader.onabort = () => reject(Error('invalidCard'));
+    reader.readAsDataURL(blob);
+  });
+  if (!active()) return false;
+  if (!copy) return invoke('export_share_png', {name: 'ky-card.png', data});
+  await invoke('copy_share_png', {data});
+  return true;
 }

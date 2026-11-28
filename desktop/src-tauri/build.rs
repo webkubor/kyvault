@@ -20,6 +20,8 @@ fn main() {
             "workspace_save",
             "workspace_delete",
             "export_workspace_file",
+            "copy_share_png",
+            "export_share_png",
             "snapshot",
             "capture_clipboard",
             "set_monitoring",

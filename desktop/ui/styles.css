@@ -427,7 +427,8 @@ button.loading::after { content: ""; position: absolute; inset: 0; margin: auto;
 .nav-item[data-view=shares] .nav-icon,
 .nav-item[data-view=feedback] .nav-icon { mask: var(--glyph) center / contain no-repeat; }
 main[data-view=vault] .entry { grid-template-columns: 34px minmax(0,1fr); column-gap: var(--s3); }
-.platform-mark { grid-row: span 2; display: grid; place-items: center; align-self: center; height: 34px; background: var(--raised); border: 1px solid var(--line); border-radius: var(--radius); color: var(--muted); font: 600 var(--t-sm) var(--mono); }
+.entry .platform-mark { grid-row: span 2; }
+.platform-mark { flex: none; width: 34px; display: grid; place-items: center; align-self: center; height: 34px; background: var(--raised); border: 1px solid var(--line); border-radius: var(--radius); color: var(--muted); font: 600 var(--t-sm) var(--mono); }
 main[data-view=vault] .entry-meta { overflow: hidden; white-space: nowrap; }
 .vault-fields { margin: var(--s6) 0; display: grid; grid-template-columns: max-content minmax(0,1fr); align-content: start; }
 .vault-fields dt,.vault-fields dd { margin: 0; border-top: 1px solid var(--line); padding: var(--s3) var(--s2); overflow-wrap: anywhere; }
@@ -467,3 +468,23 @@ main[data-view=vault] .entry-meta { color: var(--muted); }
 .nav-item[data-view=home] .nav-icon { mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M2%209l8-7%208%207v8H3V9%20M8%2017v-5h4v5%22/%3E%3C/svg%3E") center / contain no-repeat; }
 .nav-item[data-view=account] .nav-icon { mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M7%207a3%203%200%201%200%206%200a3%203%200%201%200-6%200%20M3%2017c0-5%2014-5%2014%200%22/%3E%3C/svg%3E") center / contain no-repeat; }
 #account,#home { flex: 1; min-height: 0; overflow: auto; }
+
+.platform-mark img { width: 20px; height: 20px; object-fit: contain; }
+@media (prefers-color-scheme: dark) {
+  .platform-mark img.mono-mark { filter: invert(1); }
+}
+@media (forced-colors: active) {
+  .platform-mark:has(img) { forced-color-adjust: none; background: white; }
+  .platform-mark img.mono-mark { filter: none; }
+}
+
+#status:not(:empty) { display: inline-flex; gap: var(--s2); align-items: center; color: var(--muted); }
+#status:not(:empty)::before { content: ''; display: block; flex: none; width: 7px; height: 7px; background: var(--accent); border-radius: 50%; }
+#status[data-kind=paused]::before, #status[data-kind=info]::before { background: transparent; border: 1.5px solid currentColor; }
+#status[data-kind=success]::before { width: 9px; height: 6px; border: solid var(--accent); border-width: 0 0 2px 2px; border-radius: 0; background: none; transform: rotate(-45deg); }
+#status[data-kind=warning]::before { background: var(--danger); border-radius: 1px; transform: rotate(45deg); }
+#status[data-kind=busy]::before { background: transparent; border: 2px solid var(--line); border-top-color: var(--accent); width: 10px; height: 10px; }
+@media (prefers-reduced-motion: no-preference) {
+  #status[data-kind=busy]::before { animation: status-turn 1s linear infinite; }
+}
+@keyframes status-turn { to { transform: rotate(1turn); } }

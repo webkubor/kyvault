@@ -6,6 +6,7 @@
 import { state, $, $$, el, showEl, invoke, formatWhen, firstLine, setError, setStatus, relocalizeMessages } from './core.js';
 import { t } from './lang.js';
 
+import { platformMark } from './platform-icon.js';
 import { credentialTitle, matchesCredential, platformLabel } from './vault.js';
 
 export const VIEW_META = {
@@ -124,7 +125,11 @@ export function renderList() {
   if (isSecretView()) {
     const ids = [...new Set(entries.map(entry => entry.platform))].sort();
     const label = id => platformLabel(id, state.lang);
-    const options = [new Option(t('vault.all'), ''), ...ids.map(id => new Option(label(id), id))];
+    const options = [new Option(t('vault.all'), ''), ...ids.map(id => {
+      const option = new Option(label(id), id);
+      option.dataset.platform = id;
+      return option;
+    })];
     filter.replaceChildren(...options);
     filter.value = state.platform || '';
     if (filter.selectedIndex < 0) state.platform = filter.value = '';
@@ -156,9 +161,7 @@ function renderEntry(entry) {
   const btn = el('button', 'entry');
   btn.type = 'button';
   if (isSecretView()) {
-    const mark = el('span', 'platform-mark', (entry.platform || '·').slice(0, 2).toUpperCase());
-    mark.setAttribute('aria-hidden', 'true');
-    btn.appendChild(mark);
+    btn.appendChild(platformMark(entry.platform));
     btn.appendChild(el('span', 'entry-title', credentialTitle(entry, state.lang)));
     const meta = el('span', 'entry-meta');
     meta.appendChild(el('span', '', [entry.account, ...(entry.aliases || []), entry.name].filter(Boolean).join(' · ')));
@@ -293,6 +296,7 @@ export function renderDetail() {
   back.appendChild(el('span', 'back-icon', ''));
   head.appendChild(back);
   const title = el('h2', null, isSecretView() ? credentialTitle(entry, state.lang) : entryTitle(entry));
+  if (isSecretView()) head.appendChild(platformMark(entry.platform));
   head.appendChild(title);
   pane.appendChild(head);
 

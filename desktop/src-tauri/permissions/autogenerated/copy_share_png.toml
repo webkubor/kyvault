@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-copy-share-png"
+description = "Enables the copy_share_png command without any pre-configured scope."
+commands.allow = ["copy_share_png"]
+
+[[permission]]
+identifier = "deny-copy-share-png"
+description = "Denies the copy_share_png command without any pre-configured scope."
+commands.deny = ["copy_share_png"]

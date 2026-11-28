@@ -47,3 +47,23 @@ char *ky_choose_export(const char *name) {
 }
 
 void ky_release_path(char *path) { free(path); }
+
+// Set public.png and the Ky exclusion marker together on a single item.
+// Tests pass a unique pasteboard. Only the command layer selects the general one.
+static NSString *const kyShareMarker = @"dev.kyvault.share-card";
+bool ky_write_share_png(void *rawBoard, const unsigned char *bytes, size_t length) {
+    @autoreleasepool {
+        NSPasteboard *board = (__bridge NSPasteboard *)rawBoard;
+        NSPasteboardItem *item = [NSPasteboardItem new];
+        if (!board || ![item setData:[NSData dataWithBytes:bytes length:length] forType:NSPasteboardTypePNG]
+                   || ![item setData:[NSData data] forType:kyShareMarker]) return false;
+        [board clearContents];
+        return [board writeObjects:@[item]];
+    }
+}
+
+bool ky_board_has_share_marker(void *rawBoard) {
+    @autoreleasepool {
+        return [[(__bridge NSPasteboard *)rawBoard types] containsObject:kyShareMarker];
+    }
+}

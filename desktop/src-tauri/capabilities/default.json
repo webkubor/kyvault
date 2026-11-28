@@ -19,6 +19,8 @@
     "allow-workspace-save",
     "allow-workspace-delete",
     "allow-export-workspace-file",
+    "allow-copy-share-png",
+    "allow-export-share-png",
     "allow-snapshot",
     "allow-capture-clipboard",
     "allow-set-monitoring",

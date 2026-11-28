@@ -10,6 +10,7 @@
 // finished text. That is what lets a language switch re-render the status
 // line, error lines and open dialogs without leaving stale copy behind.
 
+import { clearToasts, notifyToast, refreshToasts } from './toast.js';
 import { t } from './i18n.js';
 
 export const state = {
@@ -103,29 +104,77 @@ export const messages = {
   confirm: null,
 };
 
-export function setStatus(key, vars) {
-  messages.status = key || null;
-  messages.statusVars = vars || null;
-  $("#status").textContent = key ? (vars ? t(key, vars) : t(key)) : "";
+const statusKinds = new Map([
+  ['status.ready', 'ready'], ['status.hidden', 'paused'], ['status.monitorOff', 'paused'],
+  ['status.openKy', 'info'], ['status.unavailable', 'warning'], ['status.reqPending', 'warning'],
+  ['status.updateDownloading', 'busy'],
+]);
+// Allowlist only fixed, localized action results. Background status and interpolation
+// variables (including user-provided text) stay out of notifications.
+const actionResults = new Set([
+  'status.captured', 'status.monitorOn', 'status.monitorOff', 'status.textSaved',
+  'status.credSaved', 'status.reqSaved', 'status.refCopied', 'status.secretCopied',
+  'status.entryCopied', 'status.entryDeleted', 'status.secretDeleted',
+  'status.versionRestored', 'status.historyCleared',
+]);
+let statusTimer;
+
+export function snapshotReady() {
+  // Background snapshots may arrive immediately after a successful operation.
+  if (!messages.status || messages.status === 'status.unavailable') setStatus('status.ready');
 }
 
-export function setError(key, vars) {
+export function setStatus(key, vars) {
+  clearTimeout(statusTimer);
+  messages.status = key || null;
+  messages.statusVars = vars || null;
+  const node = $('#status');
+  const kind = statusKinds.get(key) || 'success';
+  node.dataset.kind = kind;
+  node.textContent = key ? (vars ? t(key, vars) : t(key)) : '';
+  if (key === 'status.hidden') clearToasts();
+  else if (!state.locked && actionResults.has(key)) {
+    notifyToast(() => t(key), {id:key, announce:false});
+  }
+  if (key && kind === 'success') statusTimer = setTimeout(() => setStatus('status.ready'), 5000);
+}
+
+export function setError(key, vars, retry) {
   messages.error = key || null;
   messages.errorVars = vars || null;
   const node = $("#error");
   if (key) {
     node.textContent = vars ? t(key, vars) : t(key);
     showEl(node, true);
+    const safeKey = ['err.generic','err.capture','err.load','err.lock','err.live'].includes(key) ? key : 'err.generic';
+    if (!state.locked) notifyToast(() => t(safeKey), {kind:'error', id:'app-error', announce:false, retry});
   } else {
+    notifyToast(null, {kind:'cancel', id:'app-error'});
     showEl(node, false);
   }
 }
 
 // Per-form error (e.g. #text-error, #secret-error, #unlock-error).
-export function setFormError(id, key, vars) {
+export function setFormError(id, key, vars, field) {
   const node = $(id);
+  const previous = messages.formErrors.get(id)?.field;
+  if (previous) {
+    previous.removeAttribute('aria-invalid');
+    const rest = (previous.getAttribute('aria-describedby') || '').split(/\s+/).filter(token => token && token !== node.id);
+    if (rest.length) previous.setAttribute('aria-describedby',rest.join(' '));
+    else previous.removeAttribute('aria-describedby');
+    previous.removeEventListener('input',messages.formErrors.get(id).clear);
+  }
   if (key) {
-    messages.formErrors.set(id, { key, vars: vars || null });
+    const clear = () => setFormError(id,null);
+    if (field) {
+      field.setAttribute('aria-invalid','true');
+      const descriptions = new Set((field.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean));
+      descriptions.add(node.id);
+      field.setAttribute('aria-describedby',[...descriptions].join(' '));
+      field.addEventListener('input',clear,{once:true});
+    }
+    messages.formErrors.set(id, { key, vars: vars || null, field, clear });
     node.textContent = vars ? t(key, vars) : t(key);
     showEl(node, true);
   } else {
@@ -145,6 +194,7 @@ export function setConfirmText({ titleKey, copyKey, labelKey, vars }) {
 
 // Re-apply the current language to every runtime message.
 export function relocalizeMessages() {
+  refreshToasts();
   if (messages.status) {
     $("#status").textContent = messages.statusVars
       ? t(messages.status, messages.statusVars)
