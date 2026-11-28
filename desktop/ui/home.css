@@ -98,3 +98,8 @@
   #home button { transition: none; }
   #home button:active { transform: none; }
 }
+
+@media (prefers-color-scheme: dark) {
+  .ky-home-hero { background: linear-gradient(115deg, var(--raised), var(--sidebar)); }
+  .ky-home-art i { background: linear-gradient(140deg, var(--raised), var(--bg)); }
+}

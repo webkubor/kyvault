@@ -56,46 +56,11 @@ tests) authoritative when the `desktop` flag is computed.
 
 ## 4. Theme + vibrancy tokens
 
-Brand is carried from `docs/styles.css`: **mint `#66f0b5`** on **charcoal
-`#080d10`** (dark) and a soft mint/charcoal tint in light. The desktop app uses
-the same hue, mapped to a compact system-aware scale.
+Dark mode uses neutral surfaces: window `#101012`, sidebar `#171719`, content `#1d1d20`, elevated controls and dialogs `#2b2b2f`. The bright green accent `#8ef568` identifies primary actions, focus, and selected items. Opaque surfaces keep wallpaper colours out of the dark palette.
 
-```css
-/* dark */
---bg:#0d1410; --sidebar:#121b15; --surface:#182219;
---text:#e3ece6; --muted:#a0b0a6; --line:#2b3931;
---accent:#66f0b5; --accent-text:#0a2e1f;
+Light mode uses a pale background and a deeper green accent (`#0a6b46`). Both themes follow the system through `prefers-color-scheme`. Light surfaces can use vibrancy when backdrop blur is available.
 
-/* light */
---bg:#eef4ef; --sidebar:#e6efe8; --surface:#f6faf7;
---text:#1d3027; --muted:#617069; --line:#d4e0d8;
---accent:#086744; --accent-text:#ffffff;
-```
-
-Switching is pure CSS via `prefers-color-scheme:` plus
-`<meta name="color-scheme" content="light dark">`, so native controls
-(scrollbars, dialogs, checkboxes) follow the system theme with no JS.
-
-### Vibrancy / frosted glass — fallback matrix
-
-The window is transparent with `titleBarStyle: Overlay` + `hiddenTitle` +
-`windowEffects: underWindowBackground`. The CSS layers green-tinted glass over
-whatever the OS paints behind the window.
-
-| Environment | `--body-opaque` | Panels | Result |
-|---|---|---|---|
-| macOS, `backdrop-filter` supported | `rgba(20,27,24,.72)` / `rgba(238,244,239,.78)` | translucent + `blur(28px) saturate(1.7)` | frosted green glass over the wallpaper |
-| Any WebView without `backdrop-filter` | opaque `#141b18` / `#eef4ef` | opaque `var(--sidebar)` / `var(--surface)` | flat, fully legible, **never translucent-without-blur** |
-| Reduced transparency (OS setting) | OS paints the opaque window background | same as above | legible |
-
-Rules enforced in `styles.css`:
-1. Panels are **opaque by default**; the translucent rule lives entirely
-   inside `@supports ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px)))`.
-2. `body` always has an opaque base colour, so a failed blur degrades to a
-   solid surface instead of colour mush.
-3. Text sits on `--surface`/`--sidebar` layers, never directly on the
-   wallpaper; `--text` / `--muted` keep AA contrast in both themes.
-4. macOS chrome: the sidebar reserves 30px at the top for the traffic lights,
+macOS chrome: the sidebar reserves 30px at the top for the traffic lights,
    the toolbar title block is `-webkit-app-region: drag`, and every control is
    `-webkit-app-region: no-drag`.
 

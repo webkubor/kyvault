@@ -22,21 +22,21 @@
   --dur-med: 200ms;
   --dur-slow: 260ms;
 
-  --bg: #0d1410;
-  --sidebar: #121b15;
-  --surface: #182219;
-  --raised: #1e2a22;
-  --text: #e6efe9;
-  --muted: #94a79b;
-  --faint: #6d8177;
-  --line: #25332c;
-  --hairline: #1d2922;
-  --accent: #66f0b5;
-  --accent-text: #06281a;
-  --accent-soft: #1c3a2c;
+  --bg: #101012;
+  --sidebar: #171719;
+  --surface: #1d1d20;
+  --raised: #2b2b2f;
+  --text: #f3f3f4;
+  --muted: #b1b1b8;
+  --faint: #919199;
+  --line: #404045;
+  --hairline: #303034;
+  --accent: #8ef568;
+  --accent-text: #102008;
+  --accent-soft: #303333;
   --danger: #ff9f8e;
   --danger-bg: #3a2622;
-  --overlay: rgba(6, 12, 9, .55);
+  --overlay: rgba(0, 0, 0, .58);
 
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -60,7 +60,7 @@
 
   /* Fallback (pre-blur capability) — replaced below when effects are known.
      Kept opaque so an unsupporting WebView is never translucent-without-blur. */
-  --body-opaque: #141b18;
+  --body-opaque: #101012;
 
   /* Icons are monochrome masks so they follow the text colour, including the
      accent tint on the active nav item. */
@@ -76,9 +76,6 @@
   -webkit-font-smoothing: antialiased;
 }
 
-@supports ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
-  :root { --body-opaque: rgba(20, 27, 24, .34); }
-}
 
 @media (prefers-color-scheme: light) {
   :root {
@@ -124,6 +121,7 @@ body {
 .sidebar, main, dialog { background: var(--sidebar); }
 .library, .detail, .settings { background: var(--surface); }
 
+@media (prefers-color-scheme: light) {
 @supports ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
   .sidebar, main, dialog {
     background: color-mix(in srgb, var(--sidebar) 62%, transparent);
@@ -135,6 +133,7 @@ body {
     -webkit-backdrop-filter: blur(30px) saturate(1.6);
     backdrop-filter: blur(30px) saturate(1.6);
   }
+}
 }
 .toolbar, .search-row, footer { background: transparent; }
 
@@ -499,3 +498,12 @@ main[data-view=vault] .entry-meta { color: var(--muted); }
   background: var(--surface); border-bottom: 1px solid var(--line);
 }
 .release-row[open] { padding-bottom: var(--s3); }
+
+@media (prefers-color-scheme: dark) {
+  main { background: var(--bg); }
+  .sidebar { background: var(--sidebar); }
+  dialog, .detail, .ky-toast { background: var(--raised); }
+  .nav-item[aria-current="page"], .entry[aria-pressed="true"] {
+    box-shadow: inset 2px 0 var(--accent);
+  }
+}
