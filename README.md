@@ -11,12 +11,14 @@
 
 | 选哪个 | 可以做什么 | 下载 |
 | --- | --- | --- |
-| **Ky 桌面版** | 按平台查密码，按 ⌥⌘N 记下想法，把选中的图文复制为分享卡片。 | [Mac 0.3.7 · Apple Silicon（arm64）](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.7/Ky_0.3.7_aarch64.dmg) |
+| **Ky 桌面版** | 按平台查密码，按 ⌥⌘N 记下想法，把选中的图文复制为分享卡片。 | [Mac 0.3.8 · Apple Silicon（arm64）](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.8/Ky_0.3.8_aarch64.dmg) |
 | **Kyvault 命令行** | 通过别名把 API Key 或 Token 传给子进程，命令里只写别名。 | [CLI 2.8.4 · macOS、Linux、Windows](https://github.com/webkubor/kyvault/releases/tag/v2.8.4) |
 
 [官网](https://webkubor.github.io/kyvault/) · [English](README.en.md)
 
 左键点 Mac 菜单栏的 Ky 图标，可以打字、听写，也可以粘贴文字或图片。按 ⌘↩ 存入「私密收藏」。打开收藏，点「用作想法草稿」，就能编辑副本并选段分享。
+
+点击「听写」时，如果 Ky 的麦克风或语音识别权限已被拒绝，Ky 会打开 macOS「系统设置」中对应的权限页。返回速记浮窗后，可以继续编辑原来的内容。
 
 ![速记浮窗中输入了读书会开场笔记，底部可粘贴、听写或保存](docs/assets/desktop/0.3.7/tray-zh.png)
 
