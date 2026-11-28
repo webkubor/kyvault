@@ -4,9 +4,14 @@ fn main() {
         println!("cargo:rerun-if-changed=src/flash.m");
         println!("cargo:rerun-if-changed=src/flash_feedback.m");
         println!("cargo:rustc-link-lib=framework=UniformTypeIdentifiers");
+        println!("cargo:rerun-if-changed=src/ky_dictation.m");
+        println!("cargo:rerun-if-changed=src/ky_dictation.h");
+        println!("cargo:rustc-link-lib=framework=AVFoundation");
+        println!("cargo:rustc-link-lib=framework=Speech");
         cc::Build::new()
             .file("src/secret_sheet.m")
             .file("src/flash.m")
+            .file("src/ky_dictation.m")
             .file("src/flash_feedback.m")
             .flag("-fobjc-arc")
             .compile("ky_secret_sheet");
