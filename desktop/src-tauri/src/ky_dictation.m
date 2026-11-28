@@ -98,6 +98,18 @@ typedef void (^KyVoiceStatus)(NSString *, BOOL);
     }
     self.status(self.english ? @"Listening… tap to finish" : @"正在听写，再点一次结束", YES);
 }
+// Called only by a live, user-initiated permission request on the main thread.
+- (void)openPrivacySettingsForMicrophone:(BOOL)microphone {
+    NSString *address = microphone
+        ? @"x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
+        : @"x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition";
+    NSString *page = microphone ? (self.english ? @"Microphone" : @"麦克风")
+                                : (self.english ? @"Speech Recognition" : @"语音识别");
+    [self finish:[NSString stringWithFormat:self.english
+        ? @"Allow Ky in Privacy & Security → %@, then click Dictate again."
+        : @"在「隐私与安全性 → %@」中允许 Ky，回来点「听写」。", page]];
+    [NSWorkspace.sharedWorkspace openURL:[NSURL URLWithString:address]];
+}
 - (void)startInEditor:(NSTextView *)editor english:(BOOL)english status:(KyVoiceStatus)status {
     if (self.active || !editor || !status) return;
     self.active = YES;
@@ -118,16 +130,22 @@ typedef void (^KyVoiceStatus)(NSString *, BOOL);
         dispatch_async(dispatch_get_main_queue(), ^{
             if (!self.active || self.generation != generation) return;
             if (auth != SFSpeechRecognizerAuthorizationStatusAuthorized) {
-                [self finish:english ? @"Allow Ky in Privacy & Security → Speech Recognition."
-                                     : @"请在「隐私与安全性 → 语音识别」中允许 Ky。"];
+                if (auth == SFSpeechRecognizerAuthorizationStatusDenied)
+                    [self openPrivacySettingsForMicrophone:NO];
+                else
+                    [self finish:english ? @"Speech recognition is unavailable on this Mac."
+                                         : @"这台 Mac 当前无法使用语音识别。"];
                 return;
             }
             [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     if (!self.active || self.generation != generation) return;
                     if (!granted) {
-                        [self finish:english ? @"Allow Ky in Privacy & Security → Microphone."
-                                             : @"请在「隐私与安全性 → 麦克风」中允许 Ky。"];
+                        if ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio] == AVAuthorizationStatusDenied)
+                            [self openPrivacySettingsForMicrophone:YES];
+                        else
+                            [self finish:english ? @"Microphone access is restricted on this Mac."
+                                                 : @"这台 Mac 的麦克风访问受系统限制。"];
                         return;
                     }
                     self.awaitingAuthorization = NO;

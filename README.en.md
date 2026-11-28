@@ -11,12 +11,14 @@
 
 | Choose your tool | What you can do | Download |
 | --- | --- | --- |
-| **Ky for Mac** | Find a password, capture a thought with ⌥⌘N, or share selected text and images as a card. | [Mac 0.3.7 · Apple Silicon (arm64)](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.7/Ky_0.3.7_aarch64.dmg) |
+| **Ky for Mac** | Find a password, capture a thought with ⌥⌘N, or share selected text and images as a card. | [Mac 0.3.8 · Apple Silicon (arm64)](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.8/Ky_0.3.8_aarch64.dmg) |
 | **Kyvault CLI** | Pass an API key or token to a child process by alias. Your command contains only the alias. | [CLI 2.8.4 · macOS, Linux, Windows](https://github.com/webkubor/kyvault/releases/tag/v2.8.4) |
 
 [Website](https://webkubor.github.io/kyvault/) · [中文](README.md)
 
 Click Ky in the Mac menu bar to type a note, dictate, or paste text or an image. Press ⌘↩ to save it to Private collection. Choose “Use as idea draft” to edit a copy and select paragraphs to share.
+
+If Ky has been denied microphone or speech recognition access, clicking Dictate opens the corresponding pane in macOS System Settings. Return to Quick Capture to continue editing your note.
 
 ![Quick Capture panel with a sample book club note](docs/assets/desktop/0.3.7/tray-en.png)
 
