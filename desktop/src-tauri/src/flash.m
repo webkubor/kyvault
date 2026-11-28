@@ -104,8 +104,7 @@ static void onMain(dispatch_block_t action) {
         self.previousApp = front;
     else if (!self.panel.isVisible)
         self.previousApp = nil;
-    if (@available(macOS 14.0, *)) [NSApp activate];
-    else [NSApp activateIgnoringOtherApps:YES];
+    [NSApp activateIgnoringOtherApps:YES];
     [self.panel makeKeyAndOrderFront:nil];
     [self.panel makeFirstResponder:self.body];
 }
@@ -121,7 +120,6 @@ static void onMain(dispatch_block_t action) {
     NSRunningApplication *previous = self.previousApp;
     self.previousApp = nil;
     if (previous && !previous.terminated) {
-        if (@available(macOS 14.0, *)) [NSApp yieldActivationToApplication:previous];
         [previous activateWithOptions:0];
     }
 }
