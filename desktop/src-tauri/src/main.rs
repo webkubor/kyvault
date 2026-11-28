@@ -329,7 +329,6 @@ fn main() {
             commands::unlock_app,
             commands::clear_history,
             commands::set_ui_language,
-            commands::get_app_info,
             commands::check_update,
             commands::install_update,
             commands::get_entry_image

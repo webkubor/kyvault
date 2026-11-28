@@ -427,9 +427,6 @@ let lastCheckAt = -Infinity;
 let checking = false;
 let confirmingInstall = false;
 let checkMessage = '';
-let releaseNotes = [];
-let historyRequest = 0;
-let historyFailed = false;
 let installing = false;
 let progress = null;
 
@@ -445,8 +442,7 @@ function paintUpdate() {
   $('#update-detail').hidden = !availableVersion;
   $('#update-available-text').textContent = availableVersion
     ? t('about.newAvailable', {version:availableVersion}) : '';
-  const historyBody = releaseNotes?.find(note => note.version === availableVersion)?.body;
-  $('#update-notes').textContent = releaseText(availableUpdate?.notes) || releaseText(historyBody) || t('about.noDetail');
+  $('#update-notes').textContent = releaseText(availableUpdate?.notes) || t('about.noDetail');
   const meter = $('#update-progress');
   meter.hidden = !installing || checkMessage !== 'about.downloading';
   if (progress === null) meter.removeAttribute('value');
@@ -462,69 +458,16 @@ function releaseText(body) {
     .replace(/\[([^\]]+)\]\([^\n]*?\)/g,'$1').replace(/^#{1,6}\s+/gm,'').replace(/\*\*|`/g,'').trim();
 }
 
-function renderReleaseNotes() {
-  const box = $('#release-notes');
-  box.replaceChildren();
-  if (releaseNotes === null) {
-    box.append(el('p','hint',t('about.loading')));
-    return;
-  }
-  const current = $('#about-version').textContent;
-  for (const note of releaseNotes) {
-    if (!/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/.test(note.version) || 'v' + note.version === current) continue;
-    // Link to the official release page. Never inject remote markdown, images or URLs.
-    const row = el('details', 'release-row');
-    const title = (note.name || '').replace(/^(?:Ky(?:\.app)?\s*)?v?\d+\.\d+\.\d+\s*[-—·:]?\s*/i,'').trim();
-    const summary = el('summary', '', ['v' + note.version, title].filter(Boolean).join(' · '));
-    const date = (note.published_at || '').slice(0, 10);
-    if (date) summary.append(el('time', '', date));
-    row.append(summary);
-    const body = releaseText(note.body);
-    row.append(el('p', 'release-description', body || t('about.noDetail')));
-    const link = el('a', 'release-link', t('about.openRelease'));
-    link.href = 'https://github.com/webkubor/kyvault/releases/tag/desktop-v' + note.version;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.onclick = event => {
-      if (!desktop) return;
-      event.preventDefault();
-      invoke('plugin:opener|open_url', {url:link.href}).catch(() => {
-        $('#update-status').textContent = t('about.linkFailed');
-      });
-    };
-    row.append(link);
-    box.append(row);
-  }
-  if (historyFailed) {
-    const retry = el('button','quiet',t('about.retry'));
-    retry.onclick = loadHistory;
-    box.append(el('p','hint',t('about.historyFailed')),retry);
-  }
-  if (!box.childElementCount) box.append(el('p', 'hint', t('about.noNotes')));
-}
-
-async function loadHistory() {
-  historyFailed = false;
-  const request = ++historyRequest;
-  releaseNotes = null;
-  renderReleaseNotes();
-  try {
-    const info = await invoke('get_app_info');
-    if (request !== historyRequest) return;
-    releaseNotes = Array.isArray(info?.notes) ? info.notes : [];
-  } catch {
-    if (request !== historyRequest) return;
-    releaseNotes = [];
-    historyFailed = true;
-  }
-  renderReleaseNotes();
-  paintUpdate();
-}
+$('#release-history-link').onclick = async event => {
+  if (!desktop) return;
+  event.preventDefault();
+  try { await invoke('plugin:opener|open_url', {url:event.currentTarget.href}); }
+  catch { $('#update-status').textContent = t('about.linkFailed'); }
+};
 $('#about-dialog').addEventListener('cancel', event => { if (installing) event.preventDefault(); });
 $('#update-notice').onclick = $('#about').onclick = () => {
   $('#about-dialog').showModal();
   paintUpdate();
-  loadHistory();
   if (availableUpdate) $('#update-available-text').focus();
 };
 
@@ -644,7 +587,6 @@ $('#language').addEventListener('change', (e) => {
 onLanguageChanged(() => {
   relocalizeDynamic();
   paintUpdate();
-  if ($('#about-dialog').open) renderReleaseNotes();
   if ($('#credential').open) updateCredentialHint();
   $('#collapse-toolbar').setAttribute(
     'aria-label',

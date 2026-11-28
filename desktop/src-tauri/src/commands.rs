@@ -205,16 +205,6 @@ pub fn get_entry_image(id: u64, state: State<DesktopState>) -> Result<serde_json
     use base64::Engine;
     Ok(serde_json::json!({ "png": base64::engine::general_purpose::STANDARD.encode(png) }))
 }
-/// 一条发布记录（供"关于/更新"对话框展示版本与更新日志）。
-#[derive(Serialize)]
-pub struct ReleaseNote {
-    pub version: String,
-    pub name: String,
-    pub body: String,
-    pub published_at: String,
-    pub url: String,
-}
-
 #[derive(Serialize)]
 pub struct UpdatePreview {
     version: String,
@@ -301,46 +291,6 @@ pub async fn install_update(app: tauri::AppHandle, expected_version: String) -> 
         handle.restart();
     });
     Ok(())
-}
-
-/// A failed request is distinct from a successful empty history.
-#[tauri::command]
-pub async fn get_app_info() -> Result<serde_json::Value> {
-    tauri::async_runtime::spawn_blocking(release_history)
-        .await
-        .map_err(|_| "history_unavailable")?
-}
-
-fn release_history() -> Result<serde_json::Value> {
-    let releases: Vec<serde_json::Value> =
-        ureq::get("https://api.github.com/repos/webkubor/kyvault/releases?per_page=100")
-            .set("Accept", "application/vnd.github+json")
-            .set(
-                "User-Agent",
-                concat!("ky-desktop/", env!("CARGO_PKG_VERSION")),
-            )
-            .timeout(Duration::from_secs(10))
-            .call()
-            .map_err(|_| "history_unavailable")?
-            .into_json()
-            .map_err(|_| "history_unavailable")?;
-    let notes: Vec<_> = releases
-        .iter()
-        .filter_map(|r| {
-            if r["draft"] == true || r["prerelease"] == true {
-                return None;
-            }
-            let version = r["tag_name"].as_str()?.strip_prefix("desktop-v")?;
-            Some(ReleaseNote {
-                version: version.to_owned(),
-                name: r["name"].as_str().unwrap_or_default().into(),
-                body: r["body"].as_str().unwrap_or_default().into(),
-                published_at: r["published_at"].as_str().unwrap_or_default().into(),
-                url: r["html_url"].as_str().unwrap_or_default().into(),
-            })
-        })
-        .collect();
-    Ok(serde_json::json!({"current":env!("CARGO_PKG_VERSION"),"notes":notes}))
 }
 
 #[derive(Serialize)]

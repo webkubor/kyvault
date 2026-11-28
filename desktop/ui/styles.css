@@ -397,8 +397,7 @@ dialog textarea { resize: vertical; max-height: 30vh; font-family: var(--mono); 
 .about-actions .hint { margin: 0; }
 .update-detail { padding: var(--s3); margin-bottom: var(--s3); border: 1px solid var(--accent); border-radius: var(--radius); background: var(--accent-soft); display: grid; gap: var(--s2); }
 .update-detail p { margin: 0; font-size: var(--t-sm); }
-.release-notes { display: grid; gap: var(--s2); max-height: 40vh; overflow: auto; }
-.release-link { display: block; padding-block: var(--s2); border-bottom: 1px solid var(--hairline); font-size: var(--t-sm); color: var(--accent); }
+.release-link { display: inline-block; padding-block: var(--s2); font-size: var(--t-sm); color: var(--accent); }
 button.loading { position: relative; color: transparent !important; pointer-events: none; }
 button.loading::after { content: ""; position: absolute; inset: 0; margin: auto; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -488,11 +487,7 @@ main[data-view=vault] .entry-meta { color: var(--muted); }
 }
 @keyframes status-turn { to { transform: rotate(1turn); } }
 
-.release-row { border-top: 1px solid var(--line); padding: var(--s2) 0; }
-.release-row summary { cursor: pointer; padding: var(--s1); font-weight: 600; }
-.release-row time { display: inline-block; margin-inline-start: var(--s2); font-size: var(--t-xs); color: var(--muted); font-weight: 400; }
 .release-description { white-space: pre-wrap; line-height: 1.6; overflow-wrap: anywhere; }
-.release-notes { max-height: none; overflow: visible; }
 #update-progress { width: 100%; accent-color: var(--accent); }
 .about-dialog > .dialog-heading {
   position: sticky; top: calc(0px - var(--s5)); z-index: 1;
@@ -500,7 +495,6 @@ main[data-view=vault] .entry-meta { color: var(--muted); }
   padding: var(--s3) var(--s5);
   background: var(--surface); border-bottom: 1px solid var(--line);
 }
-.release-row[open] { padding-bottom: var(--s3); }
 
 
 :where(html[data-theme="dark"]) main { background: var(--bg); }
