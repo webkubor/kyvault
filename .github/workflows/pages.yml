@@ -5,8 +5,10 @@ on:
     branches: [main]
     paths:
       - 'docs/index.html'
+      - 'desktop/ui/logo.png'
+      - 'docs/assets/ky-logo.png'
       - 'docs/styles.css'
-      - 'docs/assets/desktop/home.png'
+      - 'docs/assets/desktop/home-motion.png'
       - 'docs/assets/desktop/vault.png'
       - 'docs/assets/desktop/private.png'
       - 'docs/assets/desktop/social.png'
@@ -32,8 +34,23 @@ jobs:
       - name: Assemble the public site only
         run: |
           mkdir -p _site/assets/desktop
+          cp -L docs/assets/ky-logo.png _site/assets/ky-logo.png
           cp docs/index.html docs/styles.css _site/
-          cp docs/assets/desktop/{home,vault,private,social,card}.png _site/assets/desktop/
+          cp docs/assets/desktop/{home,home-motion,vault,private,social,card}.png _site/assets/desktop/
+          python3 - <<'PYTHON'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+          class Images(HTMLParser):
+              def handle_starttag(self, tag, attrs):
+                  if tag == "img":
+                      url = urlsplit(dict(attrs)["src"])
+                      if not url.netloc:
+                          assert (Path("_site") / url.path).is_file(), url.path
+
+          Images().feed(Path("_site/index.html").read_text())
+          PYTHON
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

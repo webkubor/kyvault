@@ -1,10 +1,20 @@
-# <img src="desktop/ui/logo.png" width="36" height="36" alt=""> Kyvault
+<h1 align="center"><img src="desktop/ui/logo.png" width="36" height="36" alt=""> Kyvault</h1>
 
-Kyvault 是给开发者用的本地密钥管理器。用 Ky 桌面版在 Mac 上查密码、记闪念、收藏图文；用命令行工具（CLI）以 AES-256-GCM 加密保存 API Key 和 Token，让 Codex、Claude Code 等工具通过别名使用凭据。
+<p align="center"><strong>Mac 上的本地密码库与私密闪记，也是开发者的命令行密钥管理工具。无需注册 Ky 账号。</strong></p>
 
-[![CLI tests](https://github.com/webkubor/kyvault/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/webkubor/kyvault/actions/workflows/test.yml) [![Desktop checks](https://github.com/webkubor/kyvault/actions/workflows/desktop.yml/badge.svg?branch=main)](https://github.com/webkubor/kyvault/actions/workflows/desktop.yml) [![CLI release](https://img.shields.io/github/v/release/webkubor/kyvault?filter=v*&label=CLI)](https://github.com/webkubor/kyvault/releases/latest) [![MIT license](https://img.shields.io/github/license/webkubor/kyvault)](LICENSE)
+<p align="center">
+  <a href="https://github.com/webkubor/kyvault/actions/workflows/test.yml"><img src="https://github.com/webkubor/kyvault/actions/workflows/test.yml/badge.svg?branch=main" alt="CLI tests"></a>
+  <a href="https://github.com/webkubor/kyvault/actions/workflows/desktop.yml"><img src="https://github.com/webkubor/kyvault/actions/workflows/desktop.yml/badge.svg?branch=main" alt="Desktop checks"></a>
+  <a href="https://github.com/webkubor/kyvault/releases/latest"><img src="https://img.shields.io/github/v/release/webkubor/kyvault?filter=v*&amp;label=CLI" alt="CLI release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/webkubor/kyvault" alt="MIT license"></a>
+</p>
 
-**[下载 Ky 0.3.5 桌面版（Apple Silicon Mac）](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.5/Ky_0.3.5_aarch64.dmg)** · [下载 macOS、Linux、Windows 命令行版](https://github.com/webkubor/kyvault/releases/tag/v2.8.3) · [官网](https://webkubor.github.io/kyvault/) · [English](README.en.md)
+| 选哪个 | 可以做什么 | 下载 |
+| --- | --- | --- |
+| **Ky 桌面版** | 按平台查密码，按 ⌥⌘N 记下想法，把选中的图文复制为分享卡片。 | [Mac 0.3.5 · Apple Silicon（arm64）](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.5/Ky_0.3.5_aarch64.dmg) |
+| **Kyvault 命令行** | 通过别名把 API Key 或 Token 传给子进程，命令里只写别名。 | [CLI 2.8.3 · macOS、Linux、Windows](https://github.com/webkubor/kyvault/releases/tag/v2.8.3) |
+
+[官网](https://webkubor.github.io/kyvault/) · [English](README.en.md)
 
 [![Ky 0.3.5 桌面版首页实拍](docs/assets/desktop/home-motion.png)](docs/assets/desktop/home-motion.mp4)
 
@@ -20,11 +30,11 @@ https://github.com/user-attachments/assets/e23302a4-63e8-4180-a989-88c326ff67f4
 
 ## 在终端使用
 
-已有 Rust 工具链时，运行以下命令安装 CLI 并查看可用命令。
+运行 `cargo install kyvault` 安装命令行工具。假设已保存密钥 `secret://openai/api-key`，给它起个别名，再运行你的脚本。
 
 ```sh
-cargo install kyvault
-kyvault --help
+kyvault alias set openai_key secret://openai/api-key
+kyvault run --env OPENAI_API_KEY=openai_key -- python app.py
 ```
 
 其他安装方式、命令示例和备份步骤见 [CLI 使用手册](docs/cli-guide.md)。要让 Codex 或 Claude Code 使用密钥别名，见 [Agent 配置](docs/agent-guide.md)。
