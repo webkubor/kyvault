@@ -80,6 +80,24 @@ fn main() {
             let mut tray = TrayIconBuilder::with_id("main")
                 .tooltip("Ky · 本地工作台")
                 .on_menu_event(|app, event| tray::on_menu_event(app, event.id.as_ref()));
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
+                tray = tray
+                    .show_menu_on_left_click(false)
+                    .on_tray_icon_event(|tray, event| {
+                        if matches!(
+                            event,
+                            TrayIconEvent::Click {
+                                button: MouseButton::Left,
+                                button_state: MouseButtonState::Up,
+                                ..
+                            }
+                        ) {
+                            flash::native::open(tray.app_handle());
+                        }
+                    });
+            }
             if let Some(icon) = app.default_window_icon() {
                 tray = tray.icon(icon.clone());
             }
