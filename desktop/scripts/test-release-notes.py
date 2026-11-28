@@ -36,9 +36,9 @@ with sync_playwright() as pw:
   notice.press('Enter');expect(p.get_by_role('dialog',name=title)).to_be_visible()
   expect(p.locator('#update-notes')).to_have_text('Fixture notes <img src=x>')
   assert p.locator('#update-notes img').count()==0
-  expect(p.locator('#about-version')).to_have_text('v0.3.6');expect(p.locator('.current-notes')).to_contain_text('Install' if width==640 else '安装')
+  expect(p.locator('#about-version')).to_have_text('v0.3.7');expect(p.locator('.current-notes')).to_contain_text('Use as idea draft' if width==640 else '用作想法草稿')
   p.evaluate("histFail('offline')")
-  expect(p.locator('.current-notes')).to_contain_text('Install' if width==640 else '安装')
+  expect(p.locator('.current-notes')).to_contain_text('Use as idea draft' if width==640 else '用作想法草稿')
   p.locator('#check-update').click();expect(p.locator('#check-update')).to_be_disabled()
   p.evaluate("checkFail('offline')");expect(p.locator('#update-status')).to_contain_text('失败' if width==1024 else 'failed')
   expect(notice).to_be_visible()
