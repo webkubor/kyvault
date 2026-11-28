@@ -1,11 +1,11 @@
 {
-  "version": "0.3.4",
-  "notes": "侧栏可切换系统、浅色和深色主题，搜索框支持 ⌘F。离线识别 31 家银行，闪记保存后显示轻提示，可关闭音效。",
-  "pub_date": "2026-11-28T09:46:16Z",
+  "version": "0.3.5",
+  "notes": "首页标志叠卡展开，冷光掠过后停住。支持减少动态效果。",
+  "pub_date": "2026-11-28T10:09:01Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbS9VYmdiWkxML1VJWkRoUVowUWZSeXQwUHNPTTQ3cDluc3dOb2V6cTNZeFI0OEtXR2QvR2ZodGZDZlpueVZENFZ6NDRJNlJVc3NPN0VsejJ6YmZxRVFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODU4OTI2CWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMy40CkIzbU5MYWdnTmpJME1hSUlUU3lacGR4WTVzbUVjMDk5c05RNUVzRzBWNUc0VzJtOFVCL0FQMXlJUTRTakRoU1F2NTc5dzQ3YWdGT1pBd3VWckQ1eUNBPT0K",
-      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.4/Ky.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbXd1cHMvZSt1SWNxUzIrMzBJY3RyWGtFWXRBTFNnY1ZSVHQweWM0Z2dkQ0R0QitZY3pDMmRpK2xiMmxlVXN6YlFDWEFNWG9xY0NNYTNIMUZ4NUYwWFFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODYwNTExCWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMy41ClRzandyQ3l6OHUwRmpSWlFzWWlEa01adDI2M2d6cGdZdGFtcndyNWhkM2FibSsydmdud1FSWmhNZzMrdGs5RGYxOVlTV2pFTHkzKy9mczF0RS8zRURBPT0K",
+      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.5/Ky.app.tar.gz"
     }
   }
 }
