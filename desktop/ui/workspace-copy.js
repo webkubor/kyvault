@@ -1,0 +1,37 @@
+import { getLang } from './i18n.js';
+
+const words = {
+  newPrivate: ['新建私密收藏', 'New private entry'], newDraft: ['写想法', 'Write an idea'],
+  imageHint: ['可选择或拖入 PNG、JPEG、WebP 原图（最大 8 MiB，最长边 16384 像素、总计最多 4000 万像素）。', 'Choose or drop an original PNG, JPEG or WebP (up to 8 MiB and 16384 pixels per side, 40 megapixels total).'],
+  shareImageHint: ['分享配图会移除原文件元数据，转为不超过 1 MiB 的 PNG，必要时缩小。下一步可预览结果。', 'Shared images are re-encoded as PNG without the original metadata and resized if needed to fit 1 MiB. Preview the result next.'],
+  empty_private: ['还没有私密收藏。新建一条，保存文字或配图。', 'Create your first private entry to keep text or an image.'],
+  empty_drafts: ['还没有草稿。到「想法草稿」写下想法，再选择要分享的段落或配图。', 'Write an idea in Drafts, then choose the paragraphs or image to share.'],
+  empty_shares: ['选择一篇草稿，预览对方会看到的内容，再保存分享版本。', 'Choose a draft, preview what the recipient will see, then save a version to share.'],
+  empty_feedback: ['收到对方发回的 JSON 后，在这里导入并查看对应分享的反馈。', 'Import the JSON file returned by a recipient to read feedback on that share.'],
+  back: ['返回', 'Back'], cancel: ['取消', 'Cancel'],
+  edit: ['编辑', 'Edit'], save: ['保存', 'Save'], hide: ['隐藏预览', 'Hide preview'],
+  title: ['标题', 'Title'], body: ['正文', 'Text'], image: ['配图', 'Image'],
+  attach: ['选择图片', 'Choose image'], remove: ['移除图片', 'Remove image'],
+  search: ['按标题搜索', 'Search titles'],
+  noMatches: ['没有匹配的标题', 'No matching titles'], loading: ['正在读取…', 'Loading…'],
+  error: ['操作失败，请重试。', 'Operation failed. Please try again.'],
+  invalid: ['请填写标题，并添加正文或图片。', 'Add a title and some text or an image.'],
+  size: ['标题限 512 字节且不能含控制字符，正文限 1 MiB。', 'Use a title up to 512 bytes without control characters and text up to 1 MiB.'],
+  badImage: ['请选择 8 MiB 以内、最长边不超过 16384 像素、总计最多 4000 万像素的有效 PNG、JPEG 或 WebP 图片。', 'Choose a PNG, JPEG or WebP image up to 8 MiB and 16384 pixels per side, 40 megapixels total.'],
+  delete: ['删除', 'Delete'], deleteQuestion: ['永久删除这条记录？', 'Permanently delete this entry?'],
+  discardAction: ['放弃更改', 'Discard changes'],
+  discard: ['放弃未保存的更改？', 'Discard unsaved changes?'],
+  chooseDraft: ['选择要分享的草稿', 'Choose a draft to share'],
+  choose: ['选择分享内容', 'Select content to share'], preview: ['预览分享', 'Preview share'],
+  pick: ['请至少选择一段正文或配图。', 'Select at least one paragraph or the image.'],
+  snapshot: ['保存此分享版本', 'Save this version'], export: ['导出离线 HTML', 'Export offline HTML'],
+  exported: ['HTML 已保存。', 'HTML saved.'], cancelled: ['已取消导出。', 'Export cancelled.'],
+  import: ['导入反馈 JSON', 'Import feedback JSON'], feedback: ['反馈', 'Feedback'],
+  invalidFeedback: ['反馈文件无效。请选择从分享页面下载的 JSON。', 'Invalid feedback file. Choose JSON downloaded from a share.'],
+  missingShare: ['本机找不到这条反馈对应的分享。', 'The matching share is unavailable on this device.'],
+  original: ['查看对应的分享版本', 'View the matching share'],
+  download: ['下载反馈 JSON', 'Download feedback JSON'],
+  send: ['填写反馈，下载 JSON 文件后发回给作者。', 'Write your feedback, download the JSON file and send it to the author.'],
+  retry: ['重试', 'Retry'], plain: ['导出的 HTML 含所选图文。收到文件的人可以保存或转发。', 'The HTML contains the selected content. Recipients can keep or forward it.']
+};
+export const w = (key) => words[key][getLang() === 'en' ? 1 : 0];

@@ -9,6 +9,17 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "touch_activity",
+            "account_status",
+            "account_login",
+            "account_create",
+            "account_bind",
+            "account_sync",
+            "account_unbind",
+            "workspace_list",
+            "workspace_read",
+            "workspace_save",
+            "workspace_delete",
+            "export_workspace_file",
             "snapshot",
             "capture_clipboard",
             "set_monitoring",

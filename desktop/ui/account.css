@@ -1,0 +1,7 @@
+#account { overflow: auto; padding: var(--s4); }
+#account .account-body { max-width: 42rem; margin-inline: auto; }
+#account .ky-field { max-width: 25rem; margin-block: var(--s2); }
+#account .account-consent { display: flex; align-items: center; gap: var(--s2); }
+#account button { margin-block: var(--s2); margin-inline-end: var(--s2); }
+#account .account-note { color: var(--muted); }
+#account .account-project, #account .account-status { overflow-wrap: anywhere; }

@@ -1,0 +1,100 @@
+#home {
+  container-type: inline-size;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  color: var(--text);
+  background: var(--surface);
+}
+#home[hidden] { display: none; }
+.ky-home-panel {
+  max-width: 960px;
+  margin: auto;
+  padding: clamp(var(--s4), 4.5cqw, 48px);
+}
+.ky-home-hero {
+  isolation: isolate;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: clamp(180px, 32cqw, 300px);
+  padding: clamp(var(--s5), 4cqw, 44px);
+  border: 1px solid var(--line);
+  border-radius: var(--large-radius);
+  background: radial-gradient(ellipse at 88% 78%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 65%),
+    linear-gradient(118deg, var(--raised), var(--accent-soft));
+}
+.ky-home-brand { font: 700 28px/1 var(--font); letter-spacing: -.075em; }
+.ky-home-hero h1 {
+  max-width: 62%;
+  margin: var(--s6) 0 0;
+  font-size: clamp(26px, 5.3cqw, 54px);
+  line-height: 1.16;
+  letter-spacing: -.045em;
+  text-wrap: balance;
+}
+.ky-home-art {
+  position: absolute;
+  z-index: -1;
+  top: 46%;
+  right: 10%;
+  width: clamp(75px, 19cqw, 196px);
+  aspect-ratio: 1;
+  transform: translateY(-50%) rotate(-13deg) skewY(-5deg);
+}
+.ky-home-art i {
+  position: absolute;
+  inset: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--raised));
+  border-radius: 23%;
+  background: linear-gradient(140deg, var(--surface), var(--accent-soft) 55%, color-mix(in srgb, var(--accent) 38%, var(--surface)));
+  box-shadow: inset 1px 2px 2px var(--raised), 4px 6px 12px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.ky-home-art i:first-child { transform: translate(20%, 24%); }
+.ky-home-art i:nth-child(2) { transform: translate(10%, 12%); }
+.ky-home-mark::after {
+  content: '';
+  position: absolute;
+  inset: 18%;
+  background: var(--accent);
+  /* Ky's K key-cut from desktop/brand/mark.svg. */
+  clip-path: polygon(24.2% 18.8%,36.7% 18.8%,36.7% 43.8%,59.8% 18.8%,76.2% 18.8%,48.8% 48%,75.8% 77.3%,59.8% 77.3%,59.8% 71.1%,53.9% 71.1%,53.9% 64.8%,36.7% 46.5%,36.7% 81.3%,24.2% 81.3%);
+}
+.ky-home-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3); margin-block: var(--s6); }
+#home .ky-home-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s2);
+  padding: clamp(var(--s3), 2.3cqw, var(--s6));
+  text-align: start;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--large-radius);
+}
+#home .ky-home-card:hover { border-color: var(--accent); }
+.ky-home-card-top, .ky-home-links, .ky-home-stat, #home .ky-home-link { display: flex; align-items: center; }
+.ky-home-card-top { justify-content: space-between; margin-bottom: var(--s4); }
+.ky-home-symbol { padding: var(--s2); border-radius: var(--radius); color: var(--accent); background: var(--accent-soft); }
+#home svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; }
+.ky-home-arrow { color: var(--muted); font-size: var(--t-md); }
+.ky-home-action { font-size: clamp(15px, 2.4cqw, 21px); line-height: 1.35; font-weight: 650; }
+.ky-home-stat { gap: var(--s2); color: var(--muted); font-size: var(--t-sm); margin-top: auto; }
+.ky-home-stat strong { font-variant-numeric: tabular-nums; color: var(--text); }
+.ky-home-links { justify-content: space-between; flex-wrap: wrap; gap: var(--s2); padding-top: var(--s3); border-top: 1px solid var(--line); }
+#home .ky-home-link { gap: var(--s2); border: 0; background: transparent; color: var(--muted); padding: var(--s2); }
+#home .ky-home-link:hover { color: var(--accent); background: var(--accent-soft); }
+#home .ky-home-link svg { width: 16px; height: 16px; }
+#home button:focus-visible { outline: var(--focus) solid var(--accent); outline-offset: 2px; }
+@container (max-width: 490px) {
+  .ky-home-grid { grid-template-columns: 1fr; }
+  #home .ky-home-card { display: grid; grid-template-columns: auto 1fr; column-gap: var(--s3); row-gap: var(--s1); }
+  .ky-home-card-top { grid-row: span 2; margin: 0; }
+  .ky-home-arrow { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #home button { transition: none; }
+  #home button:active { transform: none; }
+}

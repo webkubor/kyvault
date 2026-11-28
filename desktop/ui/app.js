@@ -11,6 +11,10 @@ const { state, $, $$, setStatus, setError, setFormError, setConfirmText, invoke,
 const { setView, renderList, renderDetail, renderNoBridge, relocalizeDynamic, closeDetail, revealEntry } = await import('./render.js');
 const { t, applyLanguage, syncLanguageFromSnapshot, currentLang, LANG_KEY, onLanguageChanged } = await import('./lang.js');
 
+const workspaceViews = new Set(['private', 'drafts', 'shares', 'feedback']);
+const { openWorkspace, closeWorkspace, canLeaveWorkspace } = await import('./workspace.js');
+const { renderHome, clearHome } = await import('./home.js');
+const { renderAccount, clearAccount } = await import('./account.js');
 let epoch = 0;
 let busy = false;
 let captureErrorShown = false;
@@ -27,6 +31,11 @@ function wipeForms() {
 }
 
 function lockView() {
+  clearHome();
+  clearAccount();
+  closeWorkspace();
+  $('#vault-platform').replaceChildren();
+  $('#vault-platform-row').hidden = true;
   epoch++;
   state.locked = true;
   state.snapshot = null;
@@ -58,6 +67,7 @@ async function refresh() {
 }
 function renderResult(snapshot) {
   state.snapshot = snapshot;
+  if (state.view === 'home') renderHome(snapshot);
   $('#monitoring').checked = Boolean(snapshot.monitoring);
   $('#language').value = currentLang();
   renderList();
@@ -122,9 +132,9 @@ const PLATFORMS = [
 let agentRequest = null;
 
 function resetCredentialForm() {
-  const select = $('#secret-platform');
+  const select = $('#credential-platforms');
   if (!select.options.length) {
-    for (const [id, label] of PLATFORMS) {
+    for (const [id, label] of [['apple','Apple'], ['alipay','支付宝'], ['amap','高德地图'], ...PLATFORMS]) {
       const opt = document.createElement('option');
       opt.value = id;
       opt.textContent = label;
@@ -132,22 +142,31 @@ function resetCredentialForm() {
     }
   }
   $('#cred-request-note').hidden = true;
-  $('#cred-verify-hint').textContent = t('cred.value.hint');
+  updateCredentialHint();
   const advanced = $('#credential .cred-advanced');
   if (advanced) advanced.open = false;
 }
 
+function updateCredentialHint() {
+  const password = $('#credential-type').value === 'Password';
+  $('#cred-verify-hint').textContent = t(password ? 'cred.local' : 'cred.value.hint');
+  $('label[for="secret-value"]').textContent = t(password ? 'cred.password' : 'cred.value.label');
+  $('#secret-form button[type="submit"]').textContent = t(password ? 'cred.savePassword' : 'action.saveCredential');
+  $('#secret-value').setAttribute('aria-describedby', 'cred-verify-hint');
+}
+$('#credential-type').addEventListener('change', updateCredentialHint);
 $('#secret-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (busy || state.locked) return;
-  const platform = $('#secret-platform').value;
+  const platform = $('#secret-platform').value.trim().toLowerCase();
+  const kind = $('#credential-type').value;
   // 名称留空自动填 main —— 用户不必理解"引用名"这个概念，选平台+粘 Key 就能存。
-  const name = ($('#secret-name').value.trim().toLowerCase() || 'main');
+  const name = ($('#secret-name').value.trim().toLowerCase() || (kind === 'Password' ? 'password' : 'main'));
   const account = $('#secret-account').value.trim();
   const alias = $('#secret-alias').value.trim().toLowerCase();
   const value = $('#secret-value').value;
   setFormError('#secret-error', null);
-  if (!/^[a-z0-9][a-z0-9._-]*$/.test(platform) || !/^[a-z0-9][a-z0-9._-]*$/.test(name)) {
+  if (!/^[\p{L}\p{N}][\p{L}\p{N}._-]*$/u.test(platform) || !/^[a-z0-9][a-z0-9._-]*$/.test(name)) {
     return setFormError('#secret-error', 'cred.err.name');
   }
   const reference = `secret://${platform}/${name}`;
@@ -158,13 +177,13 @@ $('#secret-form').addEventListener('submit', async (e) => {
       const ok = await confirm('confirm.replace.title', 'confirm.replace.copy', 'confirm.replace.label', { ref: reference });
       if (!ok) return;
     }
-  } catch { setFormError('#secret-error', 'cred.err.check'); }
+  } catch { return setFormError('#secret-error', 'cred.err.check'); }
   busy = true;
   try {
     await invoke('save_secret_with_meta', {
       reference,
       value,
-      kind: null,
+      kind,
       account: account || null,
       alias: alias || null,
     });
@@ -340,7 +359,26 @@ $('#detail').addEventListener('click', async (e) => {
     await action('delete_entry', { id }, 'status.entryDeleted');
   }
 });
-$$('.nav-item').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
+async function navigate(view, id) {
+  if (state.locked || state.view === view) return;
+  if (workspaceViews.has(state.view) && !(await canLeaveWorkspace())) return;
+  if (state.locked) return;
+  closeWorkspace();
+  clearAccount();
+  clearHome();
+  setView(view);
+  if (view === 'home') renderHome(state.snapshot);
+  if (view === 'account') renderAccount();
+  if (workspaceViews.has(view)) await openWorkspace(view, id);
+}
+$$('.nav-item').forEach(button => button.addEventListener('click', () => navigate(button.dataset.view)));
+window.addEventListener('ky-navigate', event => {
+  const view = event.detail?.view;
+  if ($$('.nav-item').some(button => button.dataset.view === view)) navigate(view);
+});
+window.addEventListener('workspace-navigate', event => {
+  if (workspaceViews.has(event.detail?.view)) navigate(event.detail.view, event.detail.id);
+});
 
 // ---- 版本与更新日志（关于对话框）----
 let availableVersion = null; // 后端检测到新版时填入
@@ -437,7 +475,14 @@ $('#do-update').addEventListener('click', async () => {
     if (btn) { btn.disabled = false; btn.classList.remove('loading'); }
   }
 });
-$('#search').addEventListener('input', (e) => { state.filter = e.target.value; renderList(); });
+function filterCollection() {
+  state.filter = $('#search').value;
+  state.platform = $('#vault-platform').value;
+  renderList();
+  if (state.selectedId && !$$('.entry').some(row => row.dataset.entryKey === state.selectedId)) closeDetail();
+}
+$('#search').addEventListener('input', filterCollection);
+$('#vault-platform').addEventListener('change', filterCollection);
 $('#capture').addEventListener('click', async () => {
   captureErrorShown = false;
   const ok = await action('capture_clipboard', {}, 'status.captured');
@@ -466,6 +511,8 @@ $('#unlock').addEventListener('click', async () => {
     $('#locked').close();
     setFormError('#unlock-error', null);
     await refresh();
+    if (!state.locked && state.view === 'account') renderAccount();
+    if (!state.locked && workspaceViews.has(state.view)) await openWorkspace(state.view);
     setStatus('status.ready');
     // 锁定期间到达的 Agent 录入请求，现在补弹。
     tryOpenAgentRequest();
@@ -490,6 +537,7 @@ $('#language').addEventListener('change', (e) => {
 
 onLanguageChanged(() => {
   relocalizeDynamic();
+  if ($('#credential').open) updateCredentialHint();
   $('#collapse-toolbar').setAttribute(
     'aria-label',
     t($('main').classList.contains('collapsed') ? 'toolbar.expand' : 'toolbar.collapse')
@@ -500,7 +548,8 @@ document.addEventListener('keydown', (e) => {
   if (isComposing(e)) return;
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && !document.querySelector('dialog[open]') && state.view !== 'settings') {
     e.preventDefault();
-    $('#search').focus();
+    const input = workspaceViews.has(state.view) ? $('#workspace input[type=search]') : $('#search');
+    input?.focus();
   }
   if (e.key === 'Escape' && state.selectedId && !document.querySelector('dialog[open]')) {
     closeDetail();
@@ -514,7 +563,8 @@ if (readPref('ky.toolbarCollapsed', '0') === '1') {
   $('main').classList.add('collapsed');
   $('#collapse-toolbar').setAttribute('aria-expanded', 'false');
 }
-setView('history');
+setView('home');
+renderHome(state.snapshot);
 
 if (desktop) {
   let lastTouch = 0;

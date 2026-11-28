@@ -37,3 +37,13 @@ bool ky_show_secret(void *rawWindow, const unsigned char *bytes, size_t length, 
     });
     return true;
 }
+
+char *ky_choose_export(const char *name) {
+    if (!NSThread.isMainThread) return NULL;
+    NSSavePanel *panel = [NSSavePanel savePanel];
+    panel.nameFieldStringValue = [NSString stringWithUTF8String:name];
+    panel.canCreateDirectories = YES;
+    return [panel runModal] == NSModalResponseOK ? strdup(panel.URL.fileSystemRepresentation) : NULL;
+}
+
+void ky_release_path(char *path) { free(path); }

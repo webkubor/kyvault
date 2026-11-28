@@ -28,8 +28,17 @@ export const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 export function el(tag, cls, text) {
   const node = document.createElement(tag);
   if (cls) node.className = cls;
+  if (['input', 'textarea', 'select'].includes(tag)) node.classList.add('ky-control');
   if (text !== undefined) node.textContent = text;
   return node;
+}
+
+// Keep the native editing surface (IME, autofill, paste and accessibility).
+// Static forms use the same ky-control class and an explicit label/for pair.
+export function formField(label, control) {
+  const wrapper = el('label', 'ky-field');
+  wrapper.append(typeof label === 'string' ? el('span', '', label) : label, control);
+  return wrapper;
 }
 
 export function showEl(node, show) {

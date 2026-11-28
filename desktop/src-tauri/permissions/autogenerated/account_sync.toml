@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-account-sync"
+description = "Enables the account_sync command without any pre-configured scope."
+commands.allow = ["account_sync"]
+
+[[permission]]
+identifier = "deny-account-sync"
+description = "Denies the account_sync command without any pre-configured scope."
+commands.deny = ["account_sync"]

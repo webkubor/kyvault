@@ -1,16 +1,16 @@
 # DESIGN.md — Ky desktop UI
 
-Status: v2 (2026-11-12) · Owner: `desktop/ui/`
+Status: desktop 0.3.0 (2026-11-28) · Owner: `desktop/ui/`
 Source of truth: this file + the shipped assets in `desktop/ui/`.
 
 ## 1. Scope
 
-Ky desktop is a lightweight, local-only clipboard history + named-snippet + vault
+Ky desktop is a local clipboard, credential, private collection and idea-sharing
 surface for the **kyvault** CLI. It is **not** the website (`docs/`). The desktop
 app is a static vanilla HTML/CSS/JS bundle served inside **Tauri 2**. No
 bundler, no build step, no framework, no network calls.
 
-Everything it renders comes from a single backend snapshot. The frontend never
+The history and vault use a backend snapshot. The private workspace lists titles and loads one document when the user opens it. The frontend never
 holds plaintext secrets, never persists secret data, and never asks for or
 reinvents redaction — it only displays what the backend returns.
 
@@ -113,17 +113,15 @@ Rules enforced in `styles.css`:
 - Toolbar collapse: `max-height` + opacity transition (`--dur-med`), chevron
   rotates 180° in sync.
 - `prefers-reduced-motion: reduce` collapses all animations/transitions to
-  0.01ms and disables the press transform.
+  zero and disables the press transform.
 
-## 6. Layout — compact, one column
+## 6. Desktop navigation and detail
 
-- Window **860×620** (minimum **680×480**).
-- Narrow **176px** sidebar: History / Vault / Snippets / Settings, plus a lock
-  affordance. Only the **active** item is tinted.
-- **One content column.** The list fills it; selecting an entry opens a
-  **detail sheet** that slides over the list (`position:absolute` inside
-  `main`, `inset:0`). There is no permanent preview pane — at 680px a
-  permanent third column left the list with no room to breathe.
+- The window opens at 1024×680 and supports 680×480. Recent history, private work and sharing are separate destinations. The sidebar uses a short label plus a monochrome symbol for each destination. Compact windows keep the icons and their accessible names.
+- At 940px and above the vault list and the selected credential share the window. Narrow windows open a detail sheet. Returning to the list restores focus to the selected row. The reveal control opens an AppKit sheet, keeping the credential value out of the WebView.
+- Private documents display their titles in the list. Opening a document reveals its text and image. Sharing starts from a draft with every paragraph and image unchecked. Preview shows only the selection. The exported file carries the immutable share identifier so returned feedback can find that exact version.
+- These decisions use Apple's [sidebar guidance](https://developer.apple.com/design/human-interface-guidelines/sidebars), W3C's [visible focus guidance](https://www.w3.org/WAI/WCAG22/Understanding/focus-visible.html) and [interaction motion guidance](https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions.html).
+
 - **Search bar** (Cmd/Ctrl+F): one field with a leading glyph. The earlier
   revision put a "搜索" label inline, a ⌘F hint on the right and a capture
   button in the same row, which read as three competing things.

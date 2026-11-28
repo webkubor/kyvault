@@ -11,8 +11,12 @@ const purposes = [
   ['backup', '备份'], ['token', '令牌'], ['pin', 'PIN 码'],
 ];
 
+export function platformLabel(id, lang) {
+  return platforms[id]?.[lang === 'en' ? 1 : 0] || id;
+}
+
 function describe(entry, english) {
-  const platform = platforms[entry.platform]?.[english ? 1 : 0] || entry.platform;
+  const platform = platformLabel(entry.platform, english ? 'en' : 'zh-CN');
   const raw = entry.name || entry.reference.split('/').slice(3).join('/');
   const name = raw.startsWith(entry.platform + '-') ? raw.slice(entry.platform.length + 1) : raw;
   let purpose = name.replace(/[-_/]+/g, ' ').trim();

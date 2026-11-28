@@ -1,11 +1,12 @@
 {
   "name": "ky-desktop",
-  "version": "0.2.7",
+  "version": "0.3.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
-    "check": "node scripts/check-modules.mjs && node scripts/test-vault.mjs",
+    "check": "node scripts/check-modules.mjs && node scripts/test-vault.mjs && node scripts/test-share.mjs",
     "check:modules": "node scripts/check-modules.mjs"
   },
   "devDependencies": {

@@ -160,7 +160,9 @@ impl Store {
         }
         let content = fs::read_to_string(&f)?;
         let val: Value = serde_json::from_str(&content).context("meta.json 语法损坏")?;
-        Ok(val.as_object().cloned().unwrap_or_default())
+        val.as_object()
+            .cloned()
+            .ok_or_else(|| anyhow!("meta.json 顶层必须为对象"))
     }
 
     pub fn save_meta(&self, meta: &serde_json::Map<String, Value>) -> Result<()> {
@@ -197,15 +199,81 @@ impl Store {
 
     /// 已存在就原样返回 —— 绝不覆盖：覆盖 master key 等于让全部存量密文永久解不开。
     pub fn init_master_key(&self) -> Result<String> {
-        let f = self.master_key_file();
-        if f.exists() {
-            return Ok(fs::read_to_string(&f)?.trim().to_string());
+        let _lock = self.lock()?;
+        self.init_key_locked()
+    }
+
+    fn init_key_locked(&self) -> Result<String> {
+        use std::io::Write;
+        let path = self.master_key_file();
+        if path.try_exists()? {
+            return Ok(fs::read_to_string(path)?.trim().to_owned());
         }
-        fs::create_dir_all(&self.root)?;
+        // Only known empty store/repository scaffolding qualifies. A backup,
+        // interrupted write, partial guard or unrecognized file needs recovery.
+        for item in fs::read_dir(&self.root)? {
+            let item = item?;
+            let ty = item.file_type()?;
+            let name = item.file_name();
+            match name.to_str() {
+                Some(".git") if ty.is_dir() || ty.is_file() => (),
+                Some(".lock" | ".gitignore" | "README.md") if ty.is_file() => (),
+                Some("secrets.json" | "meta.json") if ty.is_file() => {
+                    let value: Value = serde_json::from_slice(&fs::read(item.path())?)
+                        .context("库状态不明，请恢复原 master key")?;
+                    anyhow::ensure!(
+                        value.as_object().is_some_and(Map::is_empty),
+                        "库已有数据，请恢复原 master key"
+                    );
+                }
+                _ => anyhow::bail!("库中有旧文件或 Auth Guard，请恢复原 master key"),
+            }
+        }
         let key = new_master_key_b64();
-        fs::write(&f, &key)?;
-        harden(&f)?;
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let staged = self.root.join(".initializing.key");
+        let mut file = options.open(&staged)?;
+        file.write_all(key.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(staged, path)?;
+        #[cfg(unix)]
+        fs::File::open(&self.root)?.sync_all()?;
         Ok(key)
+    }
+
+    /// Prepare a desktop write without running legacy Auth Guard recovery.
+    /// A partial/invalid key must never be used to encrypt a new record.
+    pub fn prepare_desktop_key(&self) -> Result<()> {
+        use base64::{engine::general_purpose::STANDARD, Engine};
+        let _lock = self.lock()?;
+        let key = if let Some(key) = std::env::var("KEYRING_MASTER_KEY")
+            .ok()
+            .filter(|k| !k.trim().is_empty())
+        {
+            key
+        } else {
+            anyhow::ensure!(
+                !self.root.join("auth.json").try_exists()?
+                    && !self.root.join("master.key.enc").try_exists()?,
+                "请先恢复旧 Auth Guard 密钥库"
+            );
+            self.init_key_locked()?
+        };
+        anyhow::ensure!(
+            STANDARD
+                .decode(key.trim())
+                .ok()
+                .is_some_and(|k| k.len() == 32),
+            "请恢复有效的 master key"
+        );
+        Ok(())
     }
 
     fn aes_key(&self) -> Result<[u8; 32]> {
@@ -418,10 +486,9 @@ impl Store {
             // 不返回明文：明文已经不对了，交给下游只会换一个更难查的报错
             return Err(anyhow!(format!(
                 "完整性校验失败：{}/{} 的密文解出来的内容与写入时记录的 sha256 不符。\n\
-                 记录：{}\n实算：{}\n\
-                 密钥库可能被改动过，或密文写坏。**没有返回明文** —— \
+                  密钥库可能被改动过，或密文写坏。**没有返回明文** —— \
                  确认后可删掉 meta.json 里该条目的 sha256 再重试。",
-                platform, name, want, got,
+                platform, name,
             )));
         }
         Ok(())
@@ -444,95 +511,77 @@ impl Store {
         let ct = encrypt_joined(value, &key)?;
         let mut data = self.load()?;
 
-        if platform == "cli" {
-            if let Some((cli, profile)) = name.split_once('/') {
-                let clis = Self::obj_mut(&mut data, "_clis");
-                clis.entry(cli.to_string())
-                    .or_insert_with(|| json!({}))
-                    .as_object_mut()
-                    .unwrap()
-                    .insert(profile.to_string(), Value::String(ct));
-                self.save(&data)?;
-                self.update_meta_for_set(&platform, &name, value, kind, account)?;
-                return Ok(());
-            }
-        }
-        if platform == "server" {
-            if let Some((host, field)) = name.split_once('/') {
-                let servers = Self::obj_mut(&mut data, "_servers");
-                servers
-                    .entry(host.to_string())
-                    .or_insert_with(|| json!({}))
-                    .as_object_mut()
-                    .unwrap()
-                    .insert(field.to_string(), Value::String(ct));
-                self.save(&data)?;
-                self.update_meta_for_set(&platform, &name, value, kind, account)?;
-                return Ok(());
-            }
-        }
-        let p = Self::obj_mut(&mut data, &platform);
-        p.entry("accounts".to_string()).or_insert_with(|| json!({}));
-        p.entry("keys".to_string())
+        let (section, bucket, field) = match (platform.as_str(), name.split_once('/')) {
+            ("cli", Some((cli, profile))) => ("_clis", cli, profile),
+            ("server", Some((host, field))) => ("_servers", host, field),
+            _ => (platform.as_str(), "keys", name.as_str()),
+        };
+        let node = data
+            .as_object_mut()
+            .context("库结构损坏")?
+            .entry(section)
             .or_insert_with(|| json!({}))
             .as_object_mut()
-            .unwrap()
-            .insert(name.clone(), Value::String(ct));
-        self.save(&data)?;
-        self.update_meta_for_set(&platform, &name, value, kind, account)?;
-        Ok(())
+            .context("平台记录损坏")?;
+        if bucket == "keys" && section == platform {
+            node.entry("accounts").or_insert_with(|| json!({}));
+        }
+        node.entry(bucket)
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .context("凭据分组损坏")?
+            .insert(field.into(), Value::String(ct));
+
+        if kind.is_none() && account.is_none() && !self.meta_file().try_exists()? {
+            return self.save(&data);
+        }
+        let mut meta = self.load_meta()?;
+        let entry = meta
+            .entry(format!("{platform}/{name}"))
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .context("凭据元数据损坏")?;
+        if let Some(k) = kind.filter(|k| !k.trim().is_empty()) {
+            entry.insert("kind".into(), json!(k.trim()));
+        }
+        entry.entry("kind").or_insert_with(|| json!("API Key"));
+        if let Some(a) = account.filter(|a| !a.is_empty()) {
+            entry.insert("account".into(), json!(a));
+        }
+        let password = Self::scrub_password_meta(entry);
+        if !password {
+            entry.insert("last4".into(), json!(crate::model::last4(value)));
+            entry.insert("sha256".into(), json!(crate::model::sha256_hex(value)));
+            entry.insert("length".into(), json!(value.chars().count()));
+            entry.insert("byte_len".into(), json!(value.len()));
+            entry.insert("line_count".into(), json!(value.lines().count()));
+        }
+        let now = crate::model::now_utc();
+        entry.entry("created_at").or_insert_with(|| json!(now));
+        entry.insert("updated_at".into(), json!(now));
+        if password {
+            // Persist the sensitive classification before replacing ciphertext.
+            // Even an interrupted save must never expose a new password suffix.
+            self.save_meta(&meta)?;
+            self.save(&data)
+        } else {
+            self.save(&data)?;
+            self.save_meta(&meta)
+        }
     }
 
-    fn update_meta_for_set(
-        &self,
-        platform: &str,
-        name: &str,
-        value: &str,
-        kind: Option<&str>,
-        account: Option<&str>,
-    ) -> Result<()> {
-        if self.meta_file().exists() {
-            let mut meta = self.load_meta().unwrap_or_default();
-            let key = format!("{platform}/{name}");
-            let mut entry = meta
-                .get(&key)
-                .and_then(|v| v.as_object())
-                .cloned()
-                .unwrap_or_default();
-            if let Some(k) = kind {
-                if !k.is_empty() {
-                    entry.insert("kind".into(), Value::String(k.to_string()));
-                }
-            } else if !entry.contains_key("kind") {
-                entry.insert("kind".into(), Value::String("API Key".to_string()));
-            }
-            if let Some(a) = account {
-                if !a.is_empty() {
-                    entry.insert("account".into(), Value::String(a.to_string()));
-                }
-            }
-            entry.insert("last4".into(), Value::String(crate::model::last4(value)));
-            entry.insert("length".into(), Value::Number(value.chars().count().into()));
-            entry.insert(
-                "sha256".into(),
-                Value::String(crate::model::sha256_hex(value)),
-            );
-            // 字节数与行数：多行密钥（尤其 PEM）截断时这两个数最直观 ——
-            // 2026-09-19 那次私钥只剩一行，line_count=1 一眼就能看出来。
-            // 与 length（字符数）并存：UTF-8 下两者不等，不是重复。
-            entry.insert("byte_len".into(), Value::Number(value.len().into()));
-            entry.insert(
-                "line_count".into(),
-                Value::Number(value.lines().count().into()),
-            );
-            entry.insert("updated_at".into(), Value::String(crate::model::now_utc()));
-            if !entry.contains_key("created_at") {
-                entry.insert("created_at".into(), Value::String(crate::model::now_utc()));
-            }
-            meta.insert(key, Value::Object(entry));
-            let _ = self.save_meta(&meta);
+    fn scrub_password_meta(entry: &mut Map<String, Value>) -> bool {
+        if !entry
+            .get("kind")
+            .and_then(Value::as_str)
+            .is_some_and(|k| k.trim().eq_ignore_ascii_case("Password"))
+        {
+            return false;
         }
-        Ok(())
+        for field in ["last4", "sha256", "length", "byte_len", "line_count"] {
+            entry.remove(field);
+        }
+        true
     }
 
     pub fn annotate(
@@ -569,6 +618,7 @@ impl Store {
             entry.insert("visibility".into(), Value::String(v.to_string()));
         }
         entry.insert("updated_at".into(), Value::String(crate::model::now_utc()));
+        Self::scrub_password_meta(&mut entry);
         meta.insert(key, Value::Object(entry));
         self.save_meta(&meta)?;
         Ok(true)
@@ -745,7 +795,9 @@ impl Store {
                             }
                         }
                         if let Some(last4) = m.get("last4").and_then(|v| v.as_str()) {
-                            item.last4 = last4.to_string();
+                            if !item.kind.trim().eq_ignore_ascii_case("Password") {
+                                item.last4 = last4.to_string();
+                            }
                         }
                         if let Some(len) = m.get("length").and_then(|v| v.as_u64()) {
                             item.length = len;
@@ -1132,6 +1184,95 @@ mod tests {
         assert_eq!(p["github"].0, vec!["webkubor"]);
         assert!(s.delete_from_bucket("github", "keys", "pat").unwrap());
         assert!(s.list_bucket("github", "keys").unwrap().is_empty());
+    }
+
+    #[test]
+    fn password_rotations_and_annotations_remove_legacy_verifiers() {
+        let (dir, s) = store();
+        let reference = "secret://openai/login";
+        s.set_secret_with_meta(
+            reference,
+            "fixture-api-key",
+            Some("API Key"),
+            Some("account"),
+        )
+        .unwrap();
+        let mut meta = s.load_meta().unwrap();
+        let entry = meta.get_mut("openai/login").unwrap();
+        entry["kind"] = json!("Password");
+        entry["last4"] = json!("old");
+        entry["sha256"] = json!(crate::model::sha256_hex("old"));
+        s.save_meta(&meta).unwrap();
+        assert!(s.list_secrets().unwrap()[0].last4.is_empty());
+        s.annotate(reference, Some("account2"), None, None, None, None)
+            .unwrap();
+        assert!(s.load_meta().unwrap()["openai/login"]
+            .get("sha256")
+            .is_none());
+        s.save_meta(&meta).unwrap();
+        s.set_secret(reference, "a9Q").unwrap();
+        let current = s.load_meta().unwrap();
+        let entry = &current["openai/login"];
+        for field in ["last4", "sha256", "length", "byte_len", "line_count"] {
+            assert!(entry.get(field).is_none());
+        }
+        assert_eq!(entry["kind"], "Password");
+        assert_eq!(entry["account"], "account");
+        assert!(s.get_secret(reference).unwrap().as_deref() == Some("a9Q"));
+        let public = fs::read_to_string(dir.path().join("meta.json")).unwrap();
+        assert!(!public.contains("a9Q") && !public.contains(&crate::model::sha256_hex("a9Q")));
+    }
+
+    #[test]
+    fn initialization_refuses_existing_ciphertext_partial_guards_and_uncertain_states() {
+        for (name, data) in [
+            ("secrets.json", r#"{"site":{"keys":{"x":"ciphertext"}}}"#),
+            ("secrets.json", "[]"),
+            ("secrets.json", "invalid"),
+            ("meta.json", r#"{"site/login":{}}"#),
+            ("auth.json", "{}"),
+            ("master.key.enc", "wrapped"),
+            ("secrets.json.bak", "backup"),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let store = Store::new(dir.path());
+            fs::write(dir.path().join(name), data).unwrap();
+            assert!(store.init_master_key().is_err());
+            assert!(!store.master_key_path().exists());
+            assert_eq!(fs::read_to_string(dir.path().join(name)).unwrap(), data);
+        }
+    }
+
+    #[test]
+    fn concurrent_first_password_writers_use_one_key() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("secrets.json"), "{}").unwrap();
+        fs::write(dir.path().join("meta.json"), "{}").unwrap();
+        std::thread::scope(|scope| {
+            for i in 0..8 {
+                let s = Store::new(dir.path());
+                scope.spawn(move || {
+                    s.prepare_desktop_key().unwrap();
+                    s.set_secret_with_meta(
+                        &format!("secret://site/{i}"),
+                        "fixture",
+                        Some("Password"),
+                        Some("acct"),
+                    )
+                    .unwrap();
+                });
+            }
+        });
+        let s = Store::new(dir.path());
+        assert_eq!(s.list_secrets().unwrap().len(), 8);
+        for i in 0..8 {
+            assert!(
+                s.get_secret(&format!("secret://site/{i}"))
+                    .unwrap()
+                    .as_deref()
+                    == Some("fixture")
+            );
+        }
     }
 
     #[test]
