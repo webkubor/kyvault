@@ -20,6 +20,8 @@
 
 Play the demo to see how to read the release notes and cancel before restarting. The available update uses test data.
 
+https://github.com/user-attachments/assets/c8fd26bf-28c0-4fac-bd11-6e6d0042f6e2
+
 ## On your Mac
 
 - **Capture a thought.** Press ⌥⌘N to write and ⌘↩ to save privately. You can also collect selected text from a webpage. [Browser setup](desktop/browser/README.md)

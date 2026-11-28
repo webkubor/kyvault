@@ -20,6 +20,8 @@
 
 点击截图播放演示：打开新版本提示，阅读更新说明，再取消重启。画面使用测试更新数据。
 
+https://github.com/user-attachments/assets/bf222d0b-031a-44d5-8692-9b95b9b40a6d
+
 ## 在 Mac 上开始
 
 - **记想法**　按 ⌥⌘N 直接写，⌘↩ 存到「私密收藏」。读网页时也可以选中文字，右键收进闪记。[按网站自动收藏](desktop/browser/README.md)
