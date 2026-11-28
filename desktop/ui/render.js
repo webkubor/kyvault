@@ -7,6 +7,8 @@
 import { state, $, $$, el, showEl, invoke, formatWhen, firstLine, setError, setStatus, relocalizeMessages } from './core.js';
 import { t } from './lang.js';
 
+import { credentialTitle, matchesCredential } from './vault.js';
+
 export const VIEW_META = {
   history: 'view.history',
   vault: 'view.vault',
@@ -17,6 +19,9 @@ export const VIEW_META = {
 // the language changes.
 export function renderViewHeading() {
   const key = VIEW_META[state.view] || 'view.history';
+  const search = $('#search');
+  search.placeholder = t(isSecretView() ? 'vault.search' : 'search.placeholder');
+  search.setAttribute('aria-label', search.placeholder);
   $('#view-title').textContent = t(`${key}.title`);
 }
 
@@ -86,9 +91,10 @@ function entrySubtitle(e) {
 function matched(entries) {
   const q = state.filter.trim().toLowerCase();
   if (!q) return entries;
+  if (isSecretView()) return entries.filter(entry => matchesCredential(entry, q));
   return entries.filter((e) => {
-    const title = isSecretView() ? e.reference : entryTitle(e);
-    const subtitle = isSecretView() ? e.platform || '' : entrySubtitle(e);
+    const title = entryTitle(e);
+    const subtitle = entrySubtitle(e);
     return title.toLowerCase().includes(q) || subtitle.toLowerCase().includes(q);
   });
 }
@@ -139,10 +145,9 @@ function renderEntry(entry) {
   const btn = el('button', 'entry');
   btn.type = 'button';
   if (isSecretView()) {
-    btn.appendChild(el('span', 'entry-title', entry.reference));
+    btn.appendChild(el('span', 'entry-title', credentialTitle(entry, state.lang)));
     const meta = el('span', 'entry-meta');
-    if (entry.platform) meta.appendChild(el('span', '', entry.platform));
-    meta.appendChild(el('span', 'badge', t('badge.credential')));
+    meta.appendChild(el('span', '', [entry.account, ...(entry.aliases || []), entry.name].filter(Boolean).join(' · ')));
     btn.appendChild(meta);
   } else if (entry.image) {
     // 图片条目：缩略图 + 尺寸信息；点击复制（与文本一致，主动作在监听器里）。
@@ -259,12 +264,12 @@ export function renderDetail() {
   back.setAttribute('aria-label', t('action.back'));
   back.appendChild(el('span', 'back-icon', ''));
   head.appendChild(back);
-  const title = el('h2', null, isSecretView() ? entry.reference : entryTitle(entry));
+  const title = el('h2', null, isSecretView() ? credentialTitle(entry, state.lang) : entryTitle(entry));
   head.appendChild(title);
   pane.appendChild(head);
 
   if (isSecretView()) {
-    pane.appendChild(el('p', 'detail-note', t('preview.secret.note')));
+    pane.appendChild(el('p', 'detail-note', entry.reference));
     pane.appendChild(secretActions(entry));
   } else {
     const meta = el('p', 'detail-note', t('preview.saved', { time: formatWhen(entry.created_at) }));
@@ -287,6 +292,12 @@ export function renderDetail() {
 
 function secretActions(entry) {
   const actions = el('div', 'actions');
+  if (state.snapshot.native_reveal) {
+    const reveal = el('button', 'primary', t('vault.show'));
+    reveal.type = 'button';
+    reveal.dataset.action = 'show-secret';
+    actions.appendChild(reveal);
+  }
   const copyRef = el('button', '', t('action.copyReference'));
   copyRef.type = 'button';
   copyRef.dataset.action = 'copy-reference';

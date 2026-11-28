@@ -255,6 +255,7 @@ fn main() {
             commands::restore_entry,
             commands::copy_entry,
             commands::copy_reference,
+            commands::show_secret,
             commands::copy_secret,
             commands::save_secret,
             commands::save_secret_with_meta,

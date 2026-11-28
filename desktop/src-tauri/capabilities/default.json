@@ -19,6 +19,7 @@
     "allow-get-entry-image",
     "allow-copy-reference",
     "allow-copy-secret",
+    "allow-show-secret",
     "allow-save-secret",
     "allow-delete-secret",
     "allow-lock-app",

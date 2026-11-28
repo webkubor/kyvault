@@ -339,12 +339,16 @@ pub fn get_app_info() -> serde_json::Value {
 
 #[derive(Serialize)]
 pub struct Secret {
+    account: String,
+    kind: String,
+    aliases: Vec<String>,
     reference: String,
     platform: String,
     name: String,
 }
 #[derive(Serialize)]
 pub struct Snapshot {
+    native_reveal: bool,
     entries: Vec<Entry>,
     secrets: Vec<Secret>,
     monitoring: bool,
@@ -355,6 +359,7 @@ pub struct Snapshot {
 fn read_snapshot(state: &DesktopState, session: &Session) -> Result<Snapshot> {
     if session.locked {
         return Ok(Snapshot {
+            native_reveal: cfg!(target_os = "macos"),
             entries: vec![],
             secrets: vec![],
             monitoring: false,
@@ -363,12 +368,22 @@ fn read_snapshot(state: &DesktopState, session: &Session) -> Result<Snapshot> {
         });
     }
     let store = vault()?;
+    let aliases = kyvault::alias::Aliases::default_location()
+        .map_err(|_| "无法定位别名表")?
+        .load();
+    let mut by_ref = std::collections::HashMap::<String, Vec<String>>::new();
+    for (alias, reference) in aliases {
+        by_ref.entry(reference).or_default().push(alias);
+    }
     let secrets = store
         .list_secrets()
         .map_err(|_| "读取密钥列表失败，请检查 ky doctor")?
         .into_iter()
         .map(|meta| Secret {
+            aliases: by_ref.remove(&meta.r#ref()).unwrap_or_default(),
             reference: meta.r#ref(),
+            kind: meta.kind,
+            account: meta.account,
             platform: meta.platform,
             name: meta.name,
         })
@@ -382,6 +397,7 @@ fn read_snapshot(state: &DesktopState, session: &Session) -> Result<Snapshot> {
         .collect();
     Ok(Snapshot {
         entries,
+        native_reveal: cfg!(target_os = "macos"),
         secrets,
         monitoring: session.monitoring,
         lang: load_prefs(state).lang,
@@ -531,6 +547,51 @@ pub fn copy_reference(reference: String, state: State<DesktopState>) -> Result<(
     let _session = active(&state)?;
     validate_reference(&reference)?;
     copy(reference)
+}
+#[tauri::command]
+pub fn show_secret(
+    window: tauri::WebviewWindow,
+    reference: String,
+    state: State<DesktopState>,
+) -> Result<()> {
+    let _session = active(&state)?;
+    validate_reference(&reference)?;
+    #[cfg(target_os = "macos")]
+    {
+        let value = vault()?
+            .get_secret(&reference)
+            .map_err(|_| "密钥读取失败")?
+            .ok_or("密钥不存在")?;
+        let parent = window.ns_window().map_err(|_| "窗口不可用")?;
+        extern "C" {
+            fn ky_show_secret(
+                window: *mut std::ffi::c_void,
+                bytes: *const u8,
+                len: usize,
+                english: bool,
+            ) -> bool;
+        }
+        // Synchronous Tauri commands execute on the main thread. AppKit copies
+        // the bytes into its sheet; no plaintext crosses the WebView bridge.
+        let shown = unsafe {
+            ky_show_secret(
+                parent,
+                value.as_ptr(),
+                value.len(),
+                load_prefs(&state).lang == "en",
+            )
+        };
+        if shown {
+            Ok(())
+        } else {
+            Err("当前窗口无法显示密钥".into())
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = window;
+        Err("当前平台不支持原生查看".into())
+    }
 }
 #[tauri::command]
 pub fn copy_secret(reference: String, state: State<DesktopState>) -> Result<()> {
@@ -697,6 +758,14 @@ pub fn lock(app: &tauri::AppHandle) -> Result<()> {
     let state = app.state::<DesktopState>();
     let mut session = state.session.lock().map_err(|_| "会话不可用")?;
     session.locked = true;
+    #[cfg(target_os = "macos")]
+    app.run_on_main_thread(|| {
+        extern "C" {
+            fn ky_hide_secret();
+        }
+        unsafe { ky_hide_secret() };
+    })
+    .map_err(|_| "窗口不可用")?;
     // Locking hides content; it must not silently switch off clipboard
     // history. The capture loop already skips while locked, and the user's
     // choice stays in prefs.json so unlocking restores it.

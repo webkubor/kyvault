@@ -1,4 +1,11 @@
 fn main() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        println!("cargo:rerun-if-changed=src/secret_sheet.m");
+        cc::Build::new()
+            .file("src/secret_sheet.m")
+            .flag("-fobjc-arc")
+            .compile("ky_secret_sheet");
+    }
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "touch_activity",
@@ -12,6 +19,7 @@ fn main() {
             "copy_entry",
             "copy_reference",
             "copy_secret",
+            "show_secret",
             "save_secret",
             "delete_secret",
             "lock_app",

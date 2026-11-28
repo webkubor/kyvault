@@ -324,6 +324,10 @@ $('#detail').addEventListener('click', async (e) => {
   }
   if (command === 'copy-entry') return action('copy_entry', { id }, 'status.entryCopied');
   if (command === 'copy-reference') return action('copy_reference', { reference }, 'status.refCopied');
+  if (command === 'show-secret') {
+    try { await invoke('show_secret', { reference }); } catch { setError('err.generic'); }
+    return;
+  }
   if (command === 'copy-secret') {
     if (await confirm('confirm.copySecret.title', 'confirm.copySecret.copy', 'confirm.copySecret.label')) {
       await action('copy_secret', { reference }, 'status.secretCopied');
