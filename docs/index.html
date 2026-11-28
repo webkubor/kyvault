@@ -4,20 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>Kyvault — Local-First Secret Manager · 密钥管理器</title>
-  <meta name="description" content="Kyvault 是本地优先的 secret manager（密钥管理器）：管理 API Key、Token、密码与凭证，替代 .env / dotenv（dotenv alternative），用 AES-256-GCM 加密，通过 ky run 将凭证引用解析为子进程环境变量，减少向模型上下文传递明文。">
+  <title>Ky for Mac · 私人密码与图文工作台 | Kyvault CLI</title>
+  <meta name="description" content="在 Mac 上查找密码、保存私密图文，选好段落和配图再分享。Kyvault CLI 可通过 ky run 将本地凭据注入子进程。">
   <meta name="keywords" content="密钥管理, 秘钥管理, Token 管理, 令牌管理, API Key 管理, 凭证管理, secret manager, secret management, API key manager, token manager, password manager, dotenv alternative, .env alternative, local-first secret manager">
   <meta name="author" content="Kyvault contributors">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Kyvault — Local-First Secret Manager · 密钥管理器">
-  <meta property="og:description" content="Keep plaintext out of AI context. Store secrets locally, then inject them into subprocesses through harmless aliases. 默认本地加密，别名注入，减少向模型传递明文。">
-  <meta property="og:image" content="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/blog/projects/keyring-banner/banner.webp">
-  <meta property="og:image:alt" content="Kyvault banner">
+  <meta property="og:title" content="Ky for Mac · 私人密码与图文工作台 | Kyvault CLI">
+  <meta property="og:description" content="在 Mac 上查找密码、保存私密图文，选好段落和配图再分享。Kyvault CLI 可通过 ky run 将本地凭据注入子进程。">
+  <meta property="og:image" content="https://webkubor.github.io/kyvault/assets/desktop/social.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Ky for Mac 私人工具工作台的桌面界面">
   <meta property="og:url" content="https://webkubor.github.io/kyvault/">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Kyvault — Local-First Secret Manager · 密钥管理器">
-  <meta name="twitter:description" content="本地加密密钥管理与 AI 安全别名注入。A local-first secret manager for API keys, tokens, passwords, and credentials.">
-  <meta name="twitter:image" content="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/blog/projects/keyring-banner/banner.webp">
+  <meta name="twitter:title" content="Ky for Mac · 私人密码与图文工作台 | Kyvault CLI">
+  <meta name="twitter:description" content="在 Mac 上查找密码、保存私密图文，选好段落和配图再分享。Kyvault CLI 可通过 ky run 将本地凭据注入子进程。">
+  <meta name="twitter:image" content="https://webkubor.github.io/kyvault/assets/desktop/social.png">
+  <meta name="twitter:image:alt" content="Ky for Mac 私人工具工作台的桌面界面">
   <link rel="canonical" href="https://webkubor.github.io/kyvault/">
   <link rel="stylesheet" href="styles.css">
   <script type="application/ld+json">
@@ -52,18 +55,46 @@
   <header class="site-header">
     <a class="brand" href="#top" aria-label="Kyvault home"><span class="brand-mark" aria-hidden="true">K</span><span>KYVAULT</span></a>
     <nav aria-label="主导航 / Main navigation">
-      <a href="#how">工作原理</a><a href="#features">功能</a><a href="#compare">行为与边界</a><a href="#faq">FAQ</a>
-      <a class="nav-cta" href="https://github.com/webkubor/kyvault/releases/latest">获取 ky <span aria-hidden="true">↗</span></a>
+      <a href="#top">Mac 桌面版</a><a href="#cli">CLI</a><a href="#how">工作原理</a><a href="#features">功能</a><a href="#compare">行为与边界</a><a href="#faq">FAQ</a>
+      <a class="nav-cta" href="https://github.com/webkubor/kyvault/releases/tag/v2.8.3">获取 CLI <span aria-hidden="true">↗</span></a>
     </nav>
   </header>
   <main id="main">
-    <section class="hero" id="top" aria-labelledby="hero-title">
+    <section class="desktop-intro" id="top" aria-labelledby="desktop-title">
+      <div class="desktop-pitch">
+        <p class="desktop-name" lang="en">Ky for Mac</p>
+        <h1 id="desktop-title">你的私人<wbr><span class="desktop-title-unit">工具工作台</span></h1>
+        <p class="desktop-lede">找回一个密码，收好一张图，把写好的想法分享出去。凭据与私密图文在本机加密保存。</p>
+        <div class="hero-actions">
+          <a class="button primary" href="https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.1/Ky_0.3.1_aarch64.dmg">下载 Mac 版 <span aria-hidden="true">↓</span></a>
+          <a class="button secondary" href="#install">安装 CLI</a>
+        </div>
+        <p class="hero-meta">Apple Silicon · DMG · <a href="https://github.com/webkubor/kyvault/releases/tag/desktop-v0.3.1">0.3.1 版本说明</a></p>
+      </div>
+      <a class="desktop-preview" href="assets/desktop/home.png" aria-label="查看工作台首页原图"><img src="assets/desktop/home.png" alt="Ky 工作台首页，汇总凭据、私密收藏和想法草稿的数量" fetchpriority="high"></a>
+    </section>
+    <section class="desktop-gallery" aria-label="Mac 桌面功能">
+      <figure>
+        <figcaption><h2>找回密码</h2><p>按平台、账号或别名搜索。在 Mac 原生窗口查看原值，窗口失焦即隐藏。</p></figcaption>
+        <a href="assets/desktop/vault.png" aria-label="查看密码库原图"><img loading="lazy" src="assets/desktop/vault.png" alt="密码库中的平台筛选、凭据列表与详情"></a>
+      </figure>
+      <figure>
+        <figcaption>
+          <h2>收藏私密图文</h2>
+          <p>笔记和配图保存在本机。分享时，从草稿里勾选段落和配图，生成分享卡片。</p>
+          <p>复制卡片图片，粘贴到 X 等社交平台，或导出为 PNG。也可以导出 HTML，让对方离线阅读，再把反馈发回给你。</p>
+          <p><a href="assets/desktop/card.png">查看导出的 PNG 卡片</a></p>
+        </figcaption>
+        <a href="assets/desktop/private.png" aria-label="查看私密收藏原图"><img loading="lazy" src="assets/desktop/private.png" alt="Ky 的私密图文收藏界面"></a>
+      </figure>
+    </section>
+    <section class="hero" id="cli" aria-labelledby="hero-title">
       <div class="hero-copy">
         <p class="eyebrow"><span class="pulse" aria-hidden="true"></span> LOCAL-FIRST · AES-256-GCM · ZERO NETWORK FOR LOCAL DECRYPTION</p>
-        <h1 id="hero-title">本地优先的密钥管理器<span>Local-first secret manager</span></h1>
+        <h2 id="hero-title">本地优先的密钥管理器<span>Local-first secret manager</span></h2>
         <p class="hero-lede">让 AI 用凭证引用构造命令，无需先把明文交给模型。Kyvault 默认本地加密存储，在运行时将值注入子进程环境。</p>
         <p class="hero-lede en">Use secret references in AI-generated commands, then inject values at runtime. Child output and plaintext reads still need care.</p>
-        <div class="hero-actions"><a class="button primary" href="https://github.com/webkubor/kyvault/releases/latest">安装 Kyvault <span aria-hidden="true">→</span></a><a class="button secondary" href="https://github.com/webkubor/kyvault">查看源码</a></div>
+        <div class="hero-actions"><a class="button primary" href="https://github.com/webkubor/kyvault/releases/tag/v2.8.3">安装 Kyvault <span aria-hidden="true">→</span></a><a class="button secondary" href="https://github.com/webkubor/kyvault">查看源码</a></div>
         <p class="hero-meta">开源 MIT · macOS / Linux / Windows · 预编译二进制，无需额外语言运行时</p>
       </div>
       <div class="terminal" aria-label="别名注入命令示例">
@@ -80,7 +111,7 @@
     <section class="section capabilities" id="features" aria-labelledby="features-title"><div class="section-kicker">CAPABILITIES</div><h2 id="features-title">一座本地加密凭证台账</h2><div class="cap-grid"><article><span class="cap-icon" aria-hidden="true">⌘</span><h3>给 AI 安全用密钥</h3><p>用 <code>ky run</code> 将密钥注入子进程。<code>ky connect</code> 可为 Gemini、agy、Claude、Codex、Hermes 和项目本地助手 接入规则与技能。</p></article><article><span class="cap-icon" aria-hidden="true">▤</span><h3>不止 API Key</h3><p>用 URI 管理平台密钥、账号密码、服务器 IP / 端口 / 密码、云服务租金与 CLI 多 Profile Token。</p><p class="uri-list"><code>secret://github/main</code><code>secret://account/github/user</code><code>secret://server/host/field</code><code>secret://cli/gh/main</code></p></article><article><span class="cap-icon" aria-hidden="true">◉</span><h3>旧版 Auth Guard 兼容</h3><p>早期实现从公开 SSH 公钥派生 AES key，不验证私钥持有；TOTP 也未接入敏感命令。不能把它视为密库保护或远程 Agent 授权。</p></article><article><span class="cap-icon" aria-hidden="true">↗</span><h3>验证、迁移、整理</h3><p>运行 <code>ky check</code> 验证支持的平台密钥与余额；用预览模式导入现有 <code>.env</code>；通过 <code>ky wizard</code> 规范分类和命名。</p></article><article><span class="cap-icon" aria-hidden="true">▣</span><h3>本地 Web GUI</h3><p>运行 <code>ky ui</code> 启动本地面板并自动打开浏览器。运行 <code>ky wizard</code> 使用终端分类向导。</p></article><article><span class="cap-icon" aria-hidden="true">⇄</span><h3>可选团队密文同步</h3><p>团队可通过 GitLab 同步加密后的密文和脱敏元信息；解密仍在本地完成，根密钥不入仓。</p></article></div></section>
     <section class="search-surface" aria-labelledby="search-title"><div class="section-kicker">COMMON SEARCHES · 常见搜索</div><h2 id="search-title">按你正在找的问题发现 Kyvault</h2><p>密钥管理 · 秘钥管理 · Token 管理 · 令牌管理 · API Key 管理 · 凭证管理 · 密码管理 · <span lang="en">secret manager · API key manager · token manager · password manager · .env alternative · local-first secret manager</span></p></section>
     <section class="section faq-section" id="faq" aria-labelledby="faq-title"><div class="section-kicker">FAQ</div><h2 id="faq-title">常见问题</h2><div class="faq-list"><details><summary>密钥存在哪里？Where are secrets stored?</summary><p>文件后端默认使用 <code>~/.keyring/</code>，可通过 <code>KYVAULT_STORE_DIR</code> 指定目录；读取与解密无需联网。GitLab 密文同步和 D1 后端是可选网络功能。</p></details><details><summary>明文会被发送到哪里吗？Is plaintext sent anywhere?</summary><p>文件后端的加解密无需联网。<code>ky run</code> 把值注入子进程，无需先交给模型；但 <code>ky get</code> 会输出明文，子进程也可能输出凭证。验证、更新、同步与 D1 会访问网络。</p></details><details><summary>别名注入如何工作？How does alias injection work?</summary><p>把别名或 <code>secret://</code> URI 映射到已存凭证，然后运行 <code>ky run --env NAME=secret://platform/name -- command</code>。Kyvault 本地解析凭证，再通过子进程环境变量传入。</p></details><details><summary>旧版 Auth Guard 是否验证 SSH 私钥？</summary><p>不验证。旧实现从公开 SSH <code>.pub</code> 文件派生解密 key；TOTP 校验也没有接入敏感命令。它不能保护被复制的密库，也不能用于服务器 Agent 授权。逐条凭据授权由实验性的 <code>ky broker</code>（OpenSSH forced-command）承担，主设备签名审批与自动轮换尚未实现。</p></details><details><summary>如何从 .env 迁移？</summary><p>运行 <code>ky import --dry-run</code> 先预览导入计划；它只输出映射，不写入密钥库。</p></details></div></section>
-    <section class="final-cta"><div><div class="section-kicker">KEEP YOUR SECRETS YOURS</div><h2>从今天起，把明文留在本机。</h2><p>Kyvault v2.6.0 · MIT · Built for developers and AI agents.</p></div><a class="button primary" href="https://github.com/webkubor/kyvault/releases/latest">下载最新版本 <span aria-hidden="true">↗</span></a></section>
+    <section class="final-cta"><div><div class="section-kicker">KEEP YOUR SECRETS YOURS</div><h2>从今天起，把明文留在本机。</h2><p>Kyvault CLI · MIT · Built for developers and AI agents.</p></div><a class="button primary" href="https://github.com/webkubor/kyvault/releases/tag/v2.8.3">下载 CLI <span aria-hidden="true">↗</span></a></section>
   </main>
   <footer><a class="brand" href="#top"><span class="brand-mark" aria-hidden="true">K</span><span>KYVAULT</span></a><p>Local-first secrets for developers and AI agents.</p><div><a href="https://github.com/webkubor/kyvault">GitHub repo</a><a href="https://github.com/webkubor/kyvault/releases">Releases</a><a href="https://raw.githubusercontent.com/webkubor/kyvault/main/install.sh">install.sh</a><a href="https://github.com/webkubor/kyvault/blob/main/LICENSE">MIT License</a></div><small>© Kyvault contributors · MIT License</small></footer>
   <script>

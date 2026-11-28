@@ -44,6 +44,7 @@ fn main() {
             "discard_request",
             "save_secret_with_meta",
             "get_app_info",
+            "check_update",
             "install_update",
             "get_entry_image",
         ]),

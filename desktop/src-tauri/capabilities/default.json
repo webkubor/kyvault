@@ -7,7 +7,7 @@
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
-    "opener:allow-open-url",
+    { "identifier": "opener:allow-open-url", "allow": [{ "url": "https://github.com/webkubor/kyvault/releases/tag/desktop-v*" }] },
     "allow-account-status",
     "allow-account-login",
     "allow-account-create",
@@ -31,6 +31,7 @@
     "allow-copy-entry",
     "allow-get-entry-image",
     "allow-get-app-info",
+    "allow-check-update",
     "allow-install-update",
     "allow-copy-reference",
     "allow-copy-secret",

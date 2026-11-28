@@ -187,13 +187,13 @@ h3 { font-size: var(--t-base); font-weight: 600; }
 .brand-dot { color: var(--accent); }
 
 nav { display: grid; gap: 2px; }
-.nav-item {
+.nav-item, .sidebar-action {
   display: flex; gap: var(--s2); align-items: center;
   text-align: left; background: transparent; border-color: transparent;
   color: var(--muted); font-size: var(--t-base);
   -webkit-app-region: no-drag;
 }
-.nav-item:hover { background: var(--raised); color: var(--text); }
+.nav-item:hover, .sidebar-action:hover { background: var(--raised); color: var(--text); }
 /* Only the active item is tinted. `aria-current="false"` must NOT match. */
 .nav-item[aria-current="page"] { color: var(--accent); background: var(--accent-soft); font-weight: 550; }
 .nav-icon { width: 15px; height: 15px; flex: 0 0 auto; opacity: .85; background: currentColor; }
@@ -204,9 +204,9 @@ nav { display: grid; gap: 2px; }
 
 .sidebar-bottom { margin-top: auto; display: grid; gap: var(--s1); }
 .sidebar-bottom button { font-size: var(--t-sm); color: var(--muted); }
-.version-btn { position: relative; justify-self: start; text-align: left; cursor: pointer; border: 0; background: transparent; padding: var(--s1) 0; }
-.version-btn:hover { color: var(--text); }
-.update-dot { display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
+.sidebar-action { position: relative; }
+.action-icon { width: 15px; height: 15px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.update-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
 /* ---------- main column ---------- */
 
@@ -377,10 +377,9 @@ dialog textarea { resize: vertical; max-height: 30vh; font-family: var(--mono); 
   .sidebar { padding-inline: var(--s2); align-items: stretch; }
   .brand { justify-content: center; padding-inline: 0; }
   .wordmark { display: none; }
-  .nav-item { justify-content: center; padding-inline: 0; }
-  .nav-item > span:last-child { display: none; }
-  .sidebar-bottom button { font-size: 0; }
-  .sidebar-bottom button::after { content: "⏻"; font-size: var(--t-sm); }
+  .nav-item, .sidebar-action { justify-content: center; padding-inline: 0; }
+  .nav-item > span:last-child, .action-caption { display: none; }
+  .update-dot { position: absolute; inset-block-start: var(--s1); inset-inline-end: var(--s1); }
   .toolbar, .search-row, .settings { padding-inline: var(--s5); }
   .search-row, .settings { margin-inline: var(--s5); }
   .detail { padding-inline: var(--s5); }
@@ -390,16 +389,14 @@ dialog textarea { resize: vertical; max-height: 30vh; font-family: var(--mono); 
 .about-dialog { width: min(520px, calc(100% - var(--s8))); }
 .about-current { display: flex; align-items: baseline; gap: var(--s2); padding: var(--s3) 0; font-size: var(--t-sm); color: var(--muted); }
 .about-current strong { font-size: var(--t-md); color: var(--text); font-family: var(--mono); }
+.current-notes { padding-inline-start: var(--s5); margin: 0 0 var(--s4); line-height: 1.6; }
+.current-notes li + li { margin-block-start: var(--s1); }
 .about-actions { display: flex; align-items: center; gap: var(--s3); padding-bottom: var(--s3); }
 .about-actions .hint { margin: 0; }
 .update-detail { padding: var(--s3); margin-bottom: var(--s3); border: 1px solid var(--accent); border-radius: var(--radius); background: var(--accent-soft); display: grid; gap: var(--s2); }
 .update-detail p { margin: 0; font-size: var(--t-sm); }
 .release-notes { display: grid; gap: var(--s2); max-height: 40vh; overflow: auto; }
-.release-row { border-bottom: 1px solid var(--hairline); padding-bottom: var(--s2); }
-.release-row summary { cursor: pointer; font-size: var(--t-sm); padding: var(--s1) 0; }
-.release-row summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.release-body { white-space: pre-wrap; word-break: break-word; font-family: var(--mono); font-size: var(--t-xs); line-height: 1.6; color: var(--muted); max-height: 200px; overflow: auto; margin: var(--s2) 0; }
-.release-link { font-size: var(--t-xs); color: var(--accent); }
+.release-link { display: block; padding-block: var(--s2); border-bottom: 1px solid var(--hairline); font-size: var(--t-sm); color: var(--accent); }
 button.loading { position: relative; color: transparent !important; pointer-events: none; }
 button.loading::after { content: ""; position: absolute; inset: 0; margin: auto; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }

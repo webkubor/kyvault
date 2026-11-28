@@ -30,10 +30,21 @@ Open the Kyvault agent guide with `/kyvault` in agy, Claude Code, or OpenCode, a
 
 ---
 
-## Ky desktop
+## Ky desktop 0.3.1 for macOS
 
-A standalone Tauri 2 app for local text clipboard history, versioned snippets, and the existing vault. The CLI remains available for agents and scripts. See [desktop build and storage notes](desktop/README.md). This is a local-build preview, not a published desktop release.
+Ky brings your clipboard history, vault, and private notes into one local workspace. You can use it without an account. [Download the Apple Silicon Mac installer (DMG)](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.1/Ky_0.3.1_aarch64.dmg) · [Project website](https://webkubor.github.io/kyvault/)
 
+![Ky 0.3.1 workspace home screen](docs/assets/desktop/home.png)
+
+**Find an existing credential.** Search by platform, purpose, account, or alias. Open a result to reveal its value in a native macOS window. The value disappears when the window loses focus or after 30 seconds.
+
+![Credential search in the Ky 0.3.1 vault](docs/assets/desktop/vault.png)
+
+**Keep private notes and images.** Save text and images in an encrypted collection on your Mac. Select the paragraphs and images to share, then choose **Copy card** to paste the image into an editor that accepts images, such as X. You can also save it as a PNG. To collect feedback, export the offline HTML file and send it to your reader.
+
+![Private collection in Ky 0.3.1](docs/assets/desktop/private.png)
+
+To back up credentials, connect a private GitHub or GitLab repository. A newly created repository starts with a single `secrets.json` containing `{}`. Clicking **Sync** transfers only encrypted credential records. Your master key and private notes stay on your Mac. [Desktop usage and storage details](desktop/README.md)
 
 ## 🎬 30-second demo
 

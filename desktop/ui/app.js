@@ -7,7 +7,7 @@
 // as finished text. On a language switch the keys are re-rendered, so no stale
 // copy survives anywhere.
 
-const { messages, state, $, $$, setStatus, snapshotReady, setError, setFormError, setConfirmText, invoke, listen, isComposing, readPref, writePref } = await import('./core.js');
+const { messages, state, $, $$, el, setStatus, snapshotReady, setError, setFormError, setConfirmText, invoke, listen, isComposing, readPref, writePref } = await import('./core.js');
 const { setView, renderList, renderDetail, renderNoBridge, relocalizeDynamic, closeDetail, revealEntry } = await import('./render.js');
 const { t, applyLanguage, syncLanguageFromSnapshot, currentLang, LANG_KEY, onLanguageChanged } = await import('./lang.js');
 
@@ -294,11 +294,9 @@ if (desktop) {
   // 后端后台检测到新版 → 侧栏版本按钮显示小红点 + 记住版本号。
   listen('update-available', (event) => {
     const { version } = event.payload || {};
-    if (!version) return;
+    if (!version || manualCheck) return;
     availableVersion = version;
-    setUpdateDot(true);
-    const label = $('#version-label');
-    if (label) label.textContent = t('about.hasUpdate');
+    paintUpdate();
   });
   // 用户点"更新"后的下载/安装进度显示到状态条。
   listen('update-progress', (event) => {
@@ -390,88 +388,89 @@ window.addEventListener('workspace-navigate', event => {
 });
 
 // ---- 版本与更新日志（关于对话框）----
-let availableVersion = null; // 后端检测到新版时填入
-function setUpdateDot(on) {
+let availableVersion = null;
+let manualCheck = false;
+let checkMessage = '';
+let releaseNotes = [];
+let historyRequest = 0;
+
+function paintUpdate() {
   const dot = $('#update-dot');
-  if (dot) dot.hidden = !on;
+  dot.hidden = !availableVersion;
+  if (availableVersion) $('#about').setAttribute('aria-describedby', 'update-dot');
+  else $('#about').removeAttribute('aria-describedby');
+  $('#update-detail').hidden = !availableVersion;
+  $('#update-available-text').textContent = availableVersion
+    ? t('about.newAvailable', {version:availableVersion}) : '';
+  $('#update-status').textContent = checkMessage ? t(checkMessage) : '';
 }
 
-// 把发布说明渲染成可点击展开的列表（每条标题可点开 GitHub release 看全文）。
-function renderReleaseNotes(notes) {
+function renderReleaseNotes() {
   const box = $('#release-notes');
-  if (!box) return;
   box.replaceChildren();
-  if (!notes || !notes.length) {
-    const p = el('p', 'hint');
-    p.textContent = t('about.noNotes');
-    box.appendChild(p);
+  if (releaseNotes === null) {
+    box.append(el('p','hint',t('about.loading')));
     return;
   }
-  for (const n of notes) {
-    const row = el('details', 'release-row');
-    const sum = el('summary', '', `v${n.version} — ${n.name || n.published_at.slice(0, 10)}`);
-    row.appendChild(sum);
-    const body = el('pre', 'release-body', n.body || t('about.noDetail'));
-    row.appendChild(body);
-    if (n.url) {
-      const a = el('a', 'release-link', t('about.openRelease'));
-      a.href = n.url;
-      a.target = '_blank';
-      a.rel = 'noopener';
-      row.appendChild(a);
-    }
-    box.appendChild(row);
+  const current = $('#about-version').textContent;
+  for (const note of releaseNotes) {
+    if (!/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/.test(note.version) || 'v' + note.version === current) continue;
+    // Link to the official release page. Never inject remote markdown, images or URLs.
+    const link = el('a', 'release-link', 'v' + note.version + ' · ' + t('about.openRelease'));
+    link.href = 'https://github.com/webkubor/kyvault/releases/tag/desktop-v' + note.version;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.onclick = event => {
+      if (!desktop) return;
+      event.preventDefault();
+      invoke('plugin:opener|open_url', {url:link.href}).catch(() => {
+        $('#update-status').textContent = t('about.linkFailed');
+      });
+    };
+    box.append(link);
   }
+  if (!box.childElementCount) box.append(el('p', 'hint', t('about.noNotes')));
 }
 
-async function loadAbout() {
-  const verLabel = $('#about-version');
-  const status = $('#update-status');
-  const detail = $('#update-detail');
-  if (verLabel) verLabel.textContent = '…';
-  if (status) status.textContent = t('about.loading');
-  if (detail) detail.hidden = true;
+$('#about').addEventListener('click', async () => {
+  $('#about-dialog').showModal();
+  paintUpdate();
+  const request = ++historyRequest;
+  releaseNotes = null;
+  renderReleaseNotes();
   try {
     const info = await invoke('get_app_info');
-    if (verLabel) verLabel.textContent = `v${info.current}`;
-    renderReleaseNotes(info.notes);
-    if (status) status.textContent = '';
-    if (availableVersion) {
-      if (detail) detail.hidden = false;
-      const txt = $('#update-available-text');
-      if (txt) txt.textContent = t('about.newAvailable', { version: availableVersion });
-    }
+    if (request !== historyRequest) return;
+    releaseNotes = Array.isArray(info?.notes) ? info.notes : [];
   } catch {
-    if (status) status.textContent = t('about.loadFailed');
+    if (request !== historyRequest) return;
+    releaseNotes = [];
   }
-}
-
-$('#about').addEventListener('click', () => {
-  const dialog = document.querySelector('dialog#about-dialog');
-  if (dialog) dialog.showModal();
-  loadAbout();
+  renderReleaseNotes();
 });
 
-// 检查更新按钮：主动拉一次检测（后台也在跑，这里即时反馈），带加载动画。
 $('#check-update').addEventListener('click', async () => {
-  const btn = $('#check-update');
-  const status = $('#update-status');
-  if (btn) { btn.disabled = true; btn.classList.add('loading'); }
-  if (status) status.textContent = t('about.checking');
+  const button = $('#check-update');
+  if (button.disabled) return;
+  button.disabled = true;
+  manualCheck = true;
+  availableVersion = null;
+  checkMessage = 'about.checking';
+  paintUpdate();
   try {
-    // get_app_info 会重新拉 releases；版本检测仍由后台 check-only 事件给出。
-    await invoke('get_app_info');
-    if (status) status.textContent = availableVersion
-      ? t('about.newAvailable', { version: availableVersion })
-      : t('about.upToDate');
+    const version = await invoke('check_update');
+    if (version === null) checkMessage = 'about.upToDate';
+    else if (typeof version === 'string' && version.length) {
+      availableVersion = version;
+      checkMessage = 'about.hasUpdate';
+    } else checkMessage = 'about.checkFailed';
   } catch {
-    if (status) status.textContent = t('about.checkFailed');
+    checkMessage = 'about.checkFailed';
   } finally {
-    if (btn) { btn.disabled = false; btn.classList.remove('loading'); }
+    button.disabled = false;
+    paintUpdate();
   }
 });
-
-// 更新按钮：用户主动触发下载安装，显示加载。
 $('#do-update').addEventListener('click', async () => {
   const btn = $('#do-update');
   const status = $('#update-status');
@@ -546,6 +545,7 @@ $('#language').addEventListener('change', (e) => {
 
 onLanguageChanged(() => {
   relocalizeDynamic();
+  if ($('#about-dialog').open) { paintUpdate(); renderReleaseNotes(); }
   if ($('#credential').open) updateCredentialHint();
   $('#collapse-toolbar').setAttribute(
     'aria-label',

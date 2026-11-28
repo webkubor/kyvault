@@ -106,8 +106,9 @@ fn main() {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(Duration::from_secs(3)).await;
-                    if let Err(e) = commands::install_update_check_only(&handle).await {
-                        let _ = e;
+                    if let Ok(Some(version)) = commands::check_update(handle.clone()).await {
+                        let _ = handle
+                            .emit("update-available", serde_json::json!({"version": version}));
                     }
                 });
             }
@@ -290,6 +291,7 @@ fn main() {
             commands::clear_history,
             commands::set_ui_language,
             commands::get_app_info,
+            commands::check_update,
             commands::install_update,
             commands::get_entry_image
         ])

@@ -28,25 +28,21 @@
 
 ---
 
-## Ky 桌面版（macOS）
+## Ky 桌面版 0.3.1（macOS）
 
-面向人的独立 Tauri 2 App，CLI 继续供 Agent 与脚本使用。
+Ky 把剪贴板历史、密码库和私密图文放在同一个本地工作台，无需注册账号。[下载 Apple Silicon Mac 安装包（DMG）](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.1/Ky_0.3.1_aarch64.dmg) · [官网](https://webkubor.github.io/kyvault/)
 
-<p align="center">
-  <img src="https://cdn.jsdelivr.net/gh/webkubor/free-imgbed@main/blog/projects/kyvault-desktop/app-main.png" alt="Ky 桌面版：剪贴板历史 · 一点即复制 · 来源可见" width="720">
-</p>
+![Ky 0.3.1 工作台首页](docs/assets/desktop/home.png)
 
-**下载**：[Releases](https://github.com/webkubor/kyvault/releases) 取 `Ky_*.dmg`（Apple Silicon）。装一次之后有新版会自动提示，点一下更新即可，不用再下载安装。
+**查找已有凭证。** 按平台、用途、账号或别名搜索，例如输入「支付宝 私钥」。点「查看密码或密钥」即可在 macOS 原生窗口查看原值，窗口失焦或 30 秒后自动隐藏。
 
-| 功能 | 说明 |
-|------|------|
-| 剪贴板历史 | 复制的内容自动记录（30 天），**点一条直接复制回剪贴板**，显示来自哪个 App。 |
-| 敏感内容保护 | 密钥/令牌类内容默认隐藏、点开才显示；复制出去 30 秒自动清除；数据加密存本机。 |
-| 密钥库 | 管理你的 API Key：存取只在本机，复制走「引用」而不是明文。 |
-| 隐私屏 | 离开工位一键遮屏，防旁人偷看。 |
+![Ky 0.3.1 密码库中的凭证搜索界面](docs/assets/desktop/vault.png)
 
-构建、使用与本地存储边界见 [桌面版说明](desktop/README.md)。
+**保存私密图文。** 把文字和配图存入本机加密收藏。选好草稿中的段落和配图后，点「复制卡片」即可把图片粘贴到 X 等支持图片的编辑器，也可以保存为 PNG。需要收集反馈时，导出离线 HTML 发给对方。
 
+![Ky 0.3.1 私密收藏界面](docs/assets/desktop/private.png)
+
+需要备份密码库时，可连接 GitHub 或 GitLab 私有仓库。确认创建的新仓只含内容为 `{}` 的 `secrets.json`。点击「同步」才会传输密码密文；主密钥和私密图文留在本机。[桌面版使用与存储说明](desktop/README.md)
 
 ## 🎬 30 秒演示
 
