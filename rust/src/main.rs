@@ -217,7 +217,7 @@ enum Cmd {
     },
     /// 把密钥使用规则/技能包写进本地各家 AI 助手
     Connect,
-    /// 检查并升级到最新版（走 GitHub Release + install.sh）
+    /// 检查并升级到最新版（从 GitHub Release 原地更新 CLI）
     Update {
         /// 不问直接升（脚本/CI 用）
         #[arg(long = "yes", short = 'y')]
