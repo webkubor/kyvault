@@ -1,11 +1,11 @@
 {
-  "version": "0.3.1",
-  "notes": "侧栏可离线查看本版更新日志。分享卡片支持复制和保存为 PNG，操作成功后会显示提示。",
-  "pub_date": "2026-11-28T04:34:59Z",
+  "version": "0.3.2",
+  "notes": "历史版本可在 Ky 内阅读。安装更新前确认重启，下载显示实际进度。",
+  "pub_date": "2026-11-28T08:29:19Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbXpQSTlPVmVQNlROYlYva2xRcDFQdnE3YjhWVEg3MWpYNnQzalBiOENBYkJRQXp3R1lmdHFPZnd0WkVFOXhuajN1aWwvSCtMdGttZVpzSUJPV1h5dUFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODQwNDgwCWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4xCmtmdThXQ2NoZXJSc1FQdGpnQ0d5YWs0YS9PaWRKZkR2dUxFSWtBdVRIeTJwb29EOWVONlJweWFzWVBHbElacHErTnNpQzNkUkREMmtrME1zVDY3U0NRPT0K",
-      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.1/Ky.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbTZOQm5kc0gyQWdYQ0FibWp2ZFZCMnVnL3JiQm5zT0svb3d4TVR6WFB5SnRZK3UzeEZ1b2VkamJmTUUxekcxL0tWT2JoL0NrRWZDcVBsakhMWkZvMEEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODU0NDY2CWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4yClVKUktWOGdnenpBRHdaNW5kajdIcWFzdTFJdjMrWmw1Zm9SWWhZUDdJR3QvcitpdFcycG93WTdIcmFTeHFXMHJHVjBkb1Y1Y0pac3NSd0ZOWDFKV0N3PT0K",
+      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.2/Ky.app.tar.gz"
     }
   }
 }
