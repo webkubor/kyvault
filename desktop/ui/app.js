@@ -30,7 +30,16 @@ function showFlashSources(sources) {
     list.append(button);
   }
 }
+const flashSound = $('#flash-sound');
+flashSound.onchange = async () => {
+  flashSound.disabled = true;
+  try { flashSound.checked = await invoke('flash_sound',{enabled:flashSound.checked}); }
+  catch { flashSound.checked = !flashSound.checked; setError('err.generic'); }
+  finally { flashSound.disabled = false; }
+};
 async function loadFlashSources() {
+  try { flashSound.checked = await invoke('flash_sound'); }
+  catch { flashSound.disabled = true; }
   try { showFlashSources(await invoke('flash_apps')); }
   catch { if (!state.locked) setError('err.generic'); }
 }

@@ -28,7 +28,7 @@ with sync_playwright() as pw:
   p.evaluate("events['update-available']({payload:{version:'0.3.2'}})")
   expect(btn).to_have_accessible_name(title);expect(p.locator('#update-dot')).to_be_visible()
   btn.click();expect(p.get_by_role('dialog',name=title)).to_be_visible()
-  expect(p.locator('#about-version')).to_have_text('v0.3.3');expect(p.locator('.current-notes')).to_contain_text('Ky' if width==640 else '闪记')
+  expect(p.locator('#about-version')).to_have_text('v0.3.4');expect(p.locator('.current-notes')).to_contain_text('Ky' if width==640 else '闪记')
   p.evaluate("histFail('offline')")
   expect(p.locator('.current-notes')).to_contain_text('Ky' if width==640 else '闪记')
   p.locator('#check-update').click();expect(p.locator('#check-update')).to_be_disabled()

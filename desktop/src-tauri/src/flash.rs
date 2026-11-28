@@ -46,6 +46,36 @@ pub fn flash_app_rule(
     Ok(set)
 }
 
+#[tauri::command]
+pub fn flash_sound(enabled: Option<bool>) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        extern "C" {
+            fn ky_flash_sound(update: bool, enabled: bool) -> bool;
+        }
+        unsafe { ky_flash_sound(enabled.is_some(), enabled.unwrap_or(false)) }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = enabled;
+        false
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn received(state: &DesktopState, overlay: bool, audible: bool) {
+    extern "C" {
+        fn ky_flash_received(overlay: bool, audible: bool, english: bool);
+    }
+    unsafe {
+        ky_flash_received(
+            overlay,
+            audible,
+            crate::commands::load_prefs(state).lang == "en",
+        );
+    }
+}
+
 #[cfg(target_os = "macos")]
 pub fn automatic(state: &DesktopState, change: isize, text: &str) {
     use std::ffi::CStr;
@@ -59,8 +89,10 @@ pub fn automatic(state: &DesktopState, change: isize, text: &str) {
     let Ok(source) = unsafe { CStr::from_ptr(ptr) }.to_str() else {
         return;
     };
-    if rules(state).is_ok_and(|list| list.contains(source)) {
-        let _ = crate::workspace::save_flash(state, text, Some(source), true);
+    if rules(state).is_ok_and(|list| list.contains(source))
+        && crate::workspace::save_flash(state, text, Some(source), true).is_ok()
+    {
+        received(state, true, false);
     }
 }
 
@@ -117,7 +149,10 @@ pub fn flash_history(state: State<DesktopState>, id: u64) -> Result<(), String> 
             .find(|e| e.id == id && e.image.is_none() && !e.redacted)
             .ok_or("无法收藏此条目")?
     };
-    crate::workspace::save_flash(&state, &entry.text, entry.source.as_deref(), false)
+    crate::workspace::save_flash(&state, &entry.text, entry.source.as_deref(), false)?;
+    #[cfg(target_os = "macos")]
+    received(&state, false, true);
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]
@@ -144,13 +179,25 @@ pub mod native {
         let Ok(text) = unsafe { CStr::from_ptr(value) }.to_str() else {
             return false;
         };
-        crate::workspace::save_flash(&app.state::<DesktopState>(), text, None, false).is_ok()
+        {
+            let state = app.state::<DesktopState>();
+            let saved = crate::workspace::save_flash(&state, text, None, false).is_ok();
+            if saved {
+                super::received(&state, true, true);
+            }
+            saved
+        }
     }
     pub fn setup(app: &AppHandle) {
         let _ = APP.set(app.clone());
         let handle = app.clone();
         if crate::flash_socket::serve(&app.state::<DesktopState>().data_root, move |text| {
-            crate::workspace::save_flash(&handle.state::<DesktopState>(), text, None, false).is_ok()
+            let state = handle.state::<DesktopState>();
+            let saved = crate::workspace::save_flash(&state, text, None, false).is_ok();
+            if saved {
+                super::received(&state, true, true);
+            }
+            saved
         })
         .is_err()
         {

@@ -13,7 +13,7 @@
      inline (that was what made the search row read as crowded). */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
   /* Motion tokens (single source for consistency). */
   --ease: cubic-bezier(.22, .61, .36, 1);
@@ -22,21 +22,21 @@
   --dur-med: 200ms;
   --dur-slow: 260ms;
 
-  --bg: #0d1410;
-  --sidebar: #121b15;
-  --surface: #182219;
-  --raised: #1e2a22;
-  --text: #e6efe9;
-  --muted: #94a79b;
-  --faint: #6d8177;
-  --line: #25332c;
-  --hairline: #1d2922;
-  --accent: #66f0b5;
-  --accent-text: #06281a;
-  --accent-soft: #1c3a2c;
+  --bg: #101012;
+  --sidebar: #171719;
+  --surface: #1d1d20;
+  --raised: #2b2b2f;
+  --text: #f3f3f4;
+  --muted: #b1b1b8;
+  --faint: #919199;
+  --line: #404045;
+  --hairline: #303034;
+  --accent: #8ef568;
+  --accent-text: #102008;
+  --accent-soft: #303333;
   --danger: #ff9f8e;
   --danger-bg: #3a2622;
-  --overlay: rgba(6, 12, 9, .55);
+  --overlay: rgba(0, 0, 0, .58);
 
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -60,7 +60,7 @@
 
   /* Fallback (pre-blur capability) — replaced below when effects are known.
      Kept opaque so an unsupporting WebView is never translucent-without-blur. */
-  --body-opaque: #141b18;
+  --body-opaque: #101012;
 
   /* Icons are monochrome masks so they follow the text colour, including the
      accent tint on the active nav item. */
@@ -76,12 +76,10 @@
   -webkit-font-smoothing: antialiased;
 }
 
-@supports ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
-  :root { --body-opaque: rgba(20, 27, 24, .34); }
-}
 
-@media (prefers-color-scheme: light) {
-  :root {
+
+:where(html[data-theme="light"]):root {
+    color-scheme: light;
     --bg: #eef4ef;
     --sidebar: #e9f0ea;
     --surface: #f7faf8;
@@ -101,9 +99,10 @@
     --body-opaque: #eef4ef;
   }
   @supports ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
-    :root { --body-opaque: rgba(238, 244, 239, .42); }
+
+:where(html[data-theme="light"]):root { --body-opaque: rgba(238, 244, 239, .42); }
   }
-}
+
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -124,18 +123,22 @@ body {
 .sidebar, main, dialog { background: var(--sidebar); }
 .library, .detail, .settings { background: var(--surface); }
 
+
 @supports ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
-  .sidebar, main, dialog {
+
+:where(html[data-theme="light"]) .sidebar, :where(html[data-theme="light"]) main, :where(html[data-theme="light"]) dialog {
     background: color-mix(in srgb, var(--sidebar) 62%, transparent);
     -webkit-backdrop-filter: blur(30px) saturate(1.6);
     backdrop-filter: blur(30px) saturate(1.6);
   }
-  .library, .detail, .settings {
+
+:where(html[data-theme="light"]) .library, :where(html[data-theme="light"]) .detail, :where(html[data-theme="light"]) .settings {
     background: color-mix(in srgb, var(--surface) 60%, transparent);
     -webkit-backdrop-filter: blur(30px) saturate(1.6);
     backdrop-filter: blur(30px) saturate(1.6);
   }
 }
+
 .toolbar, .search-row, footer { background: transparent; }
 
 /* AA contrast: bumped muted for glass legibility. */
@@ -467,9 +470,9 @@ main[data-view=vault] .entry-meta { color: var(--muted); }
 #account,#home { flex: 1; min-height: 0; overflow: auto; }
 
 .platform-mark img { width: 20px; height: 20px; object-fit: contain; }
-@media (prefers-color-scheme: dark) {
-  .platform-mark img.mono-mark { filter: invert(1); }
-}
+
+:where(html[data-theme="dark"]) .platform-mark img.mono-mark { filter: invert(1); }
+
 @media (forced-colors: active) {
   .platform-mark:has(img) { forced-color-adjust: none; background: white; }
   .platform-mark img.mono-mark { filter: none; }
@@ -499,3 +502,34 @@ main[data-view=vault] .entry-meta { color: var(--muted); }
   background: var(--surface); border-bottom: 1px solid var(--line);
 }
 .release-row[open] { padding-bottom: var(--s3); }
+
+
+:where(html[data-theme="dark"]) main { background: var(--bg); }
+
+:where(html[data-theme="dark"]) .sidebar { background: var(--sidebar); }
+
+:where(html[data-theme="dark"]) dialog, :where(html[data-theme="dark"]) .detail, :where(html[data-theme="dark"]) .ky-toast { background: var(--raised); }
+
+:where(html[data-theme="dark"]) .nav-item[aria-current="page"], :where(html[data-theme="dark"]) .entry[aria-pressed="true"] {
+    box-shadow: inset 2px 0 var(--accent);
+  }
+
+
+/* Appearance remains within reach when the navigation collapses. */
+.sidebar { overflow-y: auto; }
+.brand { padding-bottom: var(--s3); }
+#appearance {
+  display: flex; padding: 3px; margin: 0 0 var(--s3);
+  border: 1px solid var(--line); border-radius: 9px; background: var(--bg);
+}
+#appearance label { position: relative; flex: 1; min-width: 0; cursor: pointer; }
+#appearance input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+#appearance label > span { display: flex; align-items: center; justify-content: center; gap: 3px; min-height: 28px; border-radius: 6px; color: var(--muted); font-size: var(--t-xs); }
+#appearance svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+#appearance input:checked + span { background: var(--raised); color: var(--accent); font-weight: 650; }
+#appearance input:focus-visible + span { outline: 2px solid var(--accent); }
+#appearance-select { display: none; }
+@media (max-width: 760px) {
+  #appearance { display: none; }
+  #appearance-select { display: block; padding: 0; width: 100%; min-height: 32px; margin-bottom: var(--s2); font-size: var(--t-xs); }
+}

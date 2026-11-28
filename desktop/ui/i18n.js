@@ -5,6 +5,12 @@
 export const DEFAULT_LANG = 'zh-CN';
 
 const zh = {
+  'theme.title': '外观',
+  'theme.system': '系统',
+  'theme.light': '浅色',
+  'theme.dark': '深色',
+
+  'flash.sound': '闪记保存音效',
   'flash.browser': '连接浏览器…',
   'flash.install': '在浏览器的扩展管理页开启开发者模式，点「加载已解压的扩展程序」，选择 Finder 中的 extension 文件夹。',
 
@@ -210,8 +216,8 @@ const zh = {
   'about.retry': '重新加载',
   'about.historyFailed': '历史版本暂时无法加载，本版说明仍可阅读。',
   'about.title': '更新日志',
-  'about.card': '按 ⌥⌘N 写闪记，⌘↩ 保存到私密收藏。',
-  'about.forms': '网页选区和剪贴板条目均可收藏。设置中可连接浏览器、选择自动收藏的来源应用。',
+  'about.card': '闪记保存后有轻提示和可关闭的音效。',
+  'about.forms': '密钥列表可识别 31 家银行，按名称或简称显示徽标。',
   'about.sync': '同步会分别提示上传、下载、两端一致或冲突。复制、保存和导出也有操作提示。',
   'about.current': '当前版本',
   'about.check': '检查更新',
@@ -239,6 +245,12 @@ const zh = {
 };
 
 const en = {
+  'theme.title': 'Appearance',
+  'theme.system': 'Auto',
+  'theme.light': 'Light',
+  'theme.dark': 'Dark',
+
+  'flash.sound': 'Quick note sound',
   'flash.browser': 'Connect browser…',
   'flash.install': 'In the browser extensions page, turn on Developer mode and load the extension folder selected in Finder.',
 
@@ -444,8 +456,8 @@ const en = {
   'about.retry': 'Retry',
   'about.historyFailed': 'Release history is unavailable. The current notes are still available offline.',
   'about.title': 'Release notes',
-  'about.card': 'Open Ky quick notes with ⌥⌘N and save with ⌘↩.',
-  'about.forms': 'Save a selection or clipboard entry. Connect a browser or choose source apps in Settings.',
+  'about.card': 'Ky confirms saved quick notes with a toast and optional sound.',
+  'about.forms': 'Vault entries recognize 31 banks by name or alias and show their logos.',
   'about.sync': 'Sync reports uploads, downloads, matching copies and conflicts. Copy, save and export actions also show feedback.',
   'about.current': 'Current version',
   'about.check': 'Check for updates',

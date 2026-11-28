@@ -1,5 +1,8 @@
 // Display vocabulary only. Stored references remain the canonical identifiers.
+import { bankNames, credentialSymbol } from './platform-icon.js';
 const platforms = {
+  bank: ['银行','Bank'], citic: ['中信银行','China CITIC Bank'], cmb: ['招商银行','China Merchants Bank'],
+  stripe: ['Stripe','Stripe'], bitiful: ['缤纷云','Bitiful'],
   alipay: ['支付宝', 'Alipay'], apple: ['苹果', 'Apple'], amap: ['高德地图', 'Amap'],
   aliyun: ['阿里云', 'Aliyun'], feishu: ['飞书', 'Feishu'], github: ['GitHub', 'GitHub'],
   openai: ['OpenAI', 'OpenAI'], gitlab: ['GitLab', 'GitLab'], 'accounts-legacy': ['旧账号', 'Legacy accounts'],
@@ -12,15 +15,19 @@ const purposes = [
 ];
 
 export function platformLabel(id, lang) {
-  return platforms[id]?.[lang === 'en' ? 1 : 0] || id;
+  return platforms[id]?.[lang === 'en' ? 1 : 0] || bankNames.get(id) || id;
 }
 
 function describe(entry, english) {
-  const platform = platformLabel(entry.platform, english ? 'en' : 'zh-CN');
+  const symbol = credentialSymbol(entry);
+  const brand = (bankNames.has(symbol) || ['stripe','bitiful'].includes(symbol)) ? symbol : entry.platform;
+  const platform = platformLabel(brand, english ? 'en' : 'zh-CN');
   const raw = entry.name || entry.reference.split('/').slice(3).join('/');
   const name = raw.startsWith(entry.platform + '-') ? raw.slice(entry.platform.length + 1) : raw;
   let purpose = name.replace(/[-_/]+/g, ' ').trim();
+  if (brand !== entry.platform) purpose = purpose.replace(new RegExp('^' + brand + '(?: |$)', 'i'), '');
   if (!english) {
+    if (purpose.toLowerCase() === 'card') purpose = '银行卡';
     for (const [term, label] of purposes) {
       purpose = purpose.replace(new RegExp('\\b' + term + '\\b', 'gi'), label);
     }
