@@ -14,9 +14,20 @@ static RecognitionReply result;
 static int starts, taps, removals, ends, cancels;
 static BOOL running;
 
+static NSMutableArray<NSString *> *openedSettings;
+static AVAuthorizationStatus micStatus = AVAuthorizationStatusDenied;
+@interface FixtureSettings : NSObject
++ (instancetype)sharedWorkspace;
+@end
+@implementation FixtureSettings
++ (instancetype)sharedWorkspace { return [self new]; }
+- (BOOL)openURL:(NSURL *)url { [openedSettings addObject:url.absoluteString]; return YES; }
+@end
+
 @interface FakeDevice : NSObject
 @end
 @implementation FakeDevice
++ (AVAuthorizationStatus)authorizationStatusForMediaType:(AVMediaType)media { return micStatus; }
 + (void)requestAccessForMediaType:(AVMediaType)media completionHandler:(MicReply)reply {
     CHECK([media isEqual:AVMediaTypeAudio]); mic = [reply copy];
 }
@@ -64,6 +75,7 @@ static BOOL running;
 }
 @end
 
+#define NSWorkspace FixtureSettings
 #define AVCaptureDevice FakeDevice
 #define AVAudioEngine FakeEngine
 #define AVAudioInputNode FakeInput
@@ -71,6 +83,7 @@ static BOOL running;
 #define SFSpeechRecognitionTask FakeTask
 #define SFSpeechRecognizer FakeRecognizer
 #import "../src-tauri/src/ky_dictation.m"
+#undef NSWorkspace
 
 @interface FakeResult : NSObject
 @property(copy) NSString *formattedString;
@@ -127,11 +140,22 @@ int main(void) { @autoreleasepool {
         speech(SFSpeechRecognizerAuthorizationStatusAuthorized); drain(); CHECK(mic);
     };
 
+    openedSettings = [NSMutableArray new];
+    editor.string = @"draft";
     begin(); speech(SFSpeechRecognizerAuthorizationStatusDenied); drain();
     CHECK(!voice.active && !mic && !starts && [message containsString:@"Speech Recognition"]);
     begin(); grantSpeech(); mic(NO); drain();
     CHECK(!voice.active && !starts && [message containsString:@"Microphone"]);
-    puts("PASS speech and microphone denial");
+    CHECK(([openedSettings isEqual:@[@"x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition",
+                                    @"x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"]]));
+    begin(); speech(SFSpeechRecognizerAuthorizationStatusRestricted); drain();
+    micStatus = AVAuthorizationStatusRestricted;
+    begin(); grantSpeech(); mic(NO); drain();
+    CHECK(openedSettings.count == 2 && !starts && [editor.string isEqual:@"draft"]);
+    micStatus = AVAuthorizationStatusDenied;
+    begin(); [voice stop]; speech(SFSpeechRecognizerAuthorizationStatusDenied); drain();
+    CHECK(openedSettings.count == 2);
+    puts("PASS direct privacy links, preserved draft, restricted and stale requests");
 
     begin(); SpeechReply oldSpeech = speech;
     [voice stop]; begin(); oldSpeech(SFSpeechRecognizerAuthorizationStatusAuthorized); drain();
