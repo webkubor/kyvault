@@ -1,11 +1,11 @@
 {
-  "version": "0.3.5",
-  "notes": "首页标志叠卡展开，冷光掠过后停住。支持减少动态效果。",
-  "pub_date": "2026-11-28T10:09:01Z",
+  "version": "0.3.6",
+  "notes": "发现新版本时，可先查看更新说明，再选择安装并重启。",
+  "pub_date": "2026-11-28T10:52:27Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbXd1cHMvZSt1SWNxUzIrMzBJY3RyWGtFWXRBTFNnY1ZSVHQweWM0Z2dkQ0R0QitZY3pDMmRpK2xiMmxlVXN6YlFDWEFNWG9xY0NNYTNIMUZ4NUYwWFFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODYwNTExCWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMy41ClRzandyQ3l6OHUwRmpSWlFzWWlEa01adDI2M2d6cGdZdGFtcndyNWhkM2FibSsydmdud1FSWmhNZzMrdGs5RGYxOVlTV2pFTHkzKy9mczF0RS8zRURBPT0K",
-      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.5/Ky.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbTI5d3JTQTBpcXhQSUZZZzYrZTdRY2p0WlQvSlRQNERzT2VJQlJVb3UwZ3BKaHBMc1hTeThMc2NwNm5pYXJVVzJzMjd1UExFS25VZjY1YXY3eEtKaEFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODYzMTE1CWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMy42CjYySjN6dkR1YStZZXpKTmNUdSt1V2xyYnNSUXJ3UG9sOHRVOHBRQkZoZDEvVEZSVTVWdHF1QkNBYzlBd08wam55YlhaVEw4d2dMYUhXZGZWOG5oaUN3PT0K",
+      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.6/Ky.app.tar.gz"
     }
   }
 }
