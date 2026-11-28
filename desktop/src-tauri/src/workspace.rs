@@ -372,6 +372,36 @@ impl Store {
     }
 }
 
+pub fn save_flash(
+    state: &DesktopState,
+    text: &str,
+    source: Option<&str>,
+    automatic: bool,
+) -> Result<(), String> {
+    let session = state.session.lock().map_err(|_| "会话不可用")?;
+    if session.locked
+        || session.is_sensitive(text)
+        || (automatic && (!session.monitoring || kyvault::desktop::needs_mask(text)))
+    {
+        return Err("内容受保护，未收藏".into());
+    }
+    let title: String = text
+        .trim()
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(64)
+        .collect();
+    let body = source.map_or_else(|| text.to_owned(), |s| format!("{text}\n\n{s}"));
+    with_store(&state.data_root, |store| {
+        store.save(Kind::Private, None, title, body, String::new())
+    })
+    .map(|_| ())
+    .map_err(|_| "未能保存闪记".into())
+}
+
 #[tauri::command(async)]
 pub fn workspace_list(state: State<'_, DesktopState>, kind: Kind) -> Result<Vec<Summary>, String> {
     guarded(&state, |store| store.list(kind))
@@ -427,6 +457,57 @@ mod tests {
         body: &str,
     ) -> Result<String> {
         store.save(kind, id, title.into(), body.into(), String::new())
+    }
+
+    #[test]
+    fn flash_is_private_and_locked_capture_fails() {
+        let root = tempfile::tempdir().unwrap();
+        let state = state(root.path());
+        let body = "窗边想到的测试想法\n第二行";
+        save_flash(&state, body, Some("example.test"), false).unwrap();
+        with_store(root.path(), |store| {
+            let notes = store.list(Kind::Private)?;
+            assert_eq!(notes.len(), 1);
+            assert_eq!(notes[0].title, "窗边想到的测试想法");
+            assert_eq!(
+                store.read(Kind::Private, &notes[0].id)?.body,
+                format!("{body}\n\nexample.test")
+            );
+            assert!(!fs::read(store.path(&notes[0].id)?)?
+                .windows(12)
+                .any(|w| w == b"example.test"));
+            Ok(())
+        })
+        .unwrap();
+        state.session.lock().unwrap().locked = true;
+        assert!(save_flash(&state, body, None, false).is_err());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn browser_bridge_acknowledges_committed_notes_and_refuses_locked_writes() {
+        let root = tempfile::tempdir_in("/tmp").unwrap();
+        let shared = std::sync::Arc::new(state(root.path()));
+        let writer = shared.clone();
+        crate::flash_socket::serve(root.path(), move |text| {
+            save_flash(&writer, text, None, false).is_ok()
+        })
+        .unwrap();
+        assert!(
+            crate::flash_socket::send(root.path(), "选区\n\nhttps://example.test/post").unwrap()
+        );
+        shared.session.lock().unwrap().locked = true;
+        assert!(!crate::flash_socket::send(root.path(), "已锁定").unwrap());
+        with_store(root.path(), |store| {
+            let notes = store.list(Kind::Private)?;
+            assert_eq!(notes.len(), 1);
+            assert_eq!(
+                store.read(Kind::Private, &notes[0].id)?.body,
+                "选区\n\nhttps://example.test/post"
+            );
+            Ok(())
+        })
+        .unwrap();
     }
 
     fn sample(format: image::ImageFormat) -> Vec<u8> {

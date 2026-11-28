@@ -17,6 +17,33 @@ const { renderHome, clearHome } = await import('./home.js');
 const { renderAccount, clearAccount } = await import('./account.js');
 const { installControls } = await import('./controls.js');
 installControls();
+function showFlashSources(sources) {
+  const list = $('#flash-sources');
+  list.replaceChildren();
+  for (const app of sources) {
+    const button = el('button', 'quiet', app + ' ×');
+    button.title = t('flash.remove');
+    button.onclick = async () => {
+      try { showFlashSources(await invoke('flash_app_rule', {app, enabled:false})); }
+      catch { setError('err.generic'); }
+    };
+    list.append(button);
+  }
+}
+async function loadFlashSources() {
+  try { showFlashSources(await invoke('flash_apps')); }
+  catch { if (!state.locked) setError('err.generic'); }
+}
+$('#flash-browser').onclick = async () => {
+  try { await invoke('flash_browser_setup'); $('#flash-install').hidden = false; }
+  catch { setError('err.generic'); }
+};
+$('#flash-app').onclick = async () => {
+  try {
+    const app = await invoke('flash_choose_app');
+    if (app) showFlashSources(await invoke('flash_app_rule', {app, enabled:true}));
+  } catch { setError('err.generic'); }
+};
 let epoch = 0;
 let busy = false;
 let captureErrorShown = false;
@@ -379,6 +406,7 @@ async function navigate(view, id) {
   setView(view);
   if (view === 'home') renderHome(state.snapshot);
   if (view === 'account') renderAccount();
+  if (view === "settings") await loadFlashSources();
   if (workspaceViews.has(view)) await openWorkspace(view, id);
 }
 $$('.nav-item').forEach(button => button.addEventListener('click', () => navigate(button.dataset.view)));

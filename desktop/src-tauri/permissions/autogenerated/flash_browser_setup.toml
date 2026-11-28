@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-flash-browser-setup"
+description = "Enables the flash_browser_setup command without any pre-configured scope."
+commands.allow = ["flash_browser_setup"]
+
+[[permission]]
+identifier = "deny-flash-browser-setup"
+description = "Denies the flash_browser_setup command without any pre-configured scope."
+commands.deny = ["flash_browser_setup"]

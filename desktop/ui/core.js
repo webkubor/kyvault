@@ -112,7 +112,7 @@ const statusKinds = new Map([
 // Allowlist only fixed, localized action results. Background status and interpolation
 // variables (including user-provided text) stay out of notifications.
 const actionResults = new Set([
-  'status.captured', 'status.monitorOn', 'status.monitorOff', 'status.textSaved',
+  'flash.saved', 'status.captured', 'status.monitorOn', 'status.monitorOff', 'status.textSaved',
   'status.credSaved', 'status.reqSaved', 'status.refCopied', 'status.secretCopied',
   'status.entryCopied', 'status.entryDeleted', 'status.secretDeleted',
   'status.versionRestored', 'status.historyCleared',

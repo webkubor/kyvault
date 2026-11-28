@@ -860,6 +860,8 @@ pub fn lock(app: &tauri::AppHandle) -> Result<()> {
     let mut session = state.session.lock().map_err(|_| "会话不可用")?;
     session.locked = true;
     #[cfg(target_os = "macos")]
+    crate::flash::native::lock(app);
+    #[cfg(target_os = "macos")]
     app.run_on_main_thread(|| {
         extern "C" {
             fn ky_hide_secret();

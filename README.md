@@ -28,9 +28,13 @@
 
 ---
 
-## Ky 桌面版 0.3.2（macOS）
+## Ky 桌面版 0.3.3（macOS）
 
-Ky 把剪贴板历史、密码库和私密图文放在同一个本地工作台，无需注册账号。[下载 Apple Silicon Mac 安装包（DMG）](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.2/Ky_0.3.2_aarch64.dmg) · [官网](https://webkubor.github.io/kyvault/)
+按 ⌥⌘N 写闪记，按 ⌘↩ 存到私密收藏。网页选中文字可通过右键服务收藏。Chrome、Edge 和 Brave 可以按网站开启复制自动收藏。[浏览器连接说明](desktop/browser/README.md)
+
+![Ky quick note](docs/assets/desktop/quick-note.png)
+
+Ky 把剪贴板历史、密码库和私密图文放在同一个本地工作台，无需注册账号。[下载 Apple Silicon Mac 安装包（DMG）](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.3/Ky_0.3.3_aarch64.dmg) · [官网](https://webkubor.github.io/kyvault/)
 
 ![Ky 0.3.1 工作台首页](docs/assets/desktop/home.png)
 

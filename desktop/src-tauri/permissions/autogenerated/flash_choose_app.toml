@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-flash-choose-app"
+description = "Enables the flash_choose_app command without any pre-configured scope."
+commands.allow = ["flash_choose_app"]
+
+[[permission]]
+identifier = "deny-flash-choose-app"
+description = "Denies the flash_choose_app command without any pre-configured scope."
+commands.deny = ["flash_choose_app"]

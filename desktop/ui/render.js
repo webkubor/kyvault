@@ -216,6 +216,16 @@ function renderEntry(entry) {
     more.title = t('action.entryDetail');
     more.addEventListener('click', () => select(entry));
     wrap.appendChild(btn);
+    if (!entry.image && !entry.redacted && state.view === 'history') {
+      const save = el('button', 'quiet', t('flash.collect'));
+      save.onclick = async () => {
+        save.disabled = true;
+        try { await invoke('flash_history', {id:entry.id}); setStatus('flash.saved'); }
+        catch { setError('err.generic'); }
+        finally { save.disabled = false; }
+      };
+      wrap.appendChild(save);
+    }
     wrap.appendChild(more);
     return wrap;
   }

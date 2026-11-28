@@ -1,13 +1,21 @@
 fn main() {
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         println!("cargo:rerun-if-changed=src/secret_sheet.m");
+        println!("cargo:rerun-if-changed=src/flash.m");
+        println!("cargo:rustc-link-lib=framework=UniformTypeIdentifiers");
         cc::Build::new()
             .file("src/secret_sheet.m")
+            .file("src/flash.m")
             .flag("-fobjc-arc")
             .compile("ky_secret_sheet");
     }
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
+            "flash_browser_setup",
+            "flash_choose_app",
+            "flash_apps",
+            "flash_app_rule",
+            "flash_history",
             "touch_activity",
             "account_status",
             "account_login",

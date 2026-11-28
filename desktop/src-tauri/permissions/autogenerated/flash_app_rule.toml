@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-flash-app-rule"
+description = "Enables the flash_app_rule command without any pre-configured scope."
+commands.allow = ["flash_app_rule"]
+
+[[permission]]
+identifier = "deny-flash-app-rule"
+description = "Denies the flash_app_rule command without any pre-configured scope."
+commands.deny = ["flash_app_rule"]
