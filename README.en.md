@@ -11,7 +11,7 @@
 
 | Choose your tool | What you can do | Download |
 | --- | --- | --- |
-| **Ky for Mac** | Find a password, capture a thought with ⌥⌘N, or share selected text and images as a card. | [Mac 0.3.6 · Apple Silicon (arm64)](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.6/Ky_0.3.6_aarch64.dmg) |
+| **Ky for Mac** | Find a password, capture a thought with ⌥⌘N, or share selected text and images as a card. | [Mac 0.3.7 · Apple Silicon (arm64)](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.7/Ky_0.3.7_aarch64.dmg) |
 | **Kyvault CLI** | Pass an API key or token to a child process by alias. Your command contains only the alias. | [CLI 2.8.4 · macOS, Linux, Windows](https://github.com/webkubor/kyvault/releases/tag/v2.8.4) |
 
 [Website](https://webkubor.github.io/kyvault/) · [中文](README.md)

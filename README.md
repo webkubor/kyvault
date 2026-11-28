@@ -11,7 +11,7 @@
 
 | 选哪个 | 可以做什么 | 下载 |
 | --- | --- | --- |
-| **Ky 桌面版** | 按平台查密码，按 ⌥⌘N 记下想法，把选中的图文复制为分享卡片。 | [Mac 0.3.6 · Apple Silicon（arm64）](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.6/Ky_0.3.6_aarch64.dmg) |
+| **Ky 桌面版** | 按平台查密码，按 ⌥⌘N 记下想法，把选中的图文复制为分享卡片。 | [Mac 0.3.7 · Apple Silicon（arm64）](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.7/Ky_0.3.7_aarch64.dmg) |
 | **Kyvault 命令行** | 通过别名把 API Key 或 Token 传给子进程，命令里只写别名。 | [CLI 2.8.4 · macOS、Linux、Windows](https://github.com/webkubor/kyvault/releases/tag/v2.8.4) |
 
 [官网](https://webkubor.github.io/kyvault/) · [English](README.en.md)
