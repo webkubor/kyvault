@@ -1,11 +1,11 @@
 {
-  "version": "0.3.0",
-  "notes": "旧凭证支持搜索和原生查看；私有仓库仅同步密码密文。新增本地图文与离线分享反馈。",
-  "pub_date": "2026-11-28T04:00:41Z",
+  "version": "0.3.1",
+  "notes": "侧栏可离线查看本版更新日志。分享卡片支持复制和保存为 PNG，操作成功后会显示提示。",
+  "pub_date": "2026-11-28T04:34:59Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbTdTNzJuWW5FNDVsbmFRMWJJMzRMa1IrNW83b2lzeEdOdndjR2ZKYTBuMW90YzR6bU1naUsxWmRUd0RKVFEzbW05Zm9DTnNmaFdLUnZjOW5USnNFY1FnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODM4MDc2CWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4wClo3eFJPWHl2bjI1L1hEQ2w1OHFnQy9hTjJsamx4YzArdFBLRUNzaUZkQWVQNUlUV3E5ZXN3amt6c2J3dStjYUNNTmw2V1YvNE5EcG95V0lLMzdPbENBPT0K",
-      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.0/Ky.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbXpQSTlPVmVQNlROYlYva2xRcDFQdnE3YjhWVEg3MWpYNnQzalBiOENBYkJRQXp3R1lmdHFPZnd0WkVFOXhuajN1aWwvSCtMdGttZVpzSUJPV1h5dUFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODQwNDgwCWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4xCmtmdThXQ2NoZXJSc1FQdGpnQ0d5YWs0YS9PaWRKZkR2dUxFSWtBdVRIeTJwb29EOWVONlJweWFzWVBHbElacHErTnNpQzNkUkREMmtrME1zVDY3U0NRPT0K",
+      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.1/Ky.app.tar.gz"
     }
   }
 }
