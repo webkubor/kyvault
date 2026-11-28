@@ -22,6 +22,8 @@ onLanguageChanged(() => {
   });
 });
 
+export function workspaceHasPendingWork() { return Boolean(current?.busy || current?.dirty); }
+
 export function canLeaveWorkspace() {
   if (!current || state.locked) return true;
   if (current.busy) return false;

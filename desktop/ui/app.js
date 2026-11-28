@@ -12,7 +12,7 @@ const { setView, renderList, renderDetail, renderNoBridge, relocalizeDynamic, cl
 const { t, applyLanguage, syncLanguageFromSnapshot, currentLang, LANG_KEY, onLanguageChanged } = await import('./lang.js');
 
 const workspaceViews = new Set(['private', 'drafts', 'shares', 'feedback']);
-const { openWorkspace, closeWorkspace, canLeaveWorkspace } = await import('./workspace.js');
+const { openWorkspace, closeWorkspace, canLeaveWorkspace, workspaceHasPendingWork } = await import('./workspace.js');
 const { renderHome, clearHome } = await import('./home.js');
 const { renderAccount, clearAccount } = await import('./account.js');
 const { installControls } = await import('./controls.js');
@@ -300,12 +300,15 @@ if (desktop) {
   });
   // 用户点"更新"后的下载/安装进度显示到状态条。
   listen('update-progress', (event) => {
-    const { phase, version } = event.payload || {};
+    const { phase, version, downloaded, total } = event.payload || {};
+    if (!installing || version !== availableVersion) return;
     if (phase === 'downloading') {
-      setStatus('status.updateDownloading', { version: version || '' });
-    } else if (phase === 'installed') {
-      setStatus('status.updateInstalled', { version: version || '' });
+      progress = total > 0 ? Math.min(100, Math.floor(downloaded / total * 100)) : null;
+    } else {
+      checkMessage = phase === 'installed' ? 'about.restarting' : 'about.installing';
+      if (phase === 'installed') writePref('ky.installedVersion', version);
     }
+    paintUpdate();
   });
   // 无条件兜底：直接问后端要 inbox 里的 pending 请求并弹框。
   // 不依赖事件、不依赖 pendingRequestId —— 事件在冷启动时可能早于监听器
@@ -393,6 +396,9 @@ let manualCheck = false;
 let checkMessage = '';
 let releaseNotes = [];
 let historyRequest = 0;
+let historyFailed = false;
+let installing = false;
+let progress = null;
 
 function paintUpdate() {
   const dot = $('#update-dot');
@@ -402,6 +408,13 @@ function paintUpdate() {
   $('#update-detail').hidden = !availableVersion;
   $('#update-available-text').textContent = availableVersion
     ? t('about.newAvailable', {version:availableVersion}) : '';
+  const meter = $('#update-progress');
+  meter.hidden = !installing || checkMessage !== 'about.downloading';
+  if (progress === null) meter.removeAttribute('value');
+  else meter.value = progress;
+  $('#check-update').disabled = installing || checkMessage === 'about.checking';
+  $('#about-dialog .close').disabled = installing;
+  $('#do-update').disabled = installing || checkMessage === 'about.checking';
   $('#update-status').textContent = checkMessage ? t(checkMessage) : '';
 }
 
@@ -416,7 +429,16 @@ function renderReleaseNotes() {
   for (const note of releaseNotes) {
     if (!/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/.test(note.version) || 'v' + note.version === current) continue;
     // Link to the official release page. Never inject remote markdown, images or URLs.
-    const link = el('a', 'release-link', 'v' + note.version + ' · ' + t('about.openRelease'));
+    const row = el('details', 'release-row');
+    const title = (note.name || '').replace(/^(?:Ky(?:\.app)?\s*)?v?\d+\.\d+\.\d+\s*[-—·:]?\s*/i,'').trim();
+    const summary = el('summary', '', ['v' + note.version, title].filter(Boolean).join(' · '));
+    const date = (note.published_at || '').slice(0, 10);
+    if (date) summary.append(el('time', '', date));
+    row.append(summary);
+    const body = (note.body || '').replace(/!\[[^\]]*\]\([^\n]*?\)/g,'')
+      .replace(/\[([^\]]+)\]\([^\n]*?\)/g,'$1').replace(/^#{1,6}\s+/gm,'').replace(/\*\*|`/g,'').trim();
+    row.append(el('p', 'release-description', body || t('about.noDetail')));
+    const link = el('a', 'release-link', t('about.openRelease'));
     link.href = 'https://github.com/webkubor/kyvault/releases/tag/desktop-v' + note.version;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
@@ -427,14 +449,19 @@ function renderReleaseNotes() {
         $('#update-status').textContent = t('about.linkFailed');
       });
     };
-    box.append(link);
+    row.append(link);
+    box.append(row);
+  }
+  if (historyFailed) {
+    const retry = el('button','quiet',t('about.retry'));
+    retry.onclick = loadHistory;
+    box.append(el('p','hint',t('about.historyFailed')),retry);
   }
   if (!box.childElementCount) box.append(el('p', 'hint', t('about.noNotes')));
 }
 
-$('#about').addEventListener('click', async () => {
-  $('#about-dialog').showModal();
-  paintUpdate();
+async function loadHistory() {
+  historyFailed = false;
   const request = ++historyRequest;
   releaseNotes = null;
   renderReleaseNotes();
@@ -445,9 +472,16 @@ $('#about').addEventListener('click', async () => {
   } catch {
     if (request !== historyRequest) return;
     releaseNotes = [];
+    historyFailed = true;
   }
   renderReleaseNotes();
-});
+}
+$('#about-dialog').addEventListener('cancel', event => { if (installing) event.preventDefault(); });
+$('#about').onclick = () => {
+  $('#about-dialog').showModal();
+  paintUpdate();
+  loadHistory();
+};
 
 $('#check-update').addEventListener('click', async () => {
   const button = $('#check-update');
@@ -472,15 +506,27 @@ $('#check-update').addEventListener('click', async () => {
   }
 });
 $('#do-update').addEventListener('click', async () => {
-  const btn = $('#do-update');
-  const status = $('#update-status');
-  if (btn) { btn.disabled = true; btn.classList.add('loading'); }
-  if (status) status.textContent = t('about.downloading');
+  if (installing || !availableVersion) return;
+  if (workspaceHasPendingWork()) {
+    checkMessage = 'about.unsaved';
+    return paintUpdate();
+  }
+  const target = availableVersion;
+  if (!await confirm('about.restart','about.restartHint','about.restart')) return;
+  installing = true;
+  progress = null;
+  checkMessage = 'about.downloading';
+  paintUpdate();
   try {
-    await invoke('install_update');
-  } catch (e) {
-    if (status) status.textContent = typeof e === 'string' ? e : t('about.updateFailed');
-    if (btn) { btn.disabled = false; btn.classList.remove('loading'); }
+    await invoke('install_update', {expectedVersion:target});
+  } catch (error) {
+    installing = false;
+    checkMessage = 'about.updateFailed';
+    if (String(error) === 'version_changed') {
+      availableVersion = null;
+      checkMessage = 'about.changed';
+    }
+    paintUpdate();
   }
 });
 function filterCollection() {
@@ -576,6 +622,12 @@ setView('home');
 renderHome(state.snapshot);
 
 if (desktop) {
+  const installed = readPref('ky.installedVersion', '');
+  if (installed && 'v' + installed === $('#about-version').textContent) {
+    const { notifyToast } = await import('./toast.js');
+    notifyToast(() => t('about.arrived',{version:installed}), {id:'updated'});
+    writePref('ky.installedVersion', '');
+  }
   let lastTouch = 0;
   const touchActivity = () => {
     if (state.locked) return;

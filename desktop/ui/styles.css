@@ -485,3 +485,17 @@ main[data-view=vault] .entry-meta { color: var(--muted); }
   #status[data-kind=busy]::before { animation: status-turn 1s linear infinite; }
 }
 @keyframes status-turn { to { transform: rotate(1turn); } }
+
+.release-row { border-top: 1px solid var(--line); padding: var(--s2) 0; }
+.release-row summary { cursor: pointer; padding: var(--s1); font-weight: 600; }
+.release-row time { display: inline-block; margin-inline-start: var(--s2); font-size: var(--t-xs); color: var(--muted); font-weight: 400; }
+.release-description { white-space: pre-wrap; line-height: 1.6; overflow-wrap: anywhere; }
+.release-notes { max-height: none; overflow: visible; }
+#update-progress { width: 100%; accent-color: var(--accent); }
+.about-dialog > .dialog-heading {
+  position: sticky; top: calc(0px - var(--s5)); z-index: 1;
+  margin: calc(0px - var(--s5)) calc(0px - var(--s5)) var(--s3);
+  padding: var(--s3) var(--s5);
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.release-row[open] { padding-bottom: var(--s3); }

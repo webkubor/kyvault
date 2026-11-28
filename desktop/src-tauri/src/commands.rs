@@ -233,14 +233,25 @@ pub async fn check_update<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result
 /// 用户主动点"更新"：检查并安装最新版，装完重启。
 /// 结果与进度通过 update-progress 事件发给前端（含下载百分比）。
 #[tauri::command]
-pub async fn install_update(app: tauri::AppHandle) -> Result<()> {
-    let updater = app.updater().map_err(|e| e.to_string())?;
+pub async fn install_update(app: tauri::AppHandle, expected_version: String) -> Result<()> {
+    static INSTALL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let guard = INSTALL.try_lock().map_err(|_| "install_busy")?;
+    let updater = app
+        .updater_builder()
+        .timeout(Duration::from_secs(120))
+        .build()
+        .map_err(|_| "update_unavailable")?;
     let update = updater
         .check()
         .await
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| "已经是最新版本".to_string())?;
+        .ok_or_else(|| "version_changed".to_string())?;
     let version = update.version.clone();
+    if version != expected_version {
+        return Err("version_changed".into());
+    }
+    let mut downloaded = 0usize;
+    let mut last_report = Instant::now();
     let _ = app.emit(
         "update-progress",
         serde_json::json!({"phase":"downloading","version":version}),
@@ -248,14 +259,19 @@ pub async fn install_update(app: tauri::AppHandle) -> Result<()> {
     update
         .download_and_install(
             |chunk, total| {
+                downloaded += chunk;
+                if last_report.elapsed() < Duration::from_millis(150) && total != Some(downloaded as u64) {
+                    return;
+                }
+                last_report = Instant::now();
                 let _ = app.emit(
                     "update-progress",
                     serde_json::json!({
-                        "phase":"downloading","version":version,"downloaded":chunk,"total":total
+                        "phase":"downloading","version":version,"downloaded":downloaded,"total":total
                     }),
                 );
             },
-            || {},
+            || { let _ = app.emit("update-progress", serde_json::json!({"phase":"installing","version":version})); },
         )
         .await
         .map_err(|e| e.to_string())?;
@@ -267,68 +283,51 @@ pub async fn install_update(app: tauri::AppHandle) -> Result<()> {
     // 或直接在这里延迟重启）。这里直接延迟重启，前端会收到 installed 事件显示提示。
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        std::thread::sleep(std::time::Duration::from_secs(2));
+        let _guard = guard;
+        tokio::time::sleep(Duration::from_secs(2)).await;
         handle.restart();
     });
     Ok(())
 }
 
-/// 当前版本 + 桌面线的历史更新日志。联网从 GitHub Releases 拉取；
-/// 失败时返回空日志（离线可用，只是看不到日志，不影响更新机制本身）。
+/// A failed request is distinct from a successful empty history.
 #[tauri::command]
 pub async fn get_app_info() -> Result<serde_json::Value> {
     tauri::async_runtime::spawn_blocking(release_history)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|_| "history_unavailable")?
 }
 
-fn release_history() -> serde_json::Value {
-    let current = env!("CARGO_PKG_VERSION").to_string();
-    let mut notes: Vec<ReleaseNote> = Vec::new();
-    if let Ok(resp) = ureq::get("https://api.github.com/repos/webkubor/kyvault/releases")
-        .set("Accept", "application/vnd.github+json")
-        .set(
-            "User-Agent",
-            concat!("ky-desktop/", env!("CARGO_PKG_VERSION")),
-        )
-        .timeout(std::time::Duration::from_secs(10))
-        .call()
-    {
-        if let Ok(body) = resp.into_json::<serde_json::Value>() {
-            if let Some(arr) = body.as_array() {
-                for r in arr {
-                    let tag = r.get("tag_name").and_then(|v| v.as_str()).unwrap_or("");
-                    if !tag.starts_with("desktop-v") {
-                        continue;
-                    }
-                    notes.push(ReleaseNote {
-                        version: tag.trim_start_matches("desktop-v").to_string(),
-                        name: r
-                            .get("name")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string(),
-                        body: r
-                            .get("body")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string(),
-                        published_at: r
-                            .get("published_at")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string(),
-                        url: r
-                            .get("html_url")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string(),
-                    });
-                }
+fn release_history() -> Result<serde_json::Value> {
+    let releases: Vec<serde_json::Value> =
+        ureq::get("https://api.github.com/repos/webkubor/kyvault/releases?per_page=100")
+            .set("Accept", "application/vnd.github+json")
+            .set(
+                "User-Agent",
+                concat!("ky-desktop/", env!("CARGO_PKG_VERSION")),
+            )
+            .timeout(Duration::from_secs(10))
+            .call()
+            .map_err(|_| "history_unavailable")?
+            .into_json()
+            .map_err(|_| "history_unavailable")?;
+    let notes: Vec<_> = releases
+        .iter()
+        .filter_map(|r| {
+            if r["draft"] == true || r["prerelease"] == true {
+                return None;
             }
-        }
-    }
-    serde_json::json!({"current": current, "notes": notes})
+            let version = r["tag_name"].as_str()?.strip_prefix("desktop-v")?;
+            Some(ReleaseNote {
+                version: version.to_owned(),
+                name: r["name"].as_str().unwrap_or_default().into(),
+                body: r["body"].as_str().unwrap_or_default().into(),
+                published_at: r["published_at"].as_str().unwrap_or_default().into(),
+                url: r["html_url"].as_str().unwrap_or_default().into(),
+            })
+        })
+        .collect();
+    Ok(serde_json::json!({"current":env!("CARGO_PKG_VERSION"),"notes":notes}))
 }
 
 #[derive(Serialize)]
