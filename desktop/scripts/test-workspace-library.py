@@ -21,10 +21,21 @@ class LibraryTest(unittest.TestCase):
                 page.add_init_script("""
                     const docs = {private:[], drafts:[], shares:[], feedback:[]};
                     window.fixtureDocs=docs;
-                    window.__TAURI__ = {event:{listen:async()=>()=>{}}, core:{invoke:async(cmd,a)=>{
+                    window.listeners={};
+                    window.privateReads=0;
+                    window.__TAURI__ = {event:{listen:async(name,fn)=>{listeners[name]=fn;return ()=>{};}}, core:{invoke:async(cmd,a)=>{
                       if(cmd==='snapshot') return {entries:[],secrets:[],monitoring:false,lang:'zh-CN'};
                       if(cmd==='pending_requests') return [];
-                      if(cmd==='workspace_list') return docs[a.kind].map(({id,title})=>({id,title}));
+                      if(cmd==='workspace_list') {
+                        if(a.kind==='private') {
+                          privateReads++;
+                          if(window.delayNext) {
+                            window.delayNext=false;
+                            return new Promise(resolve=>{window.finishRead=resolve;});
+                          }
+                        }
+                        return docs[a.kind].map(({id,title})=>({id,title}));
+                      }
                       if(cmd==='workspace_read') return docs[a.kind].find(r=>r.id===a.id);
                       if(cmd==='workspace_save') {
                         const rows=docs[a.kind], id=a.id || String(rows.length+1);
@@ -121,6 +132,51 @@ class LibraryTest(unittest.TestCase):
                 shot('drafts-no-results')
                 click('清除搜索')
                 expect(wk.get_by_role('button', name='修订 · 读书会开场想法')).to_be_visible()
+                nav('private')
+                query.fill('闪记')
+                page.evaluate("""() => {
+                  window.delayNext=true;
+                  listeners['private-collection-changed']();
+                  fixtureDocs.private.push({id:'native',title:'闪记新条目',body:'模拟原生已保存',image:''});
+                  return listeners['private-collection-changed']();
+                }""")
+                page.evaluate("finishRead([])")
+                expect(wk.get_by_role('button', name='闪记新条目')).to_be_visible()
+                expect(query).to_have_value('闪记')
+                expect(query).to_be_focused()
+
+                def delay_refresh():
+                    page.evaluate("() => {window.delayNext=true;listeners['private-collection-changed']()}")
+                def late_result():
+                    page.evaluate("finishRead([{id:'stale',title:'过期结果'}])")
+
+                delay_refresh()
+                click('闪记新条目')
+                late_result()
+                count = page.evaluate('privateReads')
+                page.evaluate("listeners['private-collection-changed']()")
+                expect(wk.get_by_role('heading', name='闪记新条目')).to_be_visible()
+                click('用作想法草稿')
+                wk.get_by_label('正文', exact=True).fill('尚未保存')
+                page.evaluate("listeners['private-collection-changed']()")
+                expect(wk.get_by_label('正文', exact=True)).to_have_value('尚未保存')
+                self.assertEqual(page.evaluate('privateReads'), count)
+                click('取消')
+                click('放弃更改')
+                click('返回收藏列表')
+                delay_refresh()
+                nav('drafts')
+                late_result()
+                expect(wk.get_by_text('过期结果')).to_have_count(0)
+                nav('private')
+                delay_refresh()
+                page.evaluate("listeners['app-locked']()")
+                late_result()
+                count = page.evaluate('privateReads')
+                page.evaluate("listeners['private-collection-changed']()")
+                expect(wk).to_be_hidden()
+                expect(wk).to_be_empty()
+                self.assertEqual(page.evaluate('privateReads'), count)
                 browser.close()
 
 

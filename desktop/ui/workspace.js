@@ -155,6 +155,10 @@ function read(kind, id) { return invoke('workspace_read', {kind, id}); }
 function save(kind, record) {
   return invoke('workspace_save', {kind, id: record.id ?? null, title: record.title, body: record.body, image: record.image || ''});
 }
+export function refreshPrivateList() {
+  if (!state.locked) return current?.refreshPrivate?.();
+}
+
 async function list(pickDraft = false) {
   const page = screen();
   const kind = pickDraft ? 'drafts' : view;
@@ -188,40 +192,47 @@ async function list(pickDraft = false) {
   }
   page.panel.append(toolbar, searchField, rows);
   message(page, 'loading');
-  try {
-    const entries = await invoke('workspace_list', {kind});
-    if (!live(page)) return;
-    const render = () => {
-      rows.replaceChildren();
-      for (const entry of entries.filter(r => r.title.toLowerCase().includes(query.value.trim().toLowerCase()))) {
-        const row = el('button', 'wk-row', entry.title);
-        row.onclick = () => run(page, async () => {
-          const record = await read(kind, entry.id);
-          if (live(page)) pickDraft ? selectContent(record) : detail(kind, record);
-        });
-        rows.append(row);
-      }
-      if (!rows.childElementCount) {
-        const filtered = Boolean(query.value.trim());
-        rows.append(label('p', filtered ? 'noMatches' : 'empty_' + kind, 'wk-muted'));
-        if (filtered) rows.append(button('clearSearch', () => {
-          query.value = '';
-          searches.delete(searchKey);
-          render();
-          query.focus();
-        }));
-      }
-    };
-    query.oninput = () => { searches.set(searchKey, query.value); render(); };
-    render();
-    message(page);
-    if (document.activeElement === document.body) query.focus();
-  } catch {
-    if (live(page)) {
+  let entries = [];
+  let revision = 0;
+  const render = () => {
+    rows.replaceChildren();
+    for (const entry of entries.filter(r => r.title.toLowerCase().includes(query.value.trim().toLowerCase()))) {
+      const row = el('button', 'wk-row', entry.title);
+      row.onclick = () => run(page, async () => {
+        const record = await read(kind, entry.id);
+        if (live(page)) pickDraft ? selectContent(record) : detail(kind, record);
+      });
+      rows.append(row);
+    }
+    if (!rows.childElementCount) {
+      const filtered = Boolean(query.value.trim());
+      rows.append(label('p', filtered ? 'noMatches' : 'empty_' + kind, 'wk-muted'));
+      if (filtered) rows.append(button('clearSearch', () => {
+        query.value = '';
+        searches.delete(searchKey);
+        render();
+        query.focus();
+      }));
+    }
+  };
+  query.oninput = () => { searches.set(searchKey, query.value); render(); };
+  async function reload(initial = false) {
+    const request = ++revision;
+    try {
+      const latest = await invoke('workspace_list', {kind});
+      if (!live(page) || request !== revision) return;
+      entries = latest;
+      render();
+      message(page);
+      if (initial && document.activeElement === document.body) query.focus();
+    } catch {
+      if (!live(page) || request !== revision) return;
       message(page, 'error');
-      rows.append(button('retry', () => list(pickDraft)));
+      page.status.append(button('retry', () => reload()));
     }
   }
+  if (kind === 'private') page.refreshPrivate = () => reload();
+  await reload(true);
 }
 
 function toast(key, kind = 'success') {

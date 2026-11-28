@@ -12,7 +12,7 @@ const { setView, renderList, renderDetail, renderNoBridge, relocalizeDynamic, cl
 const { t, applyLanguage, syncLanguageFromSnapshot, currentLang, LANG_KEY, onLanguageChanged } = await import('./lang.js');
 
 const workspaceViews = new Set(['private', 'drafts', 'shares', 'feedback']);
-const { openWorkspace, closeWorkspace, canLeaveWorkspace, workspaceHasPendingWork } = await import('./workspace.js');
+const { openWorkspace, closeWorkspace, refreshPrivateList, canLeaveWorkspace, workspaceHasPendingWork } = await import('./workspace.js');
 const { renderHome, clearHome } = await import('./home.js');
 const { renderAccount, clearAccount } = await import('./account.js');
 const { installControls } = await import('./controls.js');
@@ -698,6 +698,7 @@ if (desktop) {
   document.addEventListener('pointerdown', touchActivity);
   Promise.all([
     listen('history-changed', () => { if (!document.hidden) refresh(); }),
+    listen('private-collection-changed', refreshPrivateList),
     listen('app-locked', lockView),
     listen('capture-error', () => {
       // Show a real error instead of silently pretending the capture worked.
