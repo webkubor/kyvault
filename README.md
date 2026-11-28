@@ -11,16 +11,25 @@
 
 | 选哪个 | 可以做什么 | 下载 |
 | --- | --- | --- |
-| **Ky 桌面版** | 按平台查密码，按 ⌥⌘N 记下想法，把选中的图文复制为分享卡片。 | [Mac 0.3.6 · Apple Silicon（arm64）](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.6/Ky_0.3.6_aarch64.dmg) |
+| **Ky 桌面版** | 按平台查密码，按 ⌥⌘N 记下想法，把选中的图文复制为分享卡片。 | [Mac 0.3.7 · Apple Silicon（arm64）](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.7/Ky_0.3.7_aarch64.dmg) |
 | **Kyvault 命令行** | 通过别名把 API Key 或 Token 传给子进程，命令里只写别名。 | [CLI 2.8.4 · macOS、Linux、Windows](https://github.com/webkubor/kyvault/releases/tag/v2.8.4) |
 
 [官网](https://webkubor.github.io/kyvault/) · [English](README.en.md)
+
+左键点 Mac 菜单栏的 Ky 图标，可以打字、听写，也可以粘贴文字或图片。按 ⌘↩ 存入「私密收藏」。打开收藏，点「用作想法草稿」，就能编辑副本并选段分享。
+
+![速记浮窗中输入了读书会开场笔记，底部可粘贴、听写或保存](docs/assets/desktop/0.3.7/tray-zh.png)
+
+<details>
+<summary>查看 0.3.6 应用内更新演示</summary>
 
 [![Ky 0.3.6 显示测试更新的版本号和说明](docs/assets/desktop/0.3.6/update-preview-zh.png)](docs/assets/desktop/0.3.6/update-preview-zh.mp4)
 
 点击截图播放演示：打开新版本提示，阅读更新说明，再取消重启。画面使用测试更新数据。
 
 https://github.com/user-attachments/assets/bf222d0b-031a-44d5-8692-9b95b9b40a6d
+
+</details>
 
 ## 在 Mac 上开始
 

@@ -67,18 +67,21 @@ export function closeWorkspace() {
   root.hidden = true;
 }
 
-export async function openWorkspace(next, id) {
+export async function openWorkspace(next, id, privateSourceId) {
   closeWorkspace();
   if (state.locked || !views.includes(next)) return;
   view = next;
   $('#workspace').hidden = false;
-  if (!id) return list();
+  const fromPrivate = next === 'drafts' && privateSourceId;
+  if (!id && !fromPrivate) return list();
   const page = screen();
   page.panel.append(button('back', () => list()));
   message(page, 'loading');
   await run(page, async () => {
-    const record = await read(next, id);
-    if (live(page)) detail(next, record);
+    const record = fromPrivate ? await read('private', privateSourceId) : await read(next, id);
+    if (!live(page)) return;
+    if (fromPrivate) editor('drafts', undefined, record);
+    else detail(next, record);
   });
 }
 
@@ -152,6 +155,10 @@ function read(kind, id) { return invoke('workspace_read', {kind, id}); }
 function save(kind, record) {
   return invoke('workspace_save', {kind, id: record.id ?? null, title: record.title, body: record.body, image: record.image || ''});
 }
+export function refreshPrivateList() {
+  if (!state.locked) return current?.refreshPrivate?.();
+}
+
 async function list(pickDraft = false) {
   const page = screen();
   const kind = pickDraft ? 'drafts' : view;
@@ -159,39 +166,73 @@ async function list(pickDraft = false) {
   if (pickDraft) toolbar.append(button('back', () => list()), label('h2', 'chooseDraft'));
   else if (kind === 'shares') toolbar.append(button('chooseDraft', () => list(true), true));
   else if (kind === 'feedback') toolbar.append(importControl(page));
-  else toolbar.append(button(kind === 'private' ? 'newPrivate' : 'newDraft', () => editor(kind), true));
+  else {
+    toolbar.classList.add('wk-library-intro');
+    toolbar.append(label('p', kind === 'private' ? 'privateHint' : 'draftHint'),
+      button(kind === 'private' ? 'newPrivate' : 'newDraft', () => editor(kind), true));
+  }
   const query = el('input');
   query.type = 'search';
   const searchKey = pickDraft ? 'pickDraft' : kind;
   query.value = searches.get(searchKey) || '';
   const rows = el('div', kind === 'shares' ? 'wk-list wk-share-list' : 'wk-list');
-  page.panel.append(toolbar, field('search', query), rows);
+  const library = !pickDraft && (kind === 'private' || kind === 'drafts');
+  if (library) {
+    page.panel.classList.add('wk-library');
+    rows.classList.add('wk-library-rows');
+  }
+  const searchLabel = library ? (kind === 'private' ? 'privateSearch' : 'draftSearch') : 'search';
+  const searchField = field(searchLabel, query);
+  if (library) {
+    const box = el('span', 'wk-library-search');
+    const icon = el('span', 'search-icon');
+    icon.setAttribute('aria-hidden', 'true');
+    box.append(icon, query);
+    searchField.append(box);
+  }
+  page.panel.append(toolbar, searchField, rows);
   message(page, 'loading');
-  try {
-    const entries = await invoke('workspace_list', {kind});
-    if (!live(page)) return;
-    const render = () => {
-      rows.replaceChildren();
-      for (const entry of entries.filter(r => r.title.toLowerCase().includes(query.value.trim().toLowerCase()))) {
-        const row = el('button', 'wk-row', entry.title);
-        row.onclick = () => run(page, async () => {
-          const record = await read(kind, entry.id);
-          if (live(page)) pickDraft ? selectContent(record) : detail(kind, record);
-        });
-        rows.append(row);
-      }
-      if (!rows.childElementCount) rows.append(label('p', entries.length ? 'noMatches' : 'empty_' + kind, 'wk-muted'));
-    };
-    query.oninput = () => { searches.set(searchKey, query.value); render(); };
-    render();
-    message(page);
-    if (document.activeElement === document.body) query.focus();
-  } catch {
-    if (live(page)) {
+  let entries = [];
+  let revision = 0;
+  const render = () => {
+    rows.replaceChildren();
+    for (const entry of entries.filter(r => r.title.toLowerCase().includes(query.value.trim().toLowerCase()))) {
+      const row = el('button', 'wk-row', entry.title);
+      row.onclick = () => run(page, async () => {
+        const record = await read(kind, entry.id);
+        if (live(page)) pickDraft ? selectContent(record) : detail(kind, record);
+      });
+      rows.append(row);
+    }
+    if (!rows.childElementCount) {
+      const filtered = Boolean(query.value.trim());
+      rows.append(label('p', filtered ? 'noMatches' : 'empty_' + kind, 'wk-muted'));
+      if (filtered) rows.append(button('clearSearch', () => {
+        query.value = '';
+        searches.delete(searchKey);
+        render();
+        query.focus();
+      }));
+    }
+  };
+  query.oninput = () => { searches.set(searchKey, query.value); render(); };
+  async function reload(initial = false) {
+    const request = ++revision;
+    try {
+      const latest = await invoke('workspace_list', {kind});
+      if (!live(page) || request !== revision) return;
+      entries = latest;
+      render();
+      message(page);
+      if (initial && document.activeElement === document.body) query.focus();
+    } catch {
+      if (!live(page) || request !== revision) return;
       message(page, 'error');
-      rows.append(button('retry', () => list(pickDraft)));
+      page.status.append(button('retry', () => reload()));
     }
   }
+  if (kind === 'private') page.refreshPrivate = () => reload();
+  await reload(true);
 }
 
 function toast(key, kind = 'success') {
@@ -228,9 +269,14 @@ function shareActions(page, getSaved) {
   return controls;
 }
 
+function navigateWorkspace(detail) {
+  window.dispatchEvent(new CustomEvent('workspace-navigate', {detail}));
+}
+
 function detail(kind, record) {
   const page = screen();
-  const actions = bar(button('hide', () => list()));
+  const back = {private: 'returnPrivate', drafts: 'returnDrafts'};
+  const actions = bar(button(back[kind] || 'hide', () => list()));
   const heading = el('h2', '', record.title);
   heading.tabIndex = -1;
   page.panel.append(actions, kind === 'shares' ? shareSurface(record, heading, page, () => record, 'plain') : heading);
@@ -248,21 +294,24 @@ function detail(kind, record) {
   }
   if (kind === 'shares') return;
   content(page.panel, record);
-  actions.append(button('edit', () => editor(kind, record)), button('delete', () => run(page, async () => {
+  actions.append(button(kind === 'drafts' ? 'continueEdit' : 'edit', () => editor(kind, record)), button('delete', () => run(page, async () => {
     if (!await confirmAction('deleteQuestion', 'delete') || !live(page)) return;
     await invoke('workspace_delete', {kind, id: record.id});
     if (live(page)) await list();
   })));
+  if (kind === 'private') actions.append(button('useAsDraft', () =>
+    navigateWorkspace({view: 'drafts', privateSourceId: record.id}), true));
   if (kind === 'drafts') actions.append(button('choose', () => selectContent(record), true));
 }
 
-function editor(kind, existing) {
+function editor(kind, existing, privateSource) {
   const page = screen();
   const title = el('input');
   const body = el('textarea');
-  title.value = existing?.title || '';
-  body.value = existing?.body || '';
-  let image = existing?.image || null;
+  const initial = existing || privateSource;
+  title.value = initial?.title || '';
+  body.value = initial?.body || '';
+  let image = initial?.image || null;
   const preview = el('div');
   const file = el('input');
   file.type = 'file';
@@ -290,15 +339,24 @@ function editor(kind, existing) {
   };
   title.oninput = body.oninput = () => { page.dirty = true; };
   const cancel = button('cancel', async () => {
-    if (await canLeaveWorkspace() && live(page)) existing ? detail(kind, existing) : list();
+    if (!await canLeaveWorkspace() || !live(page)) return;
+    page.dirty = false;
+    if (privateSource) navigateWorkspace({view: 'private', id: privateSource.id});
+    else if (existing) detail(kind, existing);
+    else list();
   });
   const submit = button('save', () => run(page, async () => {
     const record = { id: existing?.id, title: title.value.trim(), body: body.value, image };
     if (!record.title || (!record.body.trim() && !image)) return message(page, 'invalid');
     if (new TextEncoder().encode(record.title).length > 512 || /[\u0000-\u001f\u007f-\u009f]/u.test(record.title) || new TextEncoder().encode(record.body).length > 1024 * 1024) return message(page, 'size');
     record.id = await save(kind, record);
-    if (live(page)) detail(kind, record);
+    if (live(page)) {
+      const filter = searches.get(kind)?.trim().toLowerCase();
+      if (filter && !record.title.toLowerCase().includes(filter)) searches.delete(kind);
+      detail(kind, record);
+    }
   }), true);
+  if (privateSource) page.panel.append(label('p', 'draftFromPrivate', 'wk-muted'));
   page.panel.append(field('title', title), field('body', body), label('p', 'imageHint', 'wk-muted'), field('attach', file), preview, bar(cancel, submit));
   update();
   title.focus();
@@ -325,7 +383,7 @@ function selectContent(draft, selected = new Set()) {
     page.panel.append(label('p', 'shareImageHint', 'wk-muted'));
     option('image', w('image'), draft.image);
   }
-  page.panel.append(bar(button('back', () => list()), button('preview', () => run(page, async () => {
+  page.panel.append(bar(button('back', () => view === 'drafts' ? detail('drafts', draft) : list(true)), button('preview', () => run(page, async () => {
     if (!selected.size) return message(page, 'pick');
     const snapshot = {title: draft.title, body: paragraphs.filter((_, i) => selected.has(i)).join('\n\n'),
       image: selected.has('image') ? await sharePng(draft.image) : ''};
@@ -342,9 +400,7 @@ function selectContent(draft, selected = new Set()) {
         const saved = await savedSnapshot();
         if (!live(preview)) return;
         detail('shares', saved);
-        if (view !== 'shares') $('#workspace').dispatchEvent(new CustomEvent('workspace-navigate', {
-          bubbles: true, cancelable: true, detail: {view: 'shares', id}
-        }));
+        if (view !== 'shares') navigateWorkspace({view: 'shares', id});
       }))));
   }, 'badImage'), true)));
 }

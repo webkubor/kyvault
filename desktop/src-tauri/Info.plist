@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Ky uses the microphone when you start dictation in a quick note. 仅在你开始闪记听写时使用麦克风。</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Ky transcribes quick notes on this Mac. 闪记语音只在本机转为文字。</string>
     <key>NSServices</key>
     <array>
         <dict>

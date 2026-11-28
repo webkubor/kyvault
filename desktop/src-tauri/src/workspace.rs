@@ -378,6 +378,16 @@ pub fn save_flash(
     source: Option<&str>,
     automatic: bool,
 ) -> Result<(), String> {
+    save_flash_content(state, text, source, automatic, String::new())
+}
+
+pub fn save_flash_content(
+    state: &DesktopState,
+    text: &str,
+    source: Option<&str>,
+    automatic: bool,
+    image: String,
+) -> Result<(), String> {
     let session = state.session.lock().map_err(|_| "会话不可用")?;
     if session.locked
         || session.is_sensitive(text)
@@ -385,7 +395,7 @@ pub fn save_flash(
     {
         return Err("内容受保护，未收藏".into());
     }
-    let title: String = text
+    let mut title: String = text
         .trim()
         .lines()
         .next()
@@ -394,9 +404,16 @@ pub fn save_flash(
         .filter(|c| !c.is_control())
         .take(64)
         .collect();
+    if title.is_empty() && !image.is_empty() {
+        title = if crate::commands::load_prefs(state).lang == "en" {
+            "Image".into()
+        } else {
+            "图片".into()
+        };
+    }
     let body = source.map_or_else(|| text.to_owned(), |s| format!("{text}\n\n{s}"));
     with_store(&state.data_root, |store| {
-        store.save(Kind::Private, None, title, body, String::new())
+        store.save(Kind::Private, None, title, body, image)
     })
     .map(|_| ())
     .map_err(|_| "未能保存闪记".into())
@@ -481,6 +498,29 @@ mod tests {
         .unwrap();
         state.session.lock().unwrap().locked = true;
         assert!(save_flash(&state, body, None, false).is_err());
+    }
+
+    #[test]
+    fn image_only_flash_round_trips_and_locked_writes_are_rejected() {
+        let root = tempfile::tempdir().unwrap();
+        let state = state(root.path());
+        let image = format!(
+            "{PNG_PREFIX}{}",
+            STANDARD.encode(sample(image::ImageFormat::Png))
+        );
+        save_flash_content(&state, "", None, false, image.clone()).unwrap();
+        with_store(root.path(), |store| {
+            let notes = store.list(Kind::Private)?;
+            assert_eq!(notes.len(), 1);
+            assert!(!notes[0].title.is_empty());
+            let note = store.read(Kind::Private, &notes[0].id)?;
+            assert!(note.body.is_empty());
+            assert_eq!(note.image, image);
+            Ok(())
+        })
+        .unwrap();
+        state.session.lock().unwrap().locked = true;
+        assert!(save_flash_content(&state, "fixture", None, false, image).is_err());
     }
 
     #[cfg(target_os = "macos")]

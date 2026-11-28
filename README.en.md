@@ -11,16 +11,25 @@
 
 | Choose your tool | What you can do | Download |
 | --- | --- | --- |
-| **Ky for Mac** | Find a password, capture a thought with ⌥⌘N, or share selected text and images as a card. | [Mac 0.3.6 · Apple Silicon (arm64)](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.6/Ky_0.3.6_aarch64.dmg) |
+| **Ky for Mac** | Find a password, capture a thought with ⌥⌘N, or share selected text and images as a card. | [Mac 0.3.7 · Apple Silicon (arm64)](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.7/Ky_0.3.7_aarch64.dmg) |
 | **Kyvault CLI** | Pass an API key or token to a child process by alias. Your command contains only the alias. | [CLI 2.8.4 · macOS, Linux, Windows](https://github.com/webkubor/kyvault/releases/tag/v2.8.4) |
 
 [Website](https://webkubor.github.io/kyvault/) · [中文](README.md)
+
+Click Ky in the Mac menu bar to type a note, dictate, or paste text or an image. Press ⌘↩ to save it to Private collection. Choose “Use as idea draft” to edit a copy and select paragraphs to share.
+
+![Quick Capture panel with a sample book club note](docs/assets/desktop/0.3.7/tray-en.png)
+
+<details>
+<summary>Watch the in-app update demo (0.3.6)</summary>
 
 [![Ky 0.3.6 showing release notes for a test update](docs/assets/desktop/0.3.6/update-preview-en.png)](docs/assets/desktop/0.3.6/update-preview-en.mp4)
 
 Play the demo to see how to read the release notes and cancel before restarting. The available update uses test data.
 
 https://github.com/user-attachments/assets/c8fd26bf-28c0-4fac-bd11-6e6d0042f6e2
+
+</details>
 
 ## On your Mac
 

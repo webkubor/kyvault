@@ -1,7 +1,7 @@
 //! Native capture entries use the same encrypted collection as private notes.
 use crate::commands::{active, DesktopState};
 use std::collections::BTreeSet;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 fn rules(state: &DesktopState) -> Result<BTreeSet<String>, String> {
     match std::fs::read(state.data_root.join("flash-apps.json")) {
@@ -62,17 +62,22 @@ pub fn flash_sound(enabled: Option<bool>) -> bool {
     }
 }
 
-#[cfg(target_os = "macos")]
-fn received(state: &DesktopState, overlay: bool, audible: bool) {
-    extern "C" {
-        fn ky_flash_received(overlay: bool, audible: bool, english: bool);
-    }
-    unsafe {
-        ky_flash_received(
-            overlay,
-            audible,
-            crate::commands::load_prefs(state).lang == "en",
-        );
+fn received(app: &AppHandle, state: &DesktopState, overlay: bool, audible: bool) {
+    let _ = app.emit_to("main", "private-collection-changed", ());
+    #[cfg(not(target_os = "macos"))]
+    let _ = (state, overlay, audible);
+    #[cfg(target_os = "macos")]
+    {
+        extern "C" {
+            fn ky_flash_received(overlay: bool, audible: bool, english: bool);
+        }
+        unsafe {
+            ky_flash_received(
+                overlay,
+                audible,
+                crate::commands::load_prefs(state).lang == "en",
+            );
+        }
     }
 }
 
@@ -92,7 +97,9 @@ pub fn automatic(state: &DesktopState, change: isize, text: &str) {
     if rules(state).is_ok_and(|list| list.contains(source))
         && crate::workspace::save_flash(state, text, Some(source), true).is_ok()
     {
-        received(state, true, false);
+        if let Some(app) = native::APP.get() {
+            received(app, state, true, false);
+        }
     }
 }
 
@@ -138,7 +145,7 @@ pub fn flash_choose_app() -> Option<String> {
 }
 
 #[tauri::command]
-pub fn flash_history(state: State<DesktopState>, id: u64) -> Result<(), String> {
+pub fn flash_history(app: AppHandle, state: State<DesktopState>, id: u64) -> Result<(), String> {
     let entry = {
         let _session = active(&state)?;
         state
@@ -150,8 +157,7 @@ pub fn flash_history(state: State<DesktopState>, id: u64) -> Result<(), String> 
             .ok_or("无法收藏此条目")?
     };
     crate::workspace::save_flash(&state, &entry.text, entry.source.as_deref(), false)?;
-    #[cfg(target_os = "macos")]
-    received(&state, false, true);
+    received(&app, &state, false, true);
     Ok(())
 }
 
@@ -164,16 +170,19 @@ pub mod native {
         sync::OnceLock,
     };
     use tauri::{AppHandle, Manager};
-    static APP: OnceLock<AppHandle> = OnceLock::new();
+    pub(super) static APP: OnceLock<AppHandle> = OnceLock::new();
     extern "C" {
-        fn ky_flash_setup(save: extern "C" fn(*const c_char) -> bool);
-        fn ky_flash_open();
+        fn ky_flash_setup(
+            save: extern "C" fn(*const c_char, *const c_char) -> bool,
+            activity: extern "C" fn(),
+        );
+        fn ky_flash_open(item: *const std::ffi::c_void, english: bool, locked: bool);
         fn ky_flash_lock();
 
     }
-    extern "C" fn save(value: *const c_char) -> bool {
+    extern "C" fn save(value: *const c_char, image: *const c_char) -> bool {
         let Some(app) = APP.get() else { return false };
-        if value.is_null() {
+        if value.is_null() || image.is_null() {
             return false;
         }
         let Ok(text) = unsafe { CStr::from_ptr(value) }.to_str() else {
@@ -181,11 +190,21 @@ pub mod native {
         };
         {
             let state = app.state::<DesktopState>();
-            let saved = crate::workspace::save_flash(&state, text, None, false).is_ok();
+            let Ok(image) = unsafe { CStr::from_ptr(image) }.to_str() else {
+                return false;
+            };
+            let saved =
+                crate::workspace::save_flash_content(&state, text, None, false, image.into())
+                    .is_ok();
             if saved {
-                super::received(&state, true, true);
+                super::received(app, &state, true, true);
             }
             saved
+        }
+    }
+    extern "C" fn activity() {
+        if let Some(app) = APP.get() {
+            drop(crate::commands::active(&app.state::<DesktopState>()));
         }
     }
     pub fn setup(app: &AppHandle) {
@@ -195,7 +214,7 @@ pub mod native {
             let state = handle.state::<DesktopState>();
             let saved = crate::workspace::save_flash(&state, text, None, false).is_ok();
             if saved {
-                super::received(&state, true, true);
+                super::received(&handle, &state, true, true);
             }
             saved
         })
@@ -203,14 +222,23 @@ pub mod native {
         {
             eprintln!("Ky: browser quick notes unavailable");
         }
-        unsafe { ky_flash_setup(save) }
+        unsafe { ky_flash_setup(save, activity) }
     }
     pub fn open(app: &AppHandle) {
-        if crate::commands::active(&app.state::<DesktopState>()).is_err() {
-            crate::show(app);
+        let Some(tray) = app.tray_by_id("main") else {
             return;
-        }
-        let _ = app.run_on_main_thread(|| unsafe { ky_flash_open() });
+        };
+        let handle = app.clone();
+        let _ = tray.with_inner_tray_icon(move |inner| {
+            let state = handle.state::<DesktopState>();
+            let locked = crate::commands::active(&state).is_err();
+            let english = crate::commands::load_prefs(&state).lang == "en";
+            let item = inner.ns_status_item();
+            let ptr = item
+                .as_deref()
+                .map_or(std::ptr::null(), |item| std::ptr::from_ref(item).cast());
+            unsafe { ky_flash_open(ptr, english, locked) };
+        });
     }
     pub fn lock(app: &AppHandle) {
         let _ = app.run_on_main_thread(|| unsafe { ky_flash_lock() });

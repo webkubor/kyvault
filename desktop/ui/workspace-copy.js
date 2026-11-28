@@ -1,11 +1,18 @@
 import { getLang } from './i18n.js';
 
 const words = {
-  newPrivate: ['新建私密收藏', 'New private entry'], newDraft: ['写想法', 'Write an idea'],
+  newPrivate: ['添加收藏', 'Add private entry'], newDraft: ['写草稿', 'Write a draft'],
+  privateHint: ['左击菜单栏 Ky 图标或按 ⌥⌘N 打开闪记，默认存到这里。', 'Click Ky in the menu bar or press ⌥⌘N to open Quick Capture. Captures are saved here by default.'],
+  draftHint: ['先写下想法，分享时再选择段落和配图。', 'Write an idea now. Choose paragraphs and images when you share it.'],
+  privateSearch: ['按标题查找收藏', 'Find private entries by title'], draftSearch: ['按标题查找草稿', 'Find drafts by title'],
+  clearSearch: ['清除搜索', 'Clear search'], continueEdit: ['继续编辑', 'Continue editing'],
+  returnPrivate: ['返回收藏列表', 'Back to private entries'], returnDrafts: ['返回草稿列表', 'Back to drafts'],
+  useAsDraft: ['用作想法草稿', 'Use as idea draft'],
+  draftFromPrivate: ['编辑后点「保存」创建草稿，原收藏会保留。', 'Edit and save to create a draft. The original entry stays in your private collection.'],
   imageHint: ['可选择或拖入 PNG、JPEG、WebP 原图（最大 8 MiB，最长边 16384 像素、总计最多 4000 万像素）。', 'Choose or drop an original PNG, JPEG or WebP (up to 8 MiB and 16384 pixels per side, 40 megapixels total).'],
   shareImageHint: ['分享配图会移除原文件元数据，转为不超过 1 MiB 的 PNG，必要时缩小。下一步可预览结果。', 'Shared images are re-encoded as PNG without the original metadata and resized if needed to fit 1 MiB. Preview the result next.'],
-  empty_private: ['还没有私密收藏。新建一条，保存文字或配图。', 'Create your first private entry to keep text or an image.'],
-  empty_drafts: ['还没有草稿。到「想法草稿」写下想法，再选择要分享的段落或配图。', 'Write an idea in Drafts, then choose the paragraphs or image to share.'],
+  empty_private: ['还没有保存的收藏。', 'No private entries yet.'],
+  empty_drafts: ['还没有草稿。可直接写，也可打开私密收藏里的闪记，选择「用作想法草稿」。', 'Write a draft, or open a quick capture in Private collection and choose “Use as idea draft”.'],
   empty_shares: ['选择一篇草稿，预览对方会看到的内容，再保存分享版本。', 'Choose a draft, preview what the recipient will see, then save a version to share.'],
   empty_feedback: ['收到对方发回的 JSON 后，在这里导入并查看对应分享的反馈。', 'Import the JSON file returned by a recipient to read feedback on that share.'],
   back: ['返回', 'Back'], cancel: ['取消', 'Cancel'],
