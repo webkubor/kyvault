@@ -5,6 +5,7 @@
     "main"
   ],
   "permissions": [
+    "core:app:allow-set-app-theme",
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     { "identifier": "opener:allow-open-url", "allow": [{ "url": "https://github.com/webkubor/kyvault/releases/tag/desktop-v*" }] },

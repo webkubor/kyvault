@@ -19,7 +19,7 @@ reinvents redaction — it only displays what the backend returns.
 No dependencies / no build. Static files only.
 No inline JS or CSS, no `unsafe-html`. Handlers are attached in code; all text
 is inserted with `textContent`, never `innerHTML`.
-No network. `localStorage` holds **only** `ky.lang` and `ky.toolbarCollapsed` —
+No network. `localStorage` holds **only** `ky.lang`, `ky.theme` and `ky.toolbarCollapsed` —
 never history, secrets, or clipboard content.
 
 ## 3. Architecture
@@ -58,7 +58,7 @@ tests) authoritative when the `desktop` flag is computed.
 
 Dark mode uses neutral surfaces: window `#101012`, sidebar `#171719`, content `#1d1d20`, elevated controls and dialogs `#2b2b2f`. The bright green accent `#8ef568` identifies primary actions, focus, and selected items. Opaque surfaces keep wallpaper colours out of the dark palette.
 
-Light mode uses a pale background and a deeper green accent (`#0a6b46`). Both themes follow the system through `prefers-color-scheme`. Light surfaces can use vibrancy when backdrop blur is available.
+Light mode uses a pale background and a deeper green accent (`#0a6b46`). The sidebar offers system, light and dark appearance. System mode follows `prefers-color-scheme`. Light surfaces can use vibrancy when backdrop blur is available.
 
 macOS chrome: the sidebar reserves 30px at the top for the traffic lights,
    the toolbar title block is `-webkit-app-region: drag`, and every control is

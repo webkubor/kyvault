@@ -5,6 +5,11 @@
 export const DEFAULT_LANG = 'zh-CN';
 
 const zh = {
+  'theme.title': '外观',
+  'theme.system': '系统',
+  'theme.light': '浅色',
+  'theme.dark': '深色',
+
   'flash.sound': '闪记保存音效',
   'flash.browser': '连接浏览器…',
   'flash.install': '在浏览器的扩展管理页开启开发者模式，点「加载已解压的扩展程序」，选择 Finder 中的 extension 文件夹。',
@@ -240,6 +245,11 @@ const zh = {
 };
 
 const en = {
+  'theme.title': 'Appearance',
+  'theme.system': 'Auto',
+  'theme.light': 'Light',
+  'theme.dark': 'Dark',
+
   'flash.sound': 'Quick note sound',
   'flash.browser': 'Connect browser…',
   'flash.install': 'In the browser extensions page, turn on Developer mode and load the extension folder selected in Finder.',

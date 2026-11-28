@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>Ky</title>
+  <script src="appearance.js"></script>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="workspace.css">
   <link rel="stylesheet" href="home.css">
@@ -20,6 +21,12 @@
       <div class="brand-mark"><img src="logo.png" alt="" width="24" height="24"></div>
       <span class="wordmark">Ky<span class="brand-dot">.</span></span>
     </header>
+    <fieldset id="appearance" data-i18n-aria="theme.title">
+    <label><input type="radio" name="appearance" value="system" data-i18n-aria="theme.system"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v13H3z M8 21h8m-4-4v4"/></svg><span data-i18n="theme.system">系统</span></span></label>
+    <label><input type="radio" name="appearance" value="light" data-i18n-aria="theme.light"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7a5 5 0 1 0 0 10 5 5 0 1 0 0-10 M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg><span data-i18n="theme.light">浅色</span></span></label>
+    <label><input type="radio" name="appearance" value="dark" data-i18n-aria="theme.dark"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15a9 9 0 0 1-11-11 9 9 0 1 0 11 11z"/></svg><span data-i18n="theme.dark">深色</span></span></label>
+    </fieldset>
+    <select id="appearance-select" data-i18n-aria="theme.title"><option value="system" data-i18n="theme.system">系统</option><option value="light" data-i18n="theme.light">浅色</option><option value="dark" data-i18n="theme.dark">深色</option></select>
     <nav>
       <button class="nav-item" data-view="home" data-i18n-aria="nav.home"><span class="nav-icon" aria-hidden="true"></span><span data-i18n="nav.home"></span></button>
       <div class="nav-group" data-i18n="group.recent"></div>
@@ -60,6 +67,7 @@
     <div class="search-row" id="search-row">
       <span class="search-icon" aria-hidden="true"></span>
       <input id="search" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="search.placeholder" data-i18n-aria="search.aria">
+      <kbd aria-hidden="true">⌘ F</kbd>
     </div>
 
     <div id="vault-platform-row" hidden><label for="vault-platform" data-i18n="vault.platform"></label><select class="ky-control" id="vault-platform"></select></div>

@@ -13,7 +13,7 @@
      inline (that was what made the search row read as crowded). */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
   /* Motion tokens (single source for consistency). */
   --ease: cubic-bezier(.22, .61, .36, 1);
@@ -77,8 +77,9 @@
 }
 
 
-@media (prefers-color-scheme: light) {
-  :root {
+
+:where(html[data-theme="light"]):root {
+    color-scheme: light;
     --bg: #eef4ef;
     --sidebar: #e9f0ea;
     --surface: #f7faf8;
@@ -98,9 +99,10 @@
     --body-opaque: #eef4ef;
   }
   @supports ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
-    :root { --body-opaque: rgba(238, 244, 239, .42); }
+
+:where(html[data-theme="light"]):root { --body-opaque: rgba(238, 244, 239, .42); }
   }
-}
+
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -121,20 +123,22 @@ body {
 .sidebar, main, dialog { background: var(--sidebar); }
 .library, .detail, .settings { background: var(--surface); }
 
-@media (prefers-color-scheme: light) {
+
 @supports ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
-  .sidebar, main, dialog {
+
+:where(html[data-theme="light"]) .sidebar, :where(html[data-theme="light"]) main, :where(html[data-theme="light"]) dialog {
     background: color-mix(in srgb, var(--sidebar) 62%, transparent);
     -webkit-backdrop-filter: blur(30px) saturate(1.6);
     backdrop-filter: blur(30px) saturate(1.6);
   }
-  .library, .detail, .settings {
+
+:where(html[data-theme="light"]) .library, :where(html[data-theme="light"]) .detail, :where(html[data-theme="light"]) .settings {
     background: color-mix(in srgb, var(--surface) 60%, transparent);
     -webkit-backdrop-filter: blur(30px) saturate(1.6);
     backdrop-filter: blur(30px) saturate(1.6);
   }
 }
-}
+
 .toolbar, .search-row, footer { background: transparent; }
 
 /* AA contrast: bumped muted for glass legibility. */
@@ -466,9 +470,9 @@ main[data-view=vault] .entry-meta { color: var(--muted); }
 #account,#home { flex: 1; min-height: 0; overflow: auto; }
 
 .platform-mark img { width: 20px; height: 20px; object-fit: contain; }
-@media (prefers-color-scheme: dark) {
-  .platform-mark img.mono-mark { filter: invert(1); }
-}
+
+:where(html[data-theme="dark"]) .platform-mark img.mono-mark { filter: invert(1); }
+
 @media (forced-colors: active) {
   .platform-mark:has(img) { forced-color-adjust: none; background: white; }
   .platform-mark img.mono-mark { filter: none; }
@@ -499,11 +503,33 @@ main[data-view=vault] .entry-meta { color: var(--muted); }
 }
 .release-row[open] { padding-bottom: var(--s3); }
 
-@media (prefers-color-scheme: dark) {
-  main { background: var(--bg); }
-  .sidebar { background: var(--sidebar); }
-  dialog, .detail, .ky-toast { background: var(--raised); }
-  .nav-item[aria-current="page"], .entry[aria-pressed="true"] {
+
+:where(html[data-theme="dark"]) main { background: var(--bg); }
+
+:where(html[data-theme="dark"]) .sidebar { background: var(--sidebar); }
+
+:where(html[data-theme="dark"]) dialog, :where(html[data-theme="dark"]) .detail, :where(html[data-theme="dark"]) .ky-toast { background: var(--raised); }
+
+:where(html[data-theme="dark"]) .nav-item[aria-current="page"], :where(html[data-theme="dark"]) .entry[aria-pressed="true"] {
     box-shadow: inset 2px 0 var(--accent);
   }
+
+
+/* Appearance remains within reach when the navigation collapses. */
+.sidebar { overflow-y: auto; }
+.brand { padding-bottom: var(--s3); }
+#appearance {
+  display: flex; padding: 3px; margin: 0 0 var(--s3);
+  border: 1px solid var(--line); border-radius: 9px; background: var(--bg);
+}
+#appearance label { position: relative; flex: 1; min-width: 0; cursor: pointer; }
+#appearance input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+#appearance label > span { display: flex; align-items: center; justify-content: center; gap: 3px; min-height: 28px; border-radius: 6px; color: var(--muted); font-size: var(--t-xs); }
+#appearance svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+#appearance input:checked + span { background: var(--raised); color: var(--accent); font-weight: 650; }
+#appearance input:focus-visible + span { outline: 2px solid var(--accent); }
+#appearance-select { display: none; }
+@media (max-width: 760px) {
+  #appearance { display: none; }
+  #appearance-select { display: block; padding: 0; width: 100%; min-height: 32px; margin-bottom: var(--s2); font-size: var(--t-xs); }
 }
