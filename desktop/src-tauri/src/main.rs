@@ -284,6 +284,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             flash::flash_browser_setup,
+            flash::flash_sound,
             flash::flash_choose_app,
             flash::flash_apps,
             flash::flash_app_rule,
