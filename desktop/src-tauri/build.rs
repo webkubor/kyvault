@@ -1,7 +1,25 @@
 fn main() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        println!("cargo:rerun-if-changed=src/secret_sheet.m");
+        cc::Build::new()
+            .file("src/secret_sheet.m")
+            .flag("-fobjc-arc")
+            .compile("ky_secret_sheet");
+    }
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "touch_activity",
+            "account_status",
+            "account_login",
+            "account_create",
+            "account_bind",
+            "account_sync",
+            "account_unbind",
+            "workspace_list",
+            "workspace_read",
+            "workspace_save",
+            "workspace_delete",
+            "export_workspace_file",
             "snapshot",
             "capture_clipboard",
             "set_monitoring",
@@ -12,6 +30,7 @@ fn main() {
             "copy_entry",
             "copy_reference",
             "copy_secret",
+            "show_secret",
             "save_secret",
             "delete_secret",
             "lock_app",

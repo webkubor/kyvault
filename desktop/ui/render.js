@@ -1,11 +1,12 @@
 // List + detail rendering for the Ky desktop UI. All user-visible strings
 // come from the i18n dictionary via t().
 //
-// Layout: one column. The list fills the column; selecting an entry opens a
-// detail sheet that slides over it. There is no permanent second pane.
+// Narrow windows use a detail sheet; the wide vault view keeps the list visible.
 
 import { state, $, $$, el, showEl, invoke, formatWhen, firstLine, setError, setStatus, relocalizeMessages } from './core.js';
 import { t } from './lang.js';
+
+import { credentialTitle, matchesCredential, platformLabel } from './vault.js';
 
 export const VIEW_META = {
   history: 'view.history',
@@ -17,7 +18,11 @@ export const VIEW_META = {
 // the language changes.
 export function renderViewHeading() {
   const key = VIEW_META[state.view] || 'view.history';
-  $('#view-title').textContent = t(`${key}.title`);
+  const search = $('#search');
+  search.placeholder = t(isSecretView() ? 'vault.search' : 'search.placeholder');
+  search.setAttribute('aria-label', search.placeholder);
+  $('#view-title').textContent = VIEW_META[state.view] ? t(`${key}.title`) : t('nav.' + state.view);
+  for (const item of $$('.nav-item')) item.title = t('nav.' + item.dataset.view);
 }
 
 export function renderAddLabel() {
@@ -84,11 +89,13 @@ function entrySubtitle(e) {
 }
 
 function matched(entries) {
+  if (isSecretView() && state.platform) entries = entries.filter(entry => entry.platform === state.platform);
   const q = state.filter.trim().toLowerCase();
   if (!q) return entries;
+  if (isSecretView()) return entries.filter(entry => matchesCredential(entry, q));
   return entries.filter((e) => {
-    const title = isSecretView() ? e.reference : entryTitle(e);
-    const subtitle = isSecretView() ? e.platform || '' : entrySubtitle(e);
+    const title = entryTitle(e);
+    const subtitle = entrySubtitle(e);
     return title.toLowerCase().includes(q) || subtitle.toLowerCase().includes(q);
   });
 }
@@ -112,6 +119,16 @@ function emptyCopy() {
 export function renderList() {
   const list = $('#entries');
   const entries = currentEntries();
+  const filter = $('#vault-platform');
+  showEl($('#vault-platform-row'), isSecretView() && entries.length > 0);
+  if (isSecretView()) {
+    const ids = [...new Set(entries.map(entry => entry.platform))].sort();
+    const label = id => platformLabel(id, state.lang);
+    const options = [new Option(t('vault.all'), ''), ...ids.map(id => new Option(label(id), id))];
+    filter.replaceChildren(...options);
+    filter.value = state.platform || '';
+    if (filter.selectedIndex < 0) state.platform = filter.value = '';
+  }
   const filtered = matched(entries);
   list.replaceChildren();
   showEl($('#empty'), filtered.length === 0);
@@ -139,10 +156,12 @@ function renderEntry(entry) {
   const btn = el('button', 'entry');
   btn.type = 'button';
   if (isSecretView()) {
-    btn.appendChild(el('span', 'entry-title', entry.reference));
+    const mark = el('span', 'platform-mark', (entry.platform || '·').slice(0, 2).toUpperCase());
+    mark.setAttribute('aria-hidden', 'true');
+    btn.appendChild(mark);
+    btn.appendChild(el('span', 'entry-title', credentialTitle(entry, state.lang)));
     const meta = el('span', 'entry-meta');
-    if (entry.platform) meta.appendChild(el('span', '', entry.platform));
-    meta.appendChild(el('span', 'badge', t('badge.credential')));
+    meta.appendChild(el('span', '', [entry.account, ...(entry.aliases || []), entry.name].filter(Boolean).join(' · ')));
     btn.appendChild(meta);
   } else if (entry.image) {
     // 图片条目：缩略图 + 尺寸信息；点击复制（与文本一致，主动作在监听器里）。
@@ -203,12 +222,21 @@ function renderEntry(entry) {
 
 export function setView(view) {
   state.view = view;
+  const collection = view === 'history' || view === 'vault';
+  const workspace = ['private','drafts','shares','feedback'].includes(view);
+  showEl($('#home'), view === 'home');
+  showEl($('#account'), view === 'account');
+  showEl($('#toolbar'), view !== 'home');
+  $('main').dataset.view = view;
+  showEl($('#collection-panes'), collection);
+  showEl($('#workspace'), workspace);
   state.selectedId = null;
   state.entry = null;
   state.filter = '';
+  state.platform = '';
   $('#search').value = '';
   showEl($('#add'), view !== 'settings');
-  showEl($('#search-row'), view !== 'settings');
+  showEl($('#search-row'), collection);
   showEl($('#library'), view !== 'settings');
   showEl($('#settings'), view === 'settings');
   $$('.nav-item').forEach((b) =>
@@ -226,6 +254,8 @@ function select(entry) {
   state.entry = entry;
   renderList();
   renderDetail();
+  const target = $('#detail [data-action="show-secret"]') || $('#detail .detail-head button');
+  target?.focus({ preventScroll: true });
 }
 
 function selectedEntry() {
@@ -234,10 +264,13 @@ function selectedEntry() {
 }
 
 export function closeDetail() {
+  const prior = state.selectedId;
   state.selectedId = null;
   state.entry = null;
   renderList();
   renderDetail();
+  const source = $$('.entry').find(button => button.dataset.entryKey === prior);
+  source?.focus();
 }
 
 /* ---------- detail sheet ---------- */
@@ -259,13 +292,24 @@ export function renderDetail() {
   back.setAttribute('aria-label', t('action.back'));
   back.appendChild(el('span', 'back-icon', ''));
   head.appendChild(back);
-  const title = el('h2', null, isSecretView() ? entry.reference : entryTitle(entry));
+  const title = el('h2', null, isSecretView() ? credentialTitle(entry, state.lang) : entryTitle(entry));
   head.appendChild(title);
   pane.appendChild(head);
 
   if (isSecretView()) {
-    pane.appendChild(el('p', 'detail-note', t('preview.secret.note')));
-    pane.appendChild(secretActions(entry));
+    const metadata = el('dl', 'vault-fields');
+    for (const [label, value] of [['vault.platform', platformLabel(entry.platform, state.lang)], ['vault.account', entry.account], ['vault.reference', entry.reference]]) {
+      if (value) metadata.append(el('dt', '', t(label)), el('dd', '', value));
+    }
+    const field = el('div', 'vault-value');
+    field.append(el('span', 'value-label', t('vault.value')), el('span', 'masked-value', '••••　••••　••••'));
+    if (state.snapshot.native_reveal) {
+      const reveal = el('button', 'primary', t('vault.show'));
+      reveal.type = 'button';
+      reveal.dataset.action = 'show-secret';
+      field.append(reveal);
+    }
+    pane.append(field, metadata, secretActions());
   } else {
     const meta = el('p', 'detail-note', t('preview.saved', { time: formatWhen(entry.created_at) }));
     pane.appendChild(meta);
@@ -285,7 +329,7 @@ export function renderDetail() {
   showEl(pane, true);
 }
 
-function secretActions(entry) {
+function secretActions() {
   const actions = el('div', 'actions');
   const copyRef = el('button', '', t('action.copyReference'));
   copyRef.type = 'button';

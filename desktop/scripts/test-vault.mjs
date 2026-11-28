@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import { credentialTitle, matchesCredential } from '../ui/vault.js';
+
+const old = { reference: 'secret://alipay/alipay-app-private-key', platform: 'alipay' };
+assert.equal(credentialTitle(old, 'zh-CN'), '支付宝 · 应用私钥');
+assert.equal(credentialTitle(old, 'en'), 'Alipay · app private key');
+for (const query of ['支付宝 私钥', '私钥 ALIPAY', old.reference]) {
+  assert.ok(matchesCredential(old, query));
+}
+assert.equal(matchesCredential(old, '支付宝 公钥'), false);
+const apple = { platform: 'apple', name: 'work-apple-id-password', reference: 'secret://apple/work-apple-id-password',
+  account: 'work@example.test', aliases: ['team-login'] };
+for (const query of ['Apple 密码', '苹果 密码', 'work@example.test', 'team-login']) {
+  assert.ok(matchesCredential(apple, query));
+}
+assert.equal(credentialTitle({ platform: 'custom', name: 'prod/db-user' }, 'zh-CN'), 'custom · prod db user');
+console.log('旧引用、中英文名称、混合搜索、账号、别名及自定义平台验证通过');

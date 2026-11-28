@@ -1,0 +1,32 @@
+#workspace {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 var(--s6) var(--s5);
+  overflow-wrap: anywhere;
+}
+.wk-panel {
+  display: grid;
+  align-content: start;
+  gap: var(--s4);
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.wk-panel textarea { min-height: 8em; resize: vertical; }
+
+.wk-muted, .wk-status { color: var(--muted); font-size: var(--t-xs); }
+.wk-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.wk-list { display: grid; }
+.wk-row { text-align: start; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; overflow-wrap: anywhere; }
+.wk-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.wk-option { display: flex; align-items: flex-start; gap: var(--s2); }
+.wk-option > input { flex: none; }
+.wk-image { display: block; max-width: 100%; max-height: 22rem; object-fit: contain; margin-block: var(--s2); }
+.wk-status:not(:empty), .wk-confirm button { margin-top: var(--s3); }
+.wk-confirm button + button { margin-inline-start: var(--s2); }
+.wk-panel { animation: detail-in var(--dur-fast) var(--ease-out); }
+@media (prefers-reduced-motion: reduce) {
+  .wk-panel { animation: none; }
+}

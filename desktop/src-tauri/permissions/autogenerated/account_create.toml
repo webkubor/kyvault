@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-account-create"
+description = "Enables the account_create command without any pre-configured scope."
+commands.allow = ["account_create"]
+
+[[permission]]
+identifier = "deny-account-create"
+description = "Denies the account_create command without any pre-configured scope."
+commands.deny = ["account_create"]

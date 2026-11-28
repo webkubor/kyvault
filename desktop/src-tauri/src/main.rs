@@ -1,7 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod account;
 mod commands;
+mod export;
+mod repo_create;
 mod tray;
+mod workspace;
 
 use commands::{DesktopState, Session};
 use std::sync::Mutex;
@@ -245,6 +249,17 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            account::account_status,
+            account::account_login,
+            repo_create::account_create,
+            account::account_bind,
+            account::account_sync,
+            account::account_unbind,
+            workspace::workspace_list,
+            workspace::workspace_read,
+            workspace::workspace_save,
+            workspace::workspace_delete,
+            export::export_workspace_file,
             commands::touch_activity,
             commands::snapshot,
             commands::capture_clipboard,
@@ -255,6 +270,7 @@ fn main() {
             commands::restore_entry,
             commands::copy_entry,
             commands::copy_reference,
+            commands::show_secret,
             commands::copy_secret,
             commands::save_secret,
             commands::save_secret_with_meta,

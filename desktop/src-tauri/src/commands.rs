@@ -123,7 +123,7 @@ impl Session {
         Ok(())
     }
 }
-fn active(state: &DesktopState) -> Result<MutexGuard<'_, Session>> {
+pub(super) fn active(state: &DesktopState) -> Result<MutexGuard<'_, Session>> {
     let mut session = state.session.lock().map_err(|_| "会话不可用，请重启 Ky")?;
     if session.locked {
         return Err("内容已隐藏，请先返回工作台".into());
@@ -131,7 +131,7 @@ fn active(state: &DesktopState) -> Result<MutexGuard<'_, Session>> {
     session.last_activity = Instant::now();
     Ok(session)
 }
-fn vault() -> Result<Store> {
+pub(super) fn vault() -> Result<Store> {
     Store::default_location().map_err(|_| "无法打开本地密钥库，请检查 ky doctor".into())
 }
 fn validate_reference(reference: &str) -> Result<()> {
@@ -339,12 +339,16 @@ pub fn get_app_info() -> serde_json::Value {
 
 #[derive(Serialize)]
 pub struct Secret {
+    account: String,
+    kind: String,
+    aliases: Vec<String>,
     reference: String,
     platform: String,
     name: String,
 }
 #[derive(Serialize)]
 pub struct Snapshot {
+    native_reveal: bool,
     entries: Vec<Entry>,
     secrets: Vec<Secret>,
     monitoring: bool,
@@ -355,6 +359,7 @@ pub struct Snapshot {
 fn read_snapshot(state: &DesktopState, session: &Session) -> Result<Snapshot> {
     if session.locked {
         return Ok(Snapshot {
+            native_reveal: cfg!(target_os = "macos"),
             entries: vec![],
             secrets: vec![],
             monitoring: false,
@@ -363,12 +368,22 @@ fn read_snapshot(state: &DesktopState, session: &Session) -> Result<Snapshot> {
         });
     }
     let store = vault()?;
+    let aliases = kyvault::alias::Aliases::default_location()
+        .map_err(|_| "无法定位别名表")?
+        .load();
+    let mut by_ref = std::collections::HashMap::<String, Vec<String>>::new();
+    for (alias, reference) in aliases {
+        by_ref.entry(reference).or_default().push(alias);
+    }
     let secrets = store
         .list_secrets()
         .map_err(|_| "读取密钥列表失败，请检查 ky doctor")?
         .into_iter()
         .map(|meta| Secret {
+            aliases: by_ref.remove(&meta.r#ref()).unwrap_or_default(),
             reference: meta.r#ref(),
+            kind: meta.kind,
+            account: meta.account,
             platform: meta.platform,
             name: meta.name,
         })
@@ -382,6 +397,7 @@ fn read_snapshot(state: &DesktopState, session: &Session) -> Result<Snapshot> {
         .collect();
     Ok(Snapshot {
         entries,
+        native_reveal: cfg!(target_os = "macos"),
         secrets,
         monitoring: session.monitoring,
         lang: load_prefs(state).lang,
@@ -533,6 +549,51 @@ pub fn copy_reference(reference: String, state: State<DesktopState>) -> Result<(
     copy(reference)
 }
 #[tauri::command]
+pub fn show_secret(
+    window: tauri::WebviewWindow,
+    reference: String,
+    state: State<DesktopState>,
+) -> Result<()> {
+    let _session = active(&state)?;
+    validate_reference(&reference)?;
+    #[cfg(target_os = "macos")]
+    {
+        let value = vault()?
+            .get_secret(&reference)
+            .map_err(|_| "密钥读取失败")?
+            .ok_or("密钥不存在")?;
+        let parent = window.ns_window().map_err(|_| "窗口不可用")?;
+        extern "C" {
+            fn ky_show_secret(
+                window: *mut std::ffi::c_void,
+                bytes: *const u8,
+                len: usize,
+                english: bool,
+            ) -> bool;
+        }
+        // Synchronous Tauri commands execute on the main thread. AppKit copies
+        // the bytes into its sheet; no plaintext crosses the WebView bridge.
+        let shown = unsafe {
+            ky_show_secret(
+                parent,
+                value.as_ptr(),
+                value.len(),
+                load_prefs(&state).lang == "en",
+            )
+        };
+        if shown {
+            Ok(())
+        } else {
+            Err("当前窗口无法显示密钥".into())
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = window;
+        Err("当前平台不支持原生查看".into())
+    }
+}
+#[tauri::command]
 pub fn copy_secret(reference: String, state: State<DesktopState>) -> Result<()> {
     let mut session = active(&state)?;
     validate_reference(&reference)?;
@@ -565,35 +626,166 @@ pub fn save_secret(
     read_snapshot(&state, &session)
 }
 
-/// 手动录入升级版：平台下拉 + 账号 + 别名。API Key 平台先在线校验再入库。
-#[tauri::command]
+/// 手动录入。普通密码只加密写入本地，API 凭据沿用平台校验。
+#[tauri::command(async)]
 pub fn save_secret_with_meta(
     reference: String,
     value: String,
     kind: Option<String>,
     account: Option<String>,
     alias: Option<String>,
+    state: State<'_, DesktopState>,
 ) -> Result<serde_json::Value> {
-    let _session_guard = (); // 校验在 fulfill 之外：手动录入不绑定请求
-    validate_reference(&reference)?;
-    if value.is_empty() || value.len() > 65_536 {
-        return Err("密钥须为 1–65536 字节".into());
-    }
-    let (platform, _) =
-        kyvault::model::parse_ref(&reference).map_err(|_| "引用格式错误".to_string())?;
-    let store = vault()?;
-    let aliases = kyvault::alias::Aliases::default_location().map_err(|e| e.to_string())?;
+    save_unlocked_secret(&state, &reference, &value, kind, account, alias)
+}
 
+fn save_unlocked_secret(
+    state: &DesktopState,
+    reference: &str,
+    value: &str,
+    kind: Option<String>,
+    account: Option<String>,
+    alias: Option<String>,
+) -> Result<serde_json::Value> {
+    let _session = active(state)?;
+    let store = vault()?;
+    save_manual_secret(
+        &store,
+        reference,
+        value,
+        kind,
+        account,
+        alias,
+        validate_manual_api_key,
+    )
+}
+
+fn save_manual_secret(
+    store: &Store,
+    reference: &str,
+    value: &str,
+    kind: Option<String>,
+    account: Option<String>,
+    alias: Option<String>,
+    validate_api_key: impl FnOnce(&str, &str) -> Result<(String, String)>,
+) -> Result<serde_json::Value> {
+    validate_reference(reference)?;
+    if value.is_empty() || value.len() > 65_536 {
+        return Err("凭据须为 1–65536 字节".into());
+    }
+    let (platform, name) = kyvault::model::parse_ref(reference).map_err(|_| "引用格式错误")?;
+    let meta = store
+        .load_meta()
+        .map_err(|_| "无法读取凭据元数据，请先恢复密钥库")?;
+    let kind = kind
+        .as_deref()
+        .map(str::trim)
+        .filter(|k| !k.is_empty())
+        .or_else(|| {
+            meta.get(&format!("{platform}/{name}"))?
+                .get("kind")?
+                .as_str()
+        })
+        .map(str::to_owned)
+        .or_else(|| default_kind(&platform));
+    store.prepare_desktop_key().map_err(|_| {
+        "无法使用本地加密密钥。请检查目录权限，已有库请先恢复原 master key 或旧 Auth Guard。"
+    })?;
+    let (check_status, check_message) = if kind
+        .as_deref()
+        .is_some_and(|k| k.trim().eq_ignore_ascii_case("Password"))
+    {
+        ("local".to_owned(), "密码已在本地加密保存".to_owned())
+    } else {
+        validate_api_key(&platform, value)?
+    };
+    store
+        .set_secret_with_meta(reference, value, kind.as_deref(), account.as_deref())
+        .map_err(|_| "凭据保存失败，请检查本地密钥库")?;
+    let alias = alias
+        .map(|a| a.trim().to_lowercase())
+        .filter(|a| !a.is_empty());
+    if let Some(a) = &alias {
+        let _lock = store.lock().map_err(|_| "无法锁定别名文件")?;
+        kyvault::alias::Aliases::new(store.root())
+            .set(a, reference)
+            .map_err(|_| "凭据已保存，别名写入失败")?;
+    }
+    Ok(serde_json::json!({
+        "ok": true,
+        "reference": reference,
+        "status": check_status,
+        "message": check_message,
+        "alias": alias.unwrap_or_default(),
+    }))
+}
+
+#[cfg(test)]
+#[test]
+fn locked_manual_save_fails_before_opening_vault() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = DesktopState {
+        history: DesktopHistory::new(dir.path()),
+        session: Mutex::new(Session {
+            locked: true,
+            ..Session::default()
+        }),
+        data_root: dir.path().into(),
+    };
+    let result = save_unlocked_secret(
+        &state,
+        "secret://openai/sample",
+        "q9X",
+        Some("Password".into()),
+        None,
+        None,
+    );
+    assert_eq!(result.unwrap_err(), "内容已隐藏，请先返回工作台");
+}
+
+#[cfg(test)]
+#[test]
+fn manual_password_never_invokes_provider_or_returns_suffix() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Store::new(dir.path());
+    let reference = "secret://openai/fixture";
+    let password = "q9X";
+    for kind in [Some("Password".into()), None] {
+        let receipt = save_manual_secret(
+            &store,
+            reference,
+            password,
+            kind,
+            Some("fixture-account".into()),
+            None,
+            |_, _| panic!("password reached API validation"),
+        )
+        .unwrap();
+        assert_eq!(receipt["status"], "local");
+        assert!(receipt.get("last4").is_none());
+        assert!(!receipt.to_string().contains(password));
+    }
+    assert!(store.get_secret(reference).unwrap().as_deref() == Some(password));
+    let meta = store.load_meta().unwrap();
+    assert_eq!(meta["openai/fixture"]["account"], "fixture-account");
+    assert_eq!(meta["openai/fixture"]["kind"], "Password");
+    assert!(meta["openai/fixture"].get("sha256").is_none());
+    assert!(!fs::read_to_string(store.secrets_path())
+        .unwrap()
+        .contains(&format!("\"{password}\"")));
+}
+
+fn validate_manual_api_key(platform: &str, value: &str) -> Result<(String, String)> {
     // 有校验端点的平台先验一把：401 的 key 不该进库。查不了（无端点/网络不通）
     // 就按未验证入库，并如实返回 —— 不假装验过。
-    let (check_status, check_message) = if platform == "xiaomi" {
+    let result = if platform == "xiaomi" {
         (
             "unverified".to_string(),
             "小米 Token Plan Key 已保存；按小米规则不做自动探测，仅用于兼容工具中的交互式使用"
                 .to_string(),
         )
-    } else if kyvault::providers::get_provider(&platform).is_some() {
-        let r = kyvault::providers::validate_key(&platform, &value);
+    } else if kyvault::providers::get_provider(platform).is_some() {
+        let r = kyvault::providers::validate_key(platform, value);
         if r.valid {
             (r.status.to_string(), r.message)
         } else if r.status == "unsupported" || r.status == "unknown" {
@@ -614,30 +806,7 @@ pub fn save_secret_with_meta(
         )
     };
 
-    let kind = kind
-        .filter(|k| !k.trim().is_empty())
-        .map(|k| k.trim().to_string())
-        .or_else(|| default_kind(&platform));
-    let account = account.filter(|a| !a.trim().is_empty());
-    store
-        .set_secret_with_meta(&reference, &value, kind.as_deref(), account.as_deref())
-        .map_err(|_| "密钥保存失败，请检查本地密钥库")?;
-
-    let alias = alias
-        .map(|a| a.trim().to_lowercase())
-        .filter(|a| !a.is_empty());
-    if let Some(a) = &alias {
-        aliases.set(a, &reference).map_err(|_| "别名写入失败")?;
-    }
-    let last4 = kyvault::model::last4(&value);
-    Ok(serde_json::json!({
-        "ok": true,
-        "reference": reference,
-        "status": check_status,
-        "message": check_message,
-        "alias": alias.unwrap_or_default(),
-        "last4": last4,
-    }))
+    Ok(result)
 }
 
 fn default_kind(platform: &str) -> Option<String> {
@@ -697,6 +866,14 @@ pub fn lock(app: &tauri::AppHandle) -> Result<()> {
     let state = app.state::<DesktopState>();
     let mut session = state.session.lock().map_err(|_| "会话不可用")?;
     session.locked = true;
+    #[cfg(target_os = "macos")]
+    app.run_on_main_thread(|| {
+        extern "C" {
+            fn ky_hide_secret();
+        }
+        unsafe { ky_hide_secret() };
+    })
+    .map_err(|_| "窗口不可用")?;
     // Locking hides content; it must not silently switch off clipboard
     // history. The capture loop already skips while locked, and the user's
     // choice stays in prefs.json so unlocking restores it.
