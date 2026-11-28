@@ -28,9 +28,9 @@
 
 ---
 
-## Ky 桌面版 0.3.1（macOS）
+## Ky 桌面版 0.3.2（macOS）
 
-Ky 把剪贴板历史、密码库和私密图文放在同一个本地工作台，无需注册账号。[下载 Apple Silicon Mac 安装包（DMG）](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.1/Ky_0.3.1_aarch64.dmg) · [官网](https://webkubor.github.io/kyvault/)
+Ky 把剪贴板历史、密码库和私密图文放在同一个本地工作台，无需注册账号。[下载 Apple Silicon Mac 安装包（DMG）](https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.2/Ky_0.3.2_aarch64.dmg) · [官网](https://webkubor.github.io/kyvault/)
 
 ![Ky 0.3.1 工作台首页](docs/assets/desktop/home.png)
 
