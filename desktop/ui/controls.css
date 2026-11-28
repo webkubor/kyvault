@@ -30,7 +30,7 @@
 .ky-control:is([aria-invalid=true],:user-invalid) { border-color: var(--danger); }
 .ky-control:disabled, fieldset:disabled .ky-control { opacity: .62; cursor: not-allowed; }
 textarea.ky-control { resize: vertical; min-height: 8em; line-height: 1.65; }
-select.ky-control {
+select.ky-control:not([multiple]):not([size]) {
   appearance: none; cursor: pointer; padding-inline-end: 36px;
   background-image: linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
   background-position: calc(100% - 17px) 52%,calc(100% - 12px) 52%;
@@ -58,9 +58,40 @@ input.ky-control[type=file] {
 .ky-control[role=switch]:checked { border-color: var(--accent); background: var(--accent); }
 .ky-control[role=switch]:checked::before { transform: translateX(16px); background: var(--accent-text); }
 @media (forced-colors: active) {
-  select.ky-control, .ky-control[role=switch] { appearance: auto; }
+  select.ky-control:not([multiple]):not([size]), .ky-control[role=switch] { appearance: auto; background-image: none; }
   .ky-control[role=switch]::before { display: none; }
 }
 
 .dialog-heading h2 { font-size: var(--t-lg); }
 .ky-control + .hint { font-size: var(--t-sm); }
+
+/* The picker sits in the WebKit top layer, including inside a modal dialog. */
+.ky-options {
+  position: fixed; inset: auto; margin: 0; box-sizing: border-box;
+  width: max-content; max-width: min(32rem, calc(100vw - 16px)); max-height: 320px;
+  overflow: auto; overscroll-behavior: contain; padding: var(--s1);
+  border: 1px solid var(--field-edge); border-radius: calc(var(--radius) + var(--s1));
+  background: var(--raised); color: var(--text); box-shadow: var(--shadow);
+  font: 400 var(--t-base)/1.45 var(--font); outline: 0;
+}
+.ky-option {
+  display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3);
+  min-height: 32px; border-radius: var(--radius); cursor: pointer;
+}
+.ky-option-label { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+.ky-option::after { content: ''; flex: 0 0 8px; width: 8px; }
+.ky-option[aria-selected=true] { color: var(--accent); font-weight: 600; }
+.ky-option[aria-selected=true]::after {
+  height: 5px; border: solid currentColor; border-width: 0 0 2px 2px; transform: rotate(-45deg);
+}
+.ky-option.active { background: var(--accent-soft); }
+.ky-options:focus-visible .ky-option.active { outline: 1px solid var(--accent); outline-offset: -1px; }
+.ky-option[aria-disabled=true] { color: var(--muted); opacity: .65; cursor: not-allowed; }
+.ky-option-group { padding: var(--s2) var(--s3) var(--s1); font-size: var(--t-sm); color: var(--muted); }
+select.ky-control[aria-expanded=true] { border-color: var(--accent); }
+.ky-control[aria-invalid=true], .ky-control:user-invalid {
+  border-color: var(--danger); box-shadow: inset 3px 0 var(--danger);
+}
+.ky-control[aria-invalid=true]:focus, .ky-control:user-invalid:focus { outline-color: var(--danger); }
+.ky-option .platform-mark { width: 25px; height: 25px; background: transparent; }
+.ky-option .platform-mark img { width: 16px; height: 16px; }

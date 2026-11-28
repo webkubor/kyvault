@@ -32,3 +32,7 @@ After product context and swap-name question:
 > “Core glyph is a customized geometric K with one specific stepped detail—a viable, restrained derivative of the production mark … Recommend accept as desktop derivative if continuity is the goal; do not claim the notch provides strong independent brand recognition, especially at 24px where it mostly disappears.”
 
 The reviewer also noted another K-named security product could plausibly use a similar concept. This is accepted as continuity-focused local application artwork, not a uniquely ownable new brand. No other candidates were presented; the unrelated legacy shield was excluded on provenance grounds.
+
+### Platform marks
+
+Ky bundles platform marks locally so opening a credential never requests a remote icon. The monochrome SVG paths are from [Simple Icons 14.0.0](https://github.com/simple-icons/simple-icons/tree/14.0.0/icons) (CC0), with LinkedIn from [13.0.0](https://github.com/simple-icons/simple-icons/blob/13.0.0/icons/linkedin.svg). Reuse `platformMark(id)` from `desktop/ui/platform-icon.js` in platform lists, filters, account connections and share destinations. Always pair a mark with a text label. The Feishu and Amap icons are from their official sites ([Feishu](https://www.feishu.cn/favicon.ico), [Amap](https://www.amap.com/favicon.ico)). Product names and marks identify their respective services. Custom platforms display initials.

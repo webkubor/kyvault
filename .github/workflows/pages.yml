@@ -6,6 +6,11 @@ on:
     paths:
       - 'docs/index.html'
       - 'docs/styles.css'
+      - 'docs/assets/desktop/home.png'
+      - 'docs/assets/desktop/vault.png'
+      - 'docs/assets/desktop/private.png'
+      - 'docs/assets/desktop/social.png'
+      - 'docs/assets/desktop/card.png'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -26,8 +31,9 @@ jobs:
       # Keep existing docs/proposals/ out of the published artifact.
       - name: Assemble the public site only
         run: |
-          mkdir -p _site
+          mkdir -p _site/assets/desktop
           cp docs/index.html docs/styles.css _site/
+          cp docs/assets/desktop/{home,vault,private,social,card}.png _site/assets/desktop/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

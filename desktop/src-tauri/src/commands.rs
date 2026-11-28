@@ -215,38 +215,26 @@ pub struct ReleaseNote {
     pub url: String,
 }
 
-/// 后台只检查新版，发现后发 update-available 事件（不自动下载）。
-pub async fn install_update_check_only(app: &tauri::AppHandle) -> Result<()> {
+/// Fetch the configured manifest on every request. None means a successful check.
+#[tauri::command]
+pub async fn check_update<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<Option<String>> {
     let updater = app
         .updater_builder()
-        .endpoints(vec![tauri::Url::parse(
-            "https://raw.githubusercontent.com/webkubor/kyvault/main/updater/latest.json",
-        )
-        .map_err(|e| e.to_string())?])
-        .and_then(|b| b.build())
+        .timeout(Duration::from_secs(15))
+        .build()
         .map_err(|e| e.to_string())?;
-    if let Some(update) = updater.check().await.map_err(|e| e.to_string())? {
-        let _ = app.emit(
-            "update-available",
-            serde_json::json!({"version": update.version, "current": env!("CARGO_PKG_VERSION")}),
-        );
-    }
-    Ok(())
+    updater
+        .check()
+        .await
+        .map(|update| update.map(|u| u.version))
+        .map_err(|e| e.to_string())
 }
 
 /// 用户主动点"更新"：检查并安装最新版，装完重启。
 /// 结果与进度通过 update-progress 事件发给前端（含下载百分比）。
 #[tauri::command]
 pub async fn install_update(app: tauri::AppHandle) -> Result<()> {
-    use tauri_plugin_updater::UpdaterExt;
-    let updater = app
-        .updater_builder()
-        .endpoints(vec![tauri::Url::parse(
-            "https://raw.githubusercontent.com/webkubor/kyvault/main/updater/latest.json",
-        )
-        .map_err(|e| e.to_string())?])
-        .and_then(|b| b.build())
-        .map_err(|e| e.to_string())?;
+    let updater = app.updater().map_err(|e| e.to_string())?;
     let update = updater
         .check()
         .await
@@ -288,7 +276,13 @@ pub async fn install_update(app: tauri::AppHandle) -> Result<()> {
 /// 当前版本 + 桌面线的历史更新日志。联网从 GitHub Releases 拉取；
 /// 失败时返回空日志（离线可用，只是看不到日志，不影响更新机制本身）。
 #[tauri::command]
-pub fn get_app_info() -> serde_json::Value {
+pub async fn get_app_info() -> Result<serde_json::Value> {
+    tauri::async_runtime::spawn_blocking(release_history)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+fn release_history() -> serde_json::Value {
     let current = env!("CARGO_PKG_VERSION").to_string();
     let mut notes: Vec<ReleaseNote> = Vec::new();
     if let Ok(resp) = ureq::get("https://api.github.com/repos/webkubor/kyvault/releases")

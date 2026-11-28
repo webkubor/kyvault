@@ -1,4 +1,6 @@
 import { $, el, formField, invoke, state } from './core.js';
+import { notifyToast } from './toast.js';
+import { platformMark } from './platform-icon.js';
 import { onLanguageChanged } from './lang.js';
 
 const copy = {
@@ -6,7 +8,16 @@ const copy = {
   provider: ['托管平台', 'Hosting provider'],
   host: ['主机名', 'Hostname'],
   login: ['验证 CLI 账号', 'Verify CLI account'],
-  pending: ['正在处理…', 'Working…'],
+  account_status: ['正在读取仓库连接…', 'Reading repository connection…'],
+  account_login: ['正在核验 CLI 账号…', 'Verifying CLI account…'],
+  account_create: ['正在创建私有仓库并绑定本地库…', 'Creating the private repository and binding this vault…'],
+  account_sync: ['正在同步加密凭证文件…', 'Syncing encrypted credentials…'],
+  account_bind: ['正在核验并绑定仓库…', 'Verifying and binding repository…'],
+  account_unbind: ['正在解除本地绑定…', 'Removing the local binding…'],
+  refresh: ['重新读取仓库连接', 'Reload repository connection'],
+  stale: ['已解除绑定。读取最新连接状态失败，请重新读取。', 'Binding removed. Reload to check the current connection.'],
+  badName: ['仓库名或用户名无效，请检查后重试。', 'Check the repository name and username and try again.'],
+  checkoutError: ['请检查本地库、Git 远端地址与分支，再读取连接状态。', 'Check the local vault, Git remote and branch, then reload the connection.'],
   hint: ['本地密码库可以独立使用。连接仓库时使用此主机的 gh 或 glab 会话。', 'The local vault works independently. Connect a repository using the gh or glab session for this host.'],
   checkout: ['当前密码库尚未连接仓库。', 'This vault has no repository connection.'],
   name: ['新仓库名称', 'New repository name'],
@@ -47,6 +58,7 @@ const copy = {
 };
 
 let page;
+let pendingRequest;
 const label = key => copy[key][state.lang === 'en' ? 1 : 0];
 
 function paint(p) {
@@ -55,15 +67,36 @@ function paint(p) {
   const button = (key, run, disabled = false) => {
     const b = el('button', '', label(key));
     b.disabled = Boolean(p.busy || disabled);
+    b.dataset.accountField = key;
+    b.type = 'button';
     b.onclick = run;
     return b;
   };
   const note = key => el('p', 'account-note', label(key));
-  const status = el('p', 'account-status', p.message ? label(p.message) : '');
-  status.setAttribute('role', 'status');
-  if (p.errorLocation) status.append(document.createTextNode(' · '+p.errorLocation));
-  const focused = document.activeElement?.dataset?.accountField;
-  const cursor = document.activeElement?.selectionStart;
+  // Keep the live region mounted across updates so assistive technology observes the change.
+  if (!p.status) {
+    p.status = el('p', 'account-status');
+    p.status.setAttribute('role', 'status');
+    p.status.setAttribute('aria-atomic', 'true');
+    p.status.tabIndex = -1;
+    p.form = el('div', 'account-form');
+    const shell = el('div', 'account-body');
+    shell.append(el('h2', '', label('title')), note('hint'), p.status, p.form);
+    root.replaceChildren(shell);
+  } else {
+    root.querySelector('h2').textContent = label('title');
+    root.querySelector('.account-note').textContent = label('hint');
+  }
+  const active = document.activeElement;
+  const focused = active?.dataset?.accountField;
+  const cursor = active?.selectionStart;
+  const selectionEnd = active?.selectionEnd;
+  let feedback = p.message ? label(p.message) : '';
+  if (p.message === 'verified') feedback += ' · ' + p.identity.username + ' @ ' + p.identity.host;
+  if (p.errorLocation) feedback += ' · ' + p.errorLocation;
+  p.status.dataset.tone = p.tone || '';
+  if (p.status.textContent !== feedback) p.status.textContent = feedback;
+  p.form.setAttribute('aria-busy', String(Boolean(p.busy)));
   function field(tag, key, value) {
     const node = el(tag);
     node.dataset.accountField = key;
@@ -78,6 +111,7 @@ function paint(p) {
     provider.append(option);
   }
   provider.value = p.provider;
+  provider.setAttribute('aria-label', label('provider'));
   provider.onchange = () => {
     p.provider = provider.value;
     p.host = t?.host && !['gitlab.com','github.com'].includes(t.host) ? t.host : p.provider + '.com';
@@ -89,15 +123,19 @@ function paint(p) {
   host.autocapitalize = 'none';
   host.spellcheck = false;
   host.required = true;
-  const body = el('div', 'account-body');
-  body.append(el('h2','',label('title')), note('hint'), formField(label('provider'),provider),
+  if (p.message === 'invalid') host.setAttribute('aria-invalid', 'true');
+  const body = document.createDocumentFragment();
+  const providerField = formField(label('provider'), provider);
+  providerField.classList.add('account-provider');
+  providerField.append(platformMark(p.provider));
+  body.append(providerField,
     formField(label('host'),host), button('login', () => verify(p)));
   const passwords = button('passwords', () => window.dispatchEvent(new CustomEvent('ky-navigate',{detail:{view:'vault'}})));
   body.append(passwords);
   if (p.message === 'auth' && /^[a-z0-9.-]+$/i.test(p.host)) {
     body.append(el('code','account-project',(p.provider==='github'?'gh':'glab')+' auth login --hostname '+p.host+' --web'));
   }
-  if (p.identity) body.append(el('p','',label('verified')+' · '+p.identity.username+' @ '+p.identity.host));
+  if (p.identity && p.message !== 'verified') body.append(el('p','',label('verified')+' · '+p.identity.username+' @ '+p.identity.host));
   const t=p.target;
   if (t?.path) {
     body.append(el('h3','',label('target')), el('p','account-project',t.host+'/'+t.path+' · '+t.branch));
@@ -114,17 +152,24 @@ function paint(p) {
     const {provider,host,path,branch,username}=t.saved;
     if (!t.bound) body.append(el('p','',label('saved')+' · '+username+' @ '+host+'/'+path+' · '+branch));
     body.append(button('unbind', () => request(p,'account_unbind',{provider,host,path,branch,username}, async () => {
-      p.target=await invoke('account_status'); p.message='unbound';
+      p.target=null;
+      try {
+        p.target=await invoke('account_status'); p.message='unbound';
+      } catch {
+        p.message='stale'; p.tone='error';
+      }
     })));
   } else if (t && !t.path && p.identity) {
     const owner=field('input','owner',p.identity.username);
     owner.readOnly=true;
     const name=field('input','name',p.name);
     name.required=true;
+    if (p.message === 'badName') name.setAttribute('aria-invalid', 'true');
     name.maxLength=100;
     name.spellcheck=false;
     const consent=el('input');
     consent.type='checkbox';
+    consent.dataset.accountField='consent';
     consent.checked=p.consent;
     consent.disabled=Boolean(p.busy);
     const consentLabel=el('label','account-consent');
@@ -142,51 +187,81 @@ function paint(p) {
   }
   host.oninput=()=>{
     p.host=host.value; p.consent=false;
-    if (p.identity || p.message==='auth') {p.identity=null;p.message=null;paint(p);}
+    if (p.identity || p.message) {p.identity=null;p.message=null;p.errorLocation=null;paint(p);}
   };
   if (t) body.append(note('scope'));
-  body.append(status);
-  root.replaceChildren(body);
-  if (focused) {
-    const next=Array.from(body.querySelectorAll('[data-account-field]')).find(node=>node.dataset.accountField===focused);
-    if (next && !next.disabled) {
-      next.focus({preventScroll:true});
-      if (cursor!=null && next.setSelectionRange) next.setSelectionRange(cursor,cursor);
+  if (!t && p.tone === 'error') body.append(button('refresh', () => load(p)));
+  p.form.replaceChildren(body);
+  if (focused && p.busy) {
+    p.returnFocus = focused;
+    p.status.focus({preventScroll:true});
+  } else {
+    const key = focused || (active === p.status && p.returnFocus);
+    if (key) {
+      const fallback = p.target?.bound ? 'sync' : p.identity && !p.target?.path && !p.target?.saved ? 'name' : 'login';
+      const next = p.form.querySelector(`[data-account-field="${key}"]:not(:disabled)`)
+        || p.form.querySelector('[data-account-field="refresh"]')
+        || p.form.querySelector(`[data-account-field="${fallback}"]`);
+      next?.focus({preventScroll:true});
+      if (focused && cursor != null && next?.type === 'text') next.setSelectionRange(cursor, selectionEnd);
     }
+    if (!p.busy) p.returnFocus = null;
   }
 }
 
 async function request(p, command, args, accept) {
-  if (p.busy) return;
+  if (p.busy || page !== p) return;
+  let finish;
+  pendingRequest = new Promise(resolve => { finish = resolve; });
   p.busy = true;
-  p.message = 'pending';
+  p.tone = 'pending';
+  p.message = command;
   p.errorLocation=null;
   paint(p);
+  if (command === 'account_sync') notifyToast(() => label(command), {id:command, kind:'pending', announce:false});
   try {
     const result = await invoke(command, args);
     if (p !== page) return;
     p.message = null;
+    p.tone = 'success';
     await accept(result);
   } catch (error) {
     if (p !== page) return;
+    p.tone = 'error';
     const code = String(error);
-    p.message = code === 'host' ? 'invalid' : Object.hasOwn(copy, code) ? code : command==='account_create' ? 'createFailed' : 'gitlab';
+    const errors = {host: 'invalid', checkout: 'checkoutError', '仓库名或用户名无效': 'badName'};
+    if (Object.hasOwn(errors, code)) p.message = errors[code];
+    else if (Object.hasOwn(copy, code)) p.message = code;
+    else p.message = command === 'account_create' ? 'createFailed' : 'gitlab';
+    if (code === 'conflict' || code === 'metadata') p.tone='conflict';
     if (command==='account_create') {
+      p.consent=false;
       if (code.startsWith('已创建 ')) p.message='createdPartial';
       p.errorLocation=args.host+'/'+args.username+'/'+args.name;
     }
     if (command === 'account_login') p.identity = null;
   } finally {
     p.busy = false;
+    pendingRequest = null;
+    finish();
+    if (command === 'account_sync') {
+      const key = p.message;
+      if (p === page && key) {
+        notifyToast(() => label(key), {id:command, kind:p.tone === 'success' ? 'success' : 'error', announce:false});
+      } else {
+        notifyToast(null, {id:command, kind:'cancel'});
+      }
+    }
     paint(p);
   }
 }
 
 function verify(p) {
+  if (p.busy || page !== p) return;
   p.identity=null;
   p.consent=false;
   p.host=p.host.trim().toLowerCase();
-  return request(p,'account_login',{provider:p.provider,host:p.host}, result => {p.identity=result;});
+  return request(p,'account_login',{provider:p.provider,host:p.host}, result => {p.identity=result;p.message='verified';});
 }
 
 export function renderAccount() {
@@ -196,6 +271,20 @@ export function renderAccount() {
   if (page) return paint(page);
   const p = {provider:'github',host:'github.com',name:'',consent:false,target:null,identity:null};
   page = p;
+  if (pendingRequest) {
+    p.busy = true;
+    p.tone = 'pending';
+    p.message = 'account_status';
+    paint(p);
+    return pendingRequest.then(() => {
+      p.busy = false;
+      if (p === page) return load(p);
+    });
+  }
+  return load(p);
+}
+
+function load(p) {
   return request(p, 'account_status', {}, result => {
     p.target = result;
     p.host=result.host || p.host;

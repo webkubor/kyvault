@@ -8,6 +8,7 @@
 .wk-panel {
   display: grid;
   align-content: start;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s4);
   min-inline-size: 0;
   margin: 0;
@@ -30,3 +31,68 @@
 @media (prefers-reduced-motion: reduce) {
   .wk-panel { animation: none; }
 }
+
+.wk-share-list { gap: var(--s2); }
+.wk-share-list .wk-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+.wk-share-list .wk-row::after {
+  content: '';
+  flex: none;
+  width: var(--s1);
+  height: var(--s1);
+  border-block-start: 1px solid var(--muted);
+  border-inline-end: 1px solid var(--muted);
+  transform: rotate(45deg);
+}
+.wk-share-surface {
+  display: grid;
+  gap: var(--s3);
+  width: clamp(68%, 66ch, 100%);
+  min-width: 0;
+  margin-inline: auto;
+}
+@media (max-width: 960px) {
+  .wk-share-surface { width: 100%; }
+}
+.wk-share {
+  width: 100%;
+  min-width: 0;
+  margin-inline: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--large-radius);
+}
+.wk-share-photo {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 58vh;
+  object-fit: contain;
+  margin-inline: auto;
+}
+.wk-share-photo { margin-bottom: var(--s4); max-width: calc(100% - var(--s6) * 2); }
+.wk-share-copy::before {
+  content: '';
+  display: block;
+  width: var(--s6);
+  height: 2px;
+  margin-bottom: var(--s3);
+  background: var(--accent);
+}
+.wk-share-copy { padding: var(--s5) var(--s6); }
+.wk-share-copy h2 { font-size: var(--t-lg); line-height: 1.3; text-wrap: pretty; }
+.wk-share-copy .wk-body { max-inline-size: 70ch; margin-top: var(--s3); line-height: 1.75; }
+.wk-share-actions { display: grid; gap: var(--s2); }
+.wk-paste-hint, .wk-destination { display: flex; align-items: center; gap: var(--s1); }
+.wk-paste-hint { gap: var(--s3); flex-wrap: wrap; color: var(--muted); font-size: var(--t-sm); }
+.wk-destination .platform-mark { width: var(--s4); height: var(--s4); background: none; border: 0; }
+.wk-destination .platform-mark img { width: 100%; height: 100%; }

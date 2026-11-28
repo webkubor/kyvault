@@ -4,6 +4,7 @@ mod account;
 mod commands;
 mod export;
 mod repo_create;
+mod share_png;
 mod tray;
 mod workspace;
 
@@ -105,8 +106,9 @@ fn main() {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(Duration::from_secs(3)).await;
-                    if let Err(e) = commands::install_update_check_only(&handle).await {
-                        let _ = e;
+                    if let Ok(Some(version)) = commands::check_update(handle.clone()).await {
+                        let _ = handle
+                            .emit("update-available", serde_json::json!({"version": version}));
                     }
                 });
             }
@@ -171,7 +173,11 @@ fn main() {
                     let change = clipboard_change();
                     let changed = change.is_none() || change != previous_change;
                     previous_change = change;
-                    if !session.monitoring || session.locked || !changed {
+                    if !session.monitoring
+                        || session.locked
+                        || !changed
+                        || share_png::clipboard_is_share()
+                    {
                         continue;
                     }
                     if clipboard.is_none() {
@@ -260,6 +266,8 @@ fn main() {
             workspace::workspace_save,
             workspace::workspace_delete,
             export::export_workspace_file,
+            share_png::copy_share_png,
+            share_png::export_share_png,
             commands::touch_activity,
             commands::snapshot,
             commands::capture_clipboard,
@@ -283,6 +291,7 @@ fn main() {
             commands::clear_history,
             commands::set_ui_language,
             commands::get_app_info,
+            commands::check_update,
             commands::install_update,
             commands::get_entry_image
         ])

@@ -29,3 +29,15 @@ if (failed) {
   process.exit(1);
 }
 console.log(`${files.length} module(s) parsed`);
+
+// The shipped notes are local and visible before any network request completes.
+const shell = await readFile(join(ui, 'index.html'), 'utf8');
+const notesVersion = shell.match(/<strong id="about-version">v([^<]+)<\/strong>/)?.[1];
+const pkg = JSON.parse(await readFile(join(ui, '../package.json'), 'utf8'));
+const config = JSON.parse(await readFile(join(ui, '../src-tauri/tauri.conf.json'), 'utf8'));
+const manifest = await readFile(join(ui, '../src-tauri/Cargo.toml'), 'utf8');
+const crateVersion = manifest.split('[package]')[1]?.split('\n[')[0]?.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
+if (![pkg.version, config.version, crateVersion].every(version => version && version === notesVersion)) {
+  throw new Error('Update the bundled release notes to match the desktop package, Tauri and Rust versions.');
+}
+console.log('Bundled release notes match desktop v' + notesVersion);
