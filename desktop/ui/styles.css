@@ -418,7 +418,7 @@ button.loading::after { content: ""; position: absolute; inset: 0; margin: auto;
 .nav-group:first-child { margin-top: 0; }
 .sidebar-bottom { padding-top: var(--s3); }
 .sidebar-bottom .nav-item { width: 100%; }
-.nav-item { min-height: 34px; }
+.nav-item, .sidebar-action { min-height: 34px; }
 .nav-item[data-view=private] .nav-icon,
 .nav-item[data-view=drafts] .nav-icon,
 .nav-item[data-view=shares] .nav-icon,
@@ -451,7 +451,7 @@ main[data-view=vault] .entry-meta { overflow: hidden; white-space: nowrap; }
 
 @media (min-width: 761px) {
   :root { --sidebar-width: 190px; }
-  .nav-item { gap: var(--s3); }
+  .nav-item, .sidebar-action { gap: var(--s3); }
   .toolbar { padding-top: var(--s6); }
   h1 { font-size: 26px; }
   #workspace, .entry-title { font-size: var(--t-md); }
