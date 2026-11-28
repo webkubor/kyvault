@@ -1,11 +1,11 @@
 {
-  "version": "0.2.7",
-  "notes": "匿名操作统计：仅固定启动/CLI成功事件与一次性ID，不含密钥、路径或身份；支持DNT/显式关闭，后台发送不阻塞。",
-  "pub_date": "2026-11-25T11:36:59.583Z",
+  "version": "0.3.0",
+  "notes": "旧凭证支持搜索和原生查看；私有仓库仅同步密码密文。新增本地图文与离线分享反馈。",
+  "pub_date": "2026-11-28T04:00:41Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbThBRFJ6a2ZvT2tMMzB6YzI2ZjExc2dRNlNhN1JiSmFYUjNwc2lBSGVVTUhYT1laaitMV2VLVE9uNmdDMU1vQjVhT1l2VjV0RmhOcEVxclRrSnFOR2djPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NjA2NTYxCWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMi43CnUzS3ZOak9oMTZRTVMrWmtMMkxPZElydXFFWlQ4MHpEWUhqSHVHRmdySEhEWlhDeWVDMEVyMzl5MUZhRkxoTlZzNWxzNHpmWDdaeHRvc3FRbmtLa0RnPT0K",
-      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.2.7/Ky.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUOXRnZElteEhSbTdTNzJuWW5FNDVsbmFRMWJJMzRMa1IrNW83b2lzeEdOdndjR2ZKYTBuMW90YzR6bU1naUsxWmRUd0RKVFEzbW05Zm9DTnNmaFdLUnZjOW5USnNFY1FnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODM4MDc2CWZpbGU6S3kuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4wClo3eFJPWHl2bjI1L1hEQ2w1OHFnQy9hTjJsamx4YzArdFBLRUNzaUZkQWVQNUlUV3E5ZXN3amt6c2J3dStjYUNNTmw2V1YvNE5EcG95V0lLMzdPbENBPT0K",
+      "url": "https://github.com/webkubor/kyvault/releases/download/desktop-v0.3.0/Ky.app.tar.gz"
     }
   }
 }
